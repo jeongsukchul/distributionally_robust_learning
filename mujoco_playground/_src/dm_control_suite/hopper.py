@@ -250,3 +250,31 @@ def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, det
         dmass = jax.random.uniform(key, minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max'])
         body_mass[i] = model.body_mass[i].set(model.body_mass * dmass)
 
+    return (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    )
+  (
+    geom_friction,
+    body_ipos,
+    body_mass,
+    dof_frictionloss,
+  ) = rand_dynamics(rng)
+
+  in_axes = jax.tree_util.tree_map(lambda x: None, model)
+  in_axes = in_axes.tree_replace({
+      "geom_friction": 0,
+      "body_ipos": 0,
+      "body_mass": 0,
+      "dof_frictionloss": 0,
+  })
+  model = model.tree_replace({
+      "geom_friction": geom_friction,
+      "body_ipos": body_ipos,
+      "body_mass": body_mass,
+      "dof_frictionloss": dof_frictionloss,
+  })
+
+  return model, in_axes

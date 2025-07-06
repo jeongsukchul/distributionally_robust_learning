@@ -1,82 +1,23 @@
-# MuJoCo Playground
+# MuJoCo Playground(distributionally robust version)
 
-[![Build](https://img.shields.io/github/actions/workflow/status/google-deepmind/mujoco_playground/ci.yml?branch=main)](https://github.com/google-deepmind/mujoco_playground/actions)
-[![PyPI version](https://img.shields.io/pypi/v/playground)](https://pypi.org/project/playground/)
-![Banner for playground](https://github.com/google-deepmind/mujoco_playground/blob/main/assets/banner.png?raw=true)
+algorithm tests for 'dm_control' benchmark 
 
-A comprehensive suite of GPU-accelerated environments for robot learning research and sim-to-real, built with [MuJoCo MJX](https://github.com/google-deepmind/mujoco/tree/main/mjx).
-
-Features include:
-
-- Classic control environments from `dm_control` reimplemented in MJX.
-- Quadruped and bipedal locomotion environments.
-- Non-prehensile and dexterous manipulation environments.
-- Vision-based support available via [Madrona-MJX](https://github.com/shacklettbp/madrona_mjx).
-
-For more details, check out the project [website](https://playground.mujoco.org/).
 
 ## Installation
 
-You can install MuJoCo Playground directly from PyPI:
-
-```sh
-pip install playground
-```
 
 ### From Source
 
-> [!IMPORTANT]
 > Requires Python 3.10 or later.
 
-1. `git clone git@github.com:google-deepmind/mujoco_playground.git && cd mujoco_playground`
-2. [Install uv](https://docs.astral.sh/uv/getting-started/installation/), a faster alternative to `pip`
-3. Create a virtual environment: `uv venv --python 3.11`
-4. Activate it: `source .venv/bin/activate`
-5. Install CUDA 12 jax: `uv pip install -U "jax[cuda12]"`
-    * Verify GPU backend: `python -c "import jax; print(jax.default_backend())"` should print gpu
-6. Install playground: `uv pip install -e ".[all]"`
-7. Verify installation (and download Menagerie): `python -c "import mujoco_playground"`
-
-#### Madrona-MJX (optional)
-
-For vision-based environments, please refer to the installation instructions in the [Madrona-MJX](https://github.com/shacklettbp/madrona_mjx?tab=readme-ov-file#installation) repository.
+1. pip install -U "jax[cuda12]"
+2. pip install -e .
+3. cd brax & pip install -e .
+   
 
 ## Getting started
 
-### Basic Tutorials
-| Colab | Description |
-|-------|-------------|
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/dm_control_suite.ipynb) | Introduction to the Playground with DM Control Suite |
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/locomotion.ipynb) | Locomotion Environments |
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/manipulation.ipynb) | Manipulation Environments |
 
-### Vision-Based Tutorials (GPU Colab)
-| Colab | Description |
-|-------|-------------|
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/training_vision_1_t4.ipynb) | Training CartPole from Vision (T4 Instance) |
-
-### Local Runtime Tutorials
-*Requires local Madrona-MJX installation*
-
-| Colab | Description |
-|-------|-------------|
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/training_vision_1.ipynb) | Training CartPole from Vision |
-| [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/google-deepmind/mujoco_playground/blob/main/learning/notebooks/training_vision_2.ipynb) | Robotic Manipulation from Vision |
-
-## Running from CLI
-> [!IMPORTANT]
-> Assumes installation from source.
-
-For basic usage, navigate to the repo's directory and run:
-```bash
-python learning/train_jax_ppo.py --env_name CartpoleBalance
-```
-
-### Training Visualization
-
-To interactively view trajectories throughout training with [rscope](https://github.com/Andrew-Luo1/rscope/tree/main), install it (`pip install rscope`) and run:
-
-```
 python learning/train_jax_ppo.py --env_name PandaPickCube --rscope_envs 16 --run_evals=False --deterministic_rscope=True
 # In a separate terminal
 python -m rscope

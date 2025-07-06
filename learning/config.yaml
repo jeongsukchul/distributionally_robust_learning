@@ -1,0 +1,44 @@
+defaults:
+    - override hydra/launcher: submitit_local
+
+# environment
+benchmark: dm_control
+task: CartpoleSwingup
+obs: state
+exp_name : ppo
+# evaluation
+checkpoint: ???
+eval_episodes: 1
+eval_pi: true
+eval_value: true # evaluate value function approximation
+eval_freq: 50000
+
+#policy
+policy : ppo
+
+# logging
+wandb_project: td-mpc(jax)
+wandb_entity: tjrcjf410-seoul-national-university
+wandb_silent: false
+use_wandb: true
+save_csv: true
+
+# misc
+save_video: true
+save_agent: true
+seed: 1
+
+# convenience
+work_dir: ???
+task_title: ???
+multitask: ???
+tasks: ???
+obs_shape: ???
+action_dim: ???
+episode_length: ???
+obs_shapes: ???
+action_dims: ???
+episode_lengths: ???
+seed_steps: ???
+bin_size: ???
+

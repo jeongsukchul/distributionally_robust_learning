@@ -1,0 +1,29 @@
+ppo_params action_repeat: 1
+batch_size: 1024
+discounting: 0.995
+entropy_cost: 0.01
+episode_length: 1000
+learning_rate: 0.001
+normalize_observations: true
+num_envs: 2048
+num_evals: 10
+num_minibatches: 32
+num_timesteps: 60000000
+num_updates_per_batch: 16
+reward_scaling: 10.0
+unroll_length: 30
+INFO:2025-07-06 15:07:33,479:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+
+[2025-07-06 15:07:33,479][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-06 15:07:33,701][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-06 15:07:33,701][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "/home/ros/mujoco_playground/learning/train.py", line 187, in train
+    train_ppo(cfg)
+  File "/home/ros/mujoco_playground/learning/train.py", line 127, in train_ppo
+    progress = functools.partial(progress, wandb=cfg.use_wandb)
+                                 ^^^^^^^^
+UnboundLocalError: cannot access local variable 'progress' where it is not associated with a value
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

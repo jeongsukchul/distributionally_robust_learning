@@ -125,3 +125,74 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
     rl_config.num_timesteps = 10_000_000
 
   return rl_config
+
+def brax_tdmpc_config(env_name: str) -> config_dict.ConfigDict:
+  """Returns tuned Brax SAC config for the given environment."""
+  env_config = dm_control_suite.get_default_config(env_name)
+
+  rl_config = config_dict.create(
+      num_timesteps=5_000_000,
+      batch_size = 256,
+      reward_coef = 0.1,
+      value_coef = 0.1,
+      consistency_coef = 20,
+      rho = 0.5,
+      enc_lr_scale = 0.3,
+      grad_clip_norm = 20,
+      discount_denom = 5,
+      discount_min = 0.95,
+      discount_max = 0.995,
+      buffer_size = 1_000_000,
+      episode_length=env_config.episode_length,
+      normalize_observations=True,
+      action_repeat=1,
+      discounting=0.99,
+      learning_rate=1e-3,
+      grad_updates_per_step=8,
+      tau = 0.01,
+      mpc = True,
+      iterations =6,
+      num_samples = 512,
+      num_elites = 64,
+      num_pi_trajs =24,
+      horion = 3,
+      min_std = 0.05,
+      max_std = 2,
+      temperature = 0.5,
+      actor_mode = "residual",
+      log_std_min = -10,
+      log_std_max = 2,
+      prior_coef = 1.0,
+      scale_threshold = 2.0,
+      entropy_coef = 1e-4,
+      awac_lambda = 0.3333,
+      exp_adv_min = 0.1,
+      exp_adv_max = 10.0,
+      num_bins = 101,
+      vmin = -10,
+      vmax = 10,
+      model_size = 1,
+      enc_dim = 256,
+      num_enc_layers = 2,
+      num_channels = 32,
+      latent_dim = 512,
+      task_dim = 96,
+      num_q = 5,
+      dropout = 0.01,
+      simnorm_dim = 8,
+  )
+
+  # if env_name == "PendulumSwingUp":
+  #   rl_config.action_repeat = 4
+
+  # if (
+  #     env_name.startswith("Acrobot")
+  #     or env_name.startswith("Swimmer")
+  #     or env_name.startswith("Finger")
+  #     or env_name.startswith("Hopper")
+  #     or env_name
+  #     in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
+  # ):
+  #   rl_config.num_timesteps = 10_000_000
+
+  return rl_config

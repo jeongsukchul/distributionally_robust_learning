@@ -100,6 +100,13 @@ _cfgs = {
     # go/keep-sorted end
 }
 
+_randomizer = {
+
+  "CartpoleSwingup": cartpole.domain_randomize,
+  "HopperHop" : hopper.domain_randomize,
+  "CheetahRun" : cheetah.domain_randomize,
+}
+
 
 def __getattr__(name):
   if name == "ALL_ENVS":

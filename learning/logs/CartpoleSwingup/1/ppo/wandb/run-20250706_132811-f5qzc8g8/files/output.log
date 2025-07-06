@@ -1,0 +1,31 @@
+debug line
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 952, in __getitem__
+    field = self._fields[key]
+            ~~~~~~~~~~~~^^^^^
+KeyError: 'network_factory'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 853, in __getattr__
+    return self[attribute]
+           ~~~~^^^^^^^^^^^
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 958, in __getitem__
+    raise KeyError(self._generate_did_you_mean_message(key, str(e)))
+KeyError: "'network_factory'"
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ros/mujoco_playground/learning/train.py", line 187, in train
+    train_ppo(cfg)
+  File "/home/ros/mujoco_playground/learning/train.py", line 122, in train_ppo
+    **ppo_params.network_factory
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 855, in __getattr__
+    raise AttributeError(e)
+AttributeError: "'network_factory'"
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

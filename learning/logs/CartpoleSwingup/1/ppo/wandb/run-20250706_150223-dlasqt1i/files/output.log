@@ -1,0 +1,44 @@
+ppo_params action_repeat: 1
+batch_size: 1024
+discounting: 0.995
+entropy_cost: 0.01
+episode_length: 1000
+learning_rate: 0.001
+normalize_observations: true
+num_envs: 2048
+num_evals: 10
+num_minibatches: 32
+num_timesteps: 60000000
+num_updates_per_batch: 16
+reward_scaling: 10.0
+unroll_length: 30
+Error executing job with overrides: []
+Traceback (most recent call last):
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 952, in __getitem__
+    field = self._fields[key]
+            ~~~~~~~~~~~~^^^^^
+KeyError: 'network_factory'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 853, in __getattr__
+    return self[attribute]
+           ~~~~^^^^^^^^^^^
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 958, in __getitem__
+    raise KeyError(self._generate_did_you_mean_message(key, str(e)))
+KeyError: "'network_factory'"
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ros/mujoco_playground/learning/train.py", line 187, in train
+    train_ppo(cfg)
+  File "/home/ros/mujoco_playground/learning/train.py", line 123, in train_ppo
+    **ppo_params.network_factory
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/ml_collections/config_dict/config_dict.py", line 855, in __getattr__
+    raise AttributeError(e)
+AttributeError: "'network_factory'"
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

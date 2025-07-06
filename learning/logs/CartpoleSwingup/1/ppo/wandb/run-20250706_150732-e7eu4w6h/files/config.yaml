@@ -1,0 +1,115 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            vaxbvd46ucn6w30epciaeienj6w6trb6:
+                codePath: learning/train.py
+                codePathLocal: train.py
+                cpu_count: 6
+                cpu_count_logical: 12
+                cudaVersion: "12.6"
+                disk:
+                    /:
+                        total: "1081101176832"
+                        used: "59345764352"
+                email: tjrcjf410@snu.ac.kr
+                executable: /home/ros/miniconda3/envs/mujoco/bin/python
+                git:
+                    commit: 60cf8430011da531e08ce95a6ea48a56e5fbad7c
+                    remote: https://github.com/google-deepmind/mujoco_playground.git
+                gpu: NVIDIA GeForce RTX 3060
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      memoryTotal: "12884901888"
+                      name: NVIDIA GeForce RTX 3060
+                      uuid: GPU-055e979c-be98-4fb4-1b6d-a18734cc5a72
+                host: DESKTOP-ENONDU4
+                memory:
+                    total: "16723943424"
+                os: Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.31
+                program: /home/ros/mujoco_playground/learning/train.py
+                python: CPython 3.12.11
+                root: /home/ros/mujoco_playground/learning/logs/CartpoleSwingup/1/ppo
+                startedAt: "2025-07-06T06:07:32.189831Z"
+                writerId: vaxbvd46ucn6w30epciaeienj6w6trb6
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 12
+                - 45
+                - 50
+            "2":
+                - 12
+                - 45
+                - 50
+            "3":
+                - 13
+                - 16
+            "4": 3.12.11
+            "5": 0.21.0
+            "12": 0.21.0
+            "13": linux-x86_64
+action_dim:
+    value: ???
+action_dims:
+    value: ???
+benchmark:
+    value: dm_control
+bin_size:
+    value: ???
+checkpoint:
+    value: ???
+env_name:
+    value: CartpoleSwingup
+episode_length:
+    value: ???
+episode_lengths:
+    value: ???
+eval_episodes:
+    value: 1
+eval_freq:
+    value: 50000
+eval_pi:
+    value: true
+eval_value:
+    value: true
+exp_name:
+    value: ppo
+multitask:
+    value: ???
+obs:
+    value: state
+obs_shape:
+    value: ???
+obs_shapes:
+    value: ???
+policy:
+    value: ppo
+save_agent:
+    value: true
+save_csv:
+    value: true
+save_video:
+    value: true
+seed:
+    value: 1
+seed_steps:
+    value: ???
+task:
+    value: CartpoleSwingup
+task_title:
+    value: ???
+tasks:
+    value: ???
+use_wandb:
+    value: true
+wandb_entity:
+    value: tjrcjf410-seoul-national-university
+wandb_project:
+    value: td-mpc(jax)
+wandb_silent:
+    value: false
+work_dir:
+    value: /home/ros/mujoco_playground/learning/logs/CartpoleSwingup/1/ppo

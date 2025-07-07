@@ -1,0 +1,85 @@
+INFO:2025-07-07 19:45:46,979:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 19:45:46,979][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 19:45:47,150][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 19:45:47,151][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 19:45:47,386][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 19:45:48,750][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 19:45:48,750][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Error executing job with overrides: ['task=CartpoleSwingup']
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 242, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 210, in train_sac
+    make_inference_fn, params, metrics = train_fn(
+                                         ^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 502, in train
+    env_state = jax.pmap(env.reset)(env_keys)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1708, in cache_miss
+    execute = pxla.xla_pmap_impl_lazy(p.flat_fun, *p.flat_args, **params)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 353, in xla_pmap_impl_lazy
+    compiled_fun, fingerprint = parallel_callable(
+                                ^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 471, in memoized_fun
+    ans = call(fun, *args)
+          ^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 630, in parallel_callable
+    closed_jaxpr, xc_backend, replicas, shards, pci = get_pmap_jaxpr(
+                                                      ^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 764, in get_pmap_jaxpr
+    jaxpr, consts, replicas, shards = stage_parallel_callable(pci, fun)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 727, in stage_parallel_callable
+    jaxpr, out_sharded_avals, consts, _ = pe.trace_to_jaxpr_dynamic(
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/profiler.py", line 354, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/partial_eval.py", line 2292, in trace_to_jaxpr_dynamic
+    ans = fun.call_wrapped(*in_tracers)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 211, in call_wrapped
+    return self.f_transformed(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 703, in _change_argument_ranks
+    results = f(*args)
+              ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api_util.py", line 73, in flatten_fun
+    ans = f(*py_args, **py_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api_util.py", line 439, in _flat_out_axes
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 396, in _get_result_paths_thunk
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/wrapper.py", line 129, in reset
+    state = self.env.reset(rng)
+            ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/envs/wrappers/training.py", line 83, in reset
+    state = self.env.reset(rng)
+            ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/wrapper.py", line 174, in reset
+    state = jax.vmap(reset, in_axes=[self._in_axes, 0])(self._mjx_model_v, rng)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1119, in vmap_f
+    _mapped_axis_size(fun, in_tree, args_flat, in_axes_flat, "vmap"))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1248, in _mapped_axis_size
+    raise ValueError(''.join(msg)[:-2])  # remove last semicolon and newline
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: vmap got inconsistent sizes for array axes to be mapped:
+  * most axes (2 of them) had size 3, e.g. axis 0 of argument mjx_model.body_ipos of type float32[3,3];
+  * one axis had size 2: axis 0 of argument mjx_model.dof_frictionloss of type float32[2];
+  * one axis had size 5: axis 0 of argument mjx_model.geom_friction of type float32[5,3];
+  * one axis had size 128: axis 0 of argument rng of type uint32[128,2]
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

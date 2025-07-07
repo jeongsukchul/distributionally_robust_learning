@@ -90,6 +90,7 @@ def brax_vision_ppo_config(env_name: str) -> config_dict.ConfigDict:
 
 def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
   """Returns tuned Brax SAC config for the given environment."""
+  
   env_config = dm_control_suite.get_default_config(env_name)
 
   rl_config = config_dict.create(
@@ -113,7 +114,8 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
 
   if env_name == "PendulumSwingUp":
     rl_config.action_repeat = 4
-
+  if env_name =="HopperHop":
+    rl_config.num_timesteps = 10_000_000
   if (
       env_name.startswith("Acrobot")
       or env_name.startswith("Swimmer")

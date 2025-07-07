@@ -1,11 +1,11 @@
-defaults:
-    - override hydra/launcher: submitit_local
+# defaults:
+#     - override hydra/launcher: submitit_local
 
 # environment
 benchmark: dm_control
 task: CartpoleSwingup
 obs: state
-exp_name : ppo
+exp_name : test
 # evaluation
 checkpoint: ???
 eval_episodes: 1
@@ -15,6 +15,11 @@ eval_freq: 50000
 
 #policy
 policy : ppo
+
+
+#dynamics shift
+dynamics_shift: false
+dynamics_shift_type: deterministic  # or deterministic
 
 # logging
 wandb_project: td-mpc(jax)

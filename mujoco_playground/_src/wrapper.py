@@ -184,7 +184,6 @@ class BraxDomainRandomizationVmapWrapper(Wrapper):
     )
     return res
 
-
 def _identity_vision_randomization_fn(
     mjx_model: mjx.Model, num_worlds: int
 ) -> Tuple[mjx.Model, mjx.Model]:

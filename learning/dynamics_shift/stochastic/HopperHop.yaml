@@ -1,0 +1,16 @@
+floor_friction_min : 0.5
+floor_friction_max : 1.2
+dof_friction_min : 0.9
+dof_friction_max : 1.1
+com_offset_min : -0.1
+com_offset_max : 0.1
+body1_mass_min: 0.8
+body1_mass_max: 1.2
+body2_mass_min: 0.8
+body2_mass_max: 1.2
+body3_mass_min: 0.8
+body3_mass_max: 1.2
+body4_mass_min: 0.8
+body4_mass_max: 1.2
+body5_mass_min: 0.8
+body5_mass_max: 1.2

@@ -1,0 +1,168 @@
+INFO:2025-07-07 18:32:40,225:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 18:32:40,225][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 18:32:40,355][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 18:32:40,356][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 18:32:40,571][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 18:32:40,915][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 18:32:40,915][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 18:32:47,525][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 18:32:47,525][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 18:33:16,322][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 18:33:16,322][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 18:34:01,590][absl][INFO] - {'eval/walltime': 45.10750412940979, 'eval/episode_reward': Array(1.708, dtype=float32), 'eval/episode_reward_std': Array(2.16, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 45.10750412940979, 'eval/sps': 2837.665316901115}
+ eval/walltime :  45.10750412940979
+ eval/episode_reward :  1.707546591758728
+ eval/episode_reward_std :  2.1597838401794434
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  45.10750412940979
+ eval/sps :  2837.665316901115
+[2025-07-07 18:34:19,923][absl][INFO] - replay size after prefill 8192
+[2025-07-07 18:34:19,977][absl][INFO] - step 0
+[2025-07-07 18:35:18,102][absl][INFO] - {'eval/walltime': 46.14890956878662, 'training/sps': 19455.996834109636, 'training/walltime': 75.4482934474945, 'training/actor_loss': Array(-39.812, dtype=float32), 'training/alpha': Array(0.065, dtype=float32), 'training/alpha_loss': Array(0.409, dtype=float32), 'training/buffer_current_size': Array(563392.06, dtype=float32), 'training/critic_loss': Array(0.011, dtype=float32), 'eval/episode_reward': Array(640.033, dtype=float32), 'eval/episode_reward_std': Array(5.627, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.041405439376831, 'eval/sps': 122910.82335482539}
+ eval/walltime :  46.14890956878662
+ training/sps :  19455.996834109636
+ training/walltime :  75.4482934474945
+ training/actor_loss :  -39.811954498291016
+ training/alpha :  0.06452330201864243
+ training/alpha_loss :  0.40885043144226074
+ training/buffer_current_size :  563392.0625
+ training/critic_loss :  0.010751530528068542
+ eval/episode_reward :  640.0328369140625
+ eval/episode_reward_std :  5.6269450187683105
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.041405439376831
+ eval/sps :  122910.82335482539
+[2025-07-07 18:35:18,106][absl][INFO] - step 1118464
+[2025-07-07 18:35:48,694][absl][INFO] - {'eval/walltime': 47.183483600616455, 'training/sps': 37575.19500357087, 'training/walltime': 104.99629712104797, 'training/actor_loss': Array(-54.988, dtype=float32), 'training/alpha': Array(0.011, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(1.674e+06, dtype=float32), 'training/critic_loss': Array(0.013, dtype=float32), 'eval/episode_reward': Array(711.344, dtype=float32), 'eval/episode_reward_std': Array(10.894, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.034574031829834, 'eval/sps': 123722.41720934027}
+ eval/walltime :  47.183483600616455
+ training/sps :  37575.19500357087
+ training/walltime :  104.99629712104797
+ training/actor_loss :  -54.98801040649414
+ training/alpha :  0.010987821966409683
+ training/alpha_loss :  -4.455545422388241e-06
+ training/buffer_current_size :  1673664.125
+ training/critic_loss :  0.013105981983244419
+ eval/episode_reward :  711.344482421875
+ eval/episode_reward_std :  10.89425277709961
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.034574031829834
+ eval/sps :  123722.41720934027
+[2025-07-07 18:35:48,698][absl][INFO] - step 2228736
+[2025-07-07 18:36:19,687][absl][INFO] - {'eval/walltime': 48.214020013809204, 'training/sps': 37067.09151987986, 'training/walltime': 134.9493350982666, 'training/actor_loss': Array(-63.856, dtype=float32), 'training/alpha': Array(0.013, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(2.784e+06, dtype=float32), 'training/critic_loss': Array(0.012, dtype=float32), 'eval/episode_reward': Array(783.283, dtype=float32), 'eval/episode_reward_std': Array(4.756, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.030536413192749, 'eval/sps': 124207.15887509275}
+ eval/walltime :  48.214020013809204
+ training/sps :  37067.09151987986
+ training/walltime :  134.9493350982666
+ training/actor_loss :  -63.85567855834961
+ training/alpha :  0.0127504151314497
+ training/alpha_loss :  -1.3042688806308433e-05
+ training/buffer_current_size :  2783936.25
+ training/critic_loss :  0.011541523039340973
+ eval/episode_reward :  783.28271484375
+ eval/episode_reward_std :  4.756160736083984
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.030536413192749
+ eval/sps :  124207.15887509275
+[2025-07-07 18:36:19,691][absl][INFO] - step 3339008
+[2025-07-07 18:36:57,904][absl][INFO] - {'eval/walltime': 49.24460577964783, 'training/sps': 29864.264479832294, 'training/walltime': 172.126610994339, 'training/actor_loss': Array(-69.449, dtype=float32), 'training/alpha': Array(0.013, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(3.865e+06, dtype=float32), 'training/critic_loss': Array(0.014, dtype=float32), 'eval/episode_reward': Array(808.88, dtype=float32), 'eval/episode_reward_std': Array(4.666, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.030585765838623, 'eval/sps': 124201.21084812577}
+ eval/walltime :  49.24460577964783
+ training/sps :  29864.264479832294
+ training/walltime :  172.126610994339
+ training/actor_loss :  -69.44947814941406
+ training/alpha :  0.013204781338572502
+ training/alpha_loss :  -2.4396890694333706e-06
+ training/buffer_current_size :  3864915.75
+ training/critic_loss :  0.013718084432184696
+ eval/episode_reward :  808.8803100585938
+ eval/episode_reward_std :  4.665924549102783
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.030585765838623
+ eval/sps :  124201.21084812577
+[2025-07-07 18:36:57,907][absl][INFO] - step 4449280
+[2025-07-07 18:38:00,596][absl][INFO] - {'eval/walltime': 50.30855751037598, 'training/sps': 18018.251435345923, 'training/walltime': 233.74590873718262, 'training/actor_loss': Array(-76.794, dtype=float32), 'training/alpha': Array(0.012, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.012, dtype=float32), 'eval/episode_reward': Array(840.12, dtype=float32), 'eval/episode_reward_std': Array(14.859, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.0639517307281494, 'eval/sps': 120306.20967400383}
+ eval/walltime :  50.30855751037598
+ training/sps :  18018.251435345923
+ training/walltime :  233.74590873718262
+ training/actor_loss :  -76.7935791015625
+ training/alpha :  0.012486876919865608
+ training/alpha_loss :  1.249271008418873e-05
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.01192318182438612
+ eval/episode_reward :  840.119873046875
+ eval/episode_reward_std :  14.859271049499512
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.0639517307281494
+ eval/sps :  120306.20967400383
+[2025-07-07 18:38:00,600][absl][INFO] - step 5559552
+[2025-07-07 18:39:02,943][absl][INFO] - {'eval/walltime': 51.368282318115234, 'training/sps': 18118.64165350958, 'training/walltime': 295.02379155158997, 'training/actor_loss': Array(-81.875, dtype=float32), 'training/alpha': Array(0.012, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.014, dtype=float32), 'eval/episode_reward': Array(886.01, dtype=float32), 'eval/episode_reward_std': Array(37.869, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.0597248077392578, 'eval/sps': 120786.07489907325}
+ eval/walltime :  51.368282318115234
+ training/sps :  18118.64165350958
+ training/walltime :  295.02379155158997
+ training/actor_loss :  -81.87456512451172
+ training/alpha :  0.012277971021831036
+ training/alpha_loss :  -2.4753837806201773e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.013964003883302212
+ eval/episode_reward :  886.0104370117188
+ eval/episode_reward_std :  37.86891555786133
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.0597248077392578
+ eval/sps :  120786.07489907325
+[2025-07-07 18:39:02,947][absl][INFO] - step 6669824
+[2025-07-07 18:40:05,569][absl][INFO] - {'eval/walltime': 52.37804889678955, 'training/sps': 18021.78654958795, 'training/walltime': 356.6310021877289, 'training/actor_loss': Array(-86.174, dtype=float32), 'training/alpha': Array(0.012, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.018, dtype=float32), 'eval/episode_reward': Array(898.806, dtype=float32), 'eval/episode_reward_std': Array(29.925, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.0097665786743164, 'eval/sps': 126761.96925436596}
+ eval/walltime :  52.37804889678955
+ training/sps :  18021.78654958795
+ training/walltime :  356.6310021877289
+ training/actor_loss :  -86.1744155883789
+ training/alpha :  0.01195051334798336
+ training/alpha_loss :  1.3281183782964945e-05
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.017647583037614822
+ eval/episode_reward :  898.8060302734375
+ eval/episode_reward_std :  29.925065994262695
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.0097665786743164
+ eval/sps :  126761.96925436596
+[2025-07-07 18:40:05,573][absl][INFO] - step 7780096
+[2025-07-07 18:41:08,208][absl][INFO] - {'eval/walltime': 53.407721519470215, 'training/sps': 18023.74077705124, 'training/walltime': 418.2315330505371, 'training/actor_loss': Array(-89.602, dtype=float32), 'training/alpha': Array(0.01, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.014, dtype=float32), 'eval/episode_reward': Array(907.031, dtype=float32), 'eval/episode_reward_std': Array(6.902, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.029672622680664, 'eval/sps': 124311.3560373811}
+ eval/walltime :  53.407721519470215
+ training/sps :  18023.74077705124
+ training/walltime :  418.2315330505371
+ training/actor_loss :  -89.60228729248047
+ training/alpha :  0.010172519832849503
+ training/alpha_loss :  1.9698962205438875e-05
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.014499712735414505
+ eval/episode_reward :  907.03125
+ eval/episode_reward_std :  6.9020185470581055
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.029672622680664
+ eval/sps :  124311.3560373811
+[2025-07-07 18:41:08,213][absl][INFO] - step 8890368
+[2025-07-07 18:42:10,817][absl][INFO] - {'eval/walltime': 54.41815543174744, 'training/sps': 18027.057034875175, 'training/walltime': 479.82073187828064, 'training/actor_loss': Array(-92.245, dtype=float32), 'training/alpha': Array(0.008, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.01, dtype=float32), 'eval/episode_reward': Array(914.415, dtype=float32), 'eval/episode_reward_std': Array(3.754, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 1.0104339122772217, 'eval/sps': 126678.25024946514}
+ eval/walltime :  54.41815543174744
+ training/sps :  18027.057034875175
+ training/walltime :  479.82073187828064
+ training/actor_loss :  -92.24541473388672
+ training/alpha :  0.007821031846106052
+ training/alpha_loss :  2.5452736736042425e-05
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.010117417201399803
+ eval/episode_reward :  914.4153442382812
+ eval/episode_reward_std :  3.753763198852539
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  1.0104339122772217
+ eval/sps :  126678.25024946514
+[2025-07-07 18:42:11,968][absl][INFO] - total steps: 10000640
+time to jit: 0:01:21.021881
+time to train: 0:08:09.227187
+Saving parameters to /home/sukchul/distributionally_robust_learning/learning/logs/CheetahRun/3/sac/models

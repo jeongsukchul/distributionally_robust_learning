@@ -1,0 +1,207 @@
+INFO:2025-07-07 11:36:22,852:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:36:22,852][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:36:22,996][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:36:22,996][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:36:23,286][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 11:36:23,637][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:36:23,637][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:36:29,177][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:36:29,177][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:36:48,260][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:36:48,260][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:37:34,713][absl][INFO] - {'eval/walltime': 46.29118776321411, 'eval/episode_reward': Array(0.049, dtype=float32), 'eval/episode_reward/hopping': Array(43.843, dtype=float32), 'eval/episode_reward/standing': Array(1.344, dtype=float32), 'eval/episode_reward_std': Array(0.308, dtype=float32), 'eval/episode_reward/hopping_std': Array(13.87, dtype=float32), 'eval/episode_reward/standing_std': Array(3.817, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 46.29118776321411, 'eval/sps': 2765.105113628492}
+ eval/walltime :  46.29118776321411
+ eval/episode_reward :  0.04947715997695923
+ eval/episode_reward/hopping :  43.843162536621094
+ eval/episode_reward/standing :  1.34375
+ eval/episode_reward_std :  0.30774253606796265
+ eval/episode_reward/hopping_std :  13.870162963867188
+ eval/episode_reward/standing_std :  3.8169798851013184
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  46.29118776321411
+ eval/sps :  2765.105113628492
+[2025-07-07 11:37:56,735][absl][INFO] - replay size after prefill 8192
+[2025-07-07 11:37:56,796][absl][INFO] - step 0
+[2025-07-07 11:39:21,495][absl][INFO] - {'eval/walltime': 49.71169662475586, 'training/sps': 13663.181158934476, 'training/walltime': 103.33663034439087, 'training/actor_loss': Array(-15.335, dtype=float32), 'training/alpha': Array(0.059, dtype=float32), 'training/alpha_loss': Array(0.276, dtype=float32), 'training/buffer_current_size': Array(563392.06, dtype=float32), 'training/critic_loss': Array(0.004, dtype=float32), 'eval/episode_reward': Array(39.245, dtype=float32), 'eval/episode_reward/hopping': Array(87.275, dtype=float32), 'eval/episode_reward/standing': Array(174.641, dtype=float32), 'eval/episode_reward_std': Array(49.87, dtype=float32), 'eval/episode_reward/hopping_std': Array(100.484, dtype=float32), 'eval/episode_reward/standing_std': Array(218.231, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.420508861541748, 'eval/sps': 37421.33266753349}
+ eval/walltime :  49.71169662475586
+ training/sps :  13663.181158934476
+ training/walltime :  103.33663034439087
+ training/actor_loss :  -15.334775924682617
+ training/alpha :  0.05914846435189247
+ training/alpha_loss :  0.27625423669815063
+ training/buffer_current_size :  563392.0625
+ training/critic_loss :  0.003888344159349799
+ eval/episode_reward :  39.24521255493164
+ eval/episode_reward/hopping :  87.27507019042969
+ eval/episode_reward/standing :  174.640625
+ eval/episode_reward_std :  49.870025634765625
+ eval/episode_reward/hopping_std :  100.48358154296875
+ eval/episode_reward/standing_std :  218.2310791015625
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.420508861541748
+ eval/sps :  37421.33266753349
+[2025-07-07 11:39:21,500][absl][INFO] - step 1118464
+[2025-07-07 11:40:15,965][absl][INFO] - {'eval/walltime': 53.492186307907104, 'training/sps': 21908.013214307663, 'training/walltime': 154.01543855667114, 'training/actor_loss': Array(-3.975, dtype=float32), 'training/alpha': Array(0.001, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(1.674e+06, dtype=float32), 'training/critic_loss': Array(0.002, dtype=float32), 'eval/episode_reward': Array(146.218, dtype=float32), 'eval/episode_reward/hopping': Array(268.684, dtype=float32), 'eval/episode_reward/standing': Array(493.266, dtype=float32), 'eval/episode_reward_std': Array(35.658, dtype=float32), 'eval/episode_reward/hopping_std': Array(62.351, dtype=float32), 'eval/episode_reward/standing_std': Array(120.518, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.780489683151245, 'eval/sps': 33858.047694314824}
+ eval/walltime :  53.492186307907104
+ training/sps :  21908.013214307663
+ training/walltime :  154.01543855667114
+ training/actor_loss :  -3.9748215675354004
+ training/alpha :  0.0011181089794263244
+ training/alpha_loss :  -4.1006314859259874e-05
+ training/buffer_current_size :  1673664.125
+ training/critic_loss :  0.0024937158450484276
+ eval/episode_reward :  146.21844482421875
+ eval/episode_reward/hopping :  268.68353271484375
+ eval/episode_reward/standing :  493.265625
+ eval/episode_reward_std :  35.65843200683594
+ eval/episode_reward/hopping_std :  62.35081481933594
+ eval/episode_reward/standing_std :  120.5177993774414
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.780489683151245
+ eval/sps :  33858.047694314824
+[2025-07-07 11:40:15,970][absl][INFO] - step 2228736
+[2025-07-07 11:41:11,875][absl][INFO] - {'eval/walltime': 56.989278078079224, 'training/sps': 21187.368009992602, 'training/walltime': 206.41798329353333, 'training/actor_loss': Array(-10.055, dtype=float32), 'training/alpha': Array(0.006, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(2.784e+06, dtype=float32), 'training/critic_loss': Array(0.005, dtype=float32), 'eval/episode_reward': Array(198.621, dtype=float32), 'eval/episode_reward/hopping': Array(356.303, dtype=float32), 'eval/episode_reward/standing': Array(513.844, dtype=float32), 'eval/episode_reward_std': Array(18.141, dtype=float32), 'eval/episode_reward/hopping_std': Array(31.1, dtype=float32), 'eval/episode_reward/standing_std': Array(47.215, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.497091770172119, 'eval/sps': 36601.84187665745}
+ eval/walltime :  56.989278078079224
+ training/sps :  21187.368009992602
+ training/walltime :  206.41798329353333
+ training/actor_loss :  -10.055349349975586
+ training/alpha :  0.005804154556244612
+ training/alpha_loss :  -3.532435584929772e-05
+ training/buffer_current_size :  2783936.25
+ training/critic_loss :  0.005213734693825245
+ eval/episode_reward :  198.62060546875
+ eval/episode_reward/hopping :  356.3034362792969
+ eval/episode_reward/standing :  513.84375
+ eval/episode_reward_std :  18.141477584838867
+ eval/episode_reward/hopping_std :  31.09953498840332
+ eval/episode_reward/standing_std :  47.215003967285156
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.497091770172119
+ eval/sps :  36601.84187665745
+[2025-07-07 11:41:11,880][absl][INFO] - step 3339008
+[2025-07-07 11:42:14,456][absl][INFO] - {'eval/walltime': 60.496232748031616, 'training/sps': 18797.862562442966, 'training/walltime': 265.48171973228455, 'training/actor_loss': Array(-15.344, dtype=float32), 'training/alpha': Array(0.008, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(3.865e+06, dtype=float32), 'training/critic_loss': Array(0.006, dtype=float32), 'eval/episode_reward': Array(260.122, dtype=float32), 'eval/episode_reward/hopping': Array(449.59, dtype=float32), 'eval/episode_reward/standing': Array(514.164, dtype=float32), 'eval/episode_reward_std': Array(4.715, dtype=float32), 'eval/episode_reward/hopping_std': Array(8.063, dtype=float32), 'eval/episode_reward/standing_std': Array(10.325, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.5069546699523926, 'eval/sps': 36498.90347791054}
+ eval/walltime :  60.496232748031616
+ training/sps :  18797.862562442966
+ training/walltime :  265.48171973228455
+ training/actor_loss :  -15.34434986114502
+ training/alpha :  0.007974334061145782
+ training/alpha_loss :  -1.83670472324593e-05
+ training/buffer_current_size :  3864915.75
+ training/critic_loss :  0.005933034233748913
+ eval/episode_reward :  260.12249755859375
+ eval/episode_reward/hopping :  449.58978271484375
+ eval/episode_reward/standing :  514.1640625
+ eval/episode_reward_std :  4.715468406677246
+ eval/episode_reward/hopping_std :  8.062556266784668
+ eval/episode_reward/standing_std :  10.325013160705566
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.5069546699523926
+ eval/sps :  36498.90347791054
+[2025-07-07 11:42:14,461][absl][INFO] - step 4449280
+[2025-07-07 11:43:36,393][absl][INFO] - {'eval/walltime': 64.09757089614868, 'training/sps': 14175.251520729456, 'training/walltime': 343.80639696121216, 'training/actor_loss': Array(-19.787, dtype=float32), 'training/alpha': Array(0.011, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.006, dtype=float32), 'eval/episode_reward': Array(273.043, dtype=float32), 'eval/episode_reward/hopping': Array(497.531, dtype=float32), 'eval/episode_reward/standing': Array(489.016, dtype=float32), 'eval/episode_reward_std': Array(5.594, dtype=float32), 'eval/episode_reward/hopping_std': Array(7.704, dtype=float32), 'eval/episode_reward/standing_std': Array(15.308, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.6013381481170654, 'eval/sps': 35542.34418862442}
+ eval/walltime :  64.09757089614868
+ training/sps :  14175.251520729456
+ training/walltime :  343.80639696121216
+ training/actor_loss :  -19.78681755065918
+ training/alpha :  0.010864189825952053
+ training/alpha_loss :  -1.6830394088174216e-05
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.006084934808313847
+ eval/episode_reward :  273.04278564453125
+ eval/episode_reward/hopping :  497.5306396484375
+ eval/episode_reward/standing :  489.015625
+ eval/episode_reward_std :  5.593902587890625
+ eval/episode_reward/hopping_std :  7.7035627365112305
+ eval/episode_reward/standing_std :  15.308281898498535
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.6013381481170654
+ eval/sps :  35542.34418862442
+[2025-07-07 11:43:36,398][absl][INFO] - step 5559552
+[2025-07-07 11:44:59,837][absl][INFO] - {'eval/walltime': 67.81016945838928, 'training/sps': 13927.851121474883, 'training/walltime': 423.52235531806946, 'training/actor_loss': Array(-22.859, dtype=float32), 'training/alpha': Array(0.013, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.005, dtype=float32), 'eval/episode_reward': Array(286.502, dtype=float32), 'eval/episode_reward/hopping': Array(512.432, dtype=float32), 'eval/episode_reward/standing': Array(499.867, dtype=float32), 'eval/episode_reward_std': Array(3.046, dtype=float32), 'eval/episode_reward/hopping_std': Array(6.346, dtype=float32), 'eval/episode_reward/standing_std': Array(11.59, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.7125985622406006, 'eval/sps': 34477.19915151569}
+ eval/walltime :  67.81016945838928
+ training/sps :  13927.851121474883
+ training/walltime :  423.52235531806946
+ training/actor_loss :  -22.858592987060547
+ training/alpha :  0.013055476360023022
+ training/alpha_loss :  -9.901521480060183e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.004911571741104126
+ eval/episode_reward :  286.50177001953125
+ eval/episode_reward/hopping :  512.43212890625
+ eval/episode_reward/standing :  499.8671875
+ eval/episode_reward_std :  3.0462148189544678
+ eval/episode_reward/hopping_std :  6.345808506011963
+ eval/episode_reward/standing_std :  11.590250968933105
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.7125985622406006
+ eval/sps :  34477.19915151569
+[2025-07-07 11:44:59,846][absl][INFO] - step 6669824
+[2025-07-07 11:46:21,904][absl][INFO] - {'eval/walltime': 71.42233538627625, 'training/sps': 14154.32409981293, 'training/walltime': 501.9628369808197, 'training/actor_loss': Array(-24.735, dtype=float32), 'training/alpha': Array(0.014, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.004, dtype=float32), 'eval/episode_reward': Array(294.41, dtype=float32), 'eval/episode_reward/hopping': Array(522.18, dtype=float32), 'eval/episode_reward/standing': Array(503.656, dtype=float32), 'eval/episode_reward_std': Array(3.441, dtype=float32), 'eval/episode_reward/hopping_std': Array(7.416, dtype=float32), 'eval/episode_reward/standing_std': Array(12.46, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.612165927886963, 'eval/sps': 35435.80293801098}
+ eval/walltime :  71.42233538627625
+ training/sps :  14154.32409981293
+ training/walltime :  501.9628369808197
+ training/actor_loss :  -24.7347354888916
+ training/alpha :  0.01413906179368496
+ training/alpha_loss :  -1.8188260355600505e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.004010104574263096
+ eval/episode_reward :  294.41009521484375
+ eval/episode_reward/hopping :  522.1798706054688
+ eval/episode_reward/standing :  503.65625
+ eval/episode_reward_std :  3.4410979747772217
+ eval/episode_reward/hopping_std :  7.415769100189209
+ eval/episode_reward/standing_std :  12.460209846496582
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.612165927886963
+ eval/sps :  35435.80293801098
+[2025-07-07 11:46:21,915][absl][INFO] - step 7780096
+[2025-07-07 11:47:45,454][absl][INFO] - {'eval/walltime': 75.1482343673706, 'training/sps': 13912.082320558004, 'training/walltime': 581.7691502571106, 'training/actor_loss': Array(-26.074, dtype=float32), 'training/alpha': Array(0.014, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.004, dtype=float32), 'eval/episode_reward': Array(298.763, dtype=float32), 'eval/episode_reward/hopping': Array(545.276, dtype=float32), 'eval/episode_reward/standing': Array(496.984, dtype=float32), 'eval/episode_reward_std': Array(4.319, dtype=float32), 'eval/episode_reward/hopping_std': Array(8.104, dtype=float32), 'eval/episode_reward/standing_std': Array(13.376, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.7258989810943604, 'eval/sps': 34354.12517877879}
+ eval/walltime :  75.1482343673706
+ training/sps :  13912.082320558004
+ training/walltime :  581.7691502571106
+ training/actor_loss :  -26.073705673217773
+ training/alpha :  0.01385924406349659
+ training/alpha_loss :  1.8235411971545545e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.0035763434134423733
+ eval/episode_reward :  298.76336669921875
+ eval/episode_reward/hopping :  545.2755737304688
+ eval/episode_reward/standing :  496.984375
+ eval/episode_reward_std :  4.31858491897583
+ eval/episode_reward/hopping_std :  8.104071617126465
+ eval/episode_reward/standing_std :  13.375575065612793
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.7258989810943604
+ eval/sps :  34354.12517877879
+[2025-07-07 11:47:45,459][absl][INFO] - step 8890368
+[2025-07-07 11:49:09,648][absl][INFO] - {'eval/walltime': 78.69785237312317, 'training/sps': 13769.886329271929, 'training/walltime': 662.3995907306671, 'training/actor_loss': Array(-26.836, dtype=float32), 'training/alpha': Array(0.014, dtype=float32), 'training/alpha_loss': Array(-0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.004, dtype=float32), 'eval/episode_reward': Array(292.598, dtype=float32), 'eval/episode_reward/hopping': Array(526.049, dtype=float32), 'eval/episode_reward/standing': Array(488.859, dtype=float32), 'eval/episode_reward_std': Array(52.729, dtype=float32), 'eval/episode_reward/hopping_std': Array(94.294, dtype=float32), 'eval/episode_reward/standing_std': Array(88.712, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 3.5496180057525635, 'eval/sps': 36060.21825237569}
+ eval/walltime :  78.69785237312317
+ training/sps :  13769.886329271929
+ training/walltime :  662.3995907306671
+ training/actor_loss :  -26.836328506469727
+ training/alpha :  0.01443424355238676
+ training/alpha_loss :  -6.249495527299587e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.004006731323897839
+ eval/episode_reward :  292.598388671875
+ eval/episode_reward/hopping :  526.04931640625
+ eval/episode_reward/standing :  488.859375
+ eval/episode_reward_std :  52.72932434082031
+ eval/episode_reward/hopping_std :  94.29447937011719
+ eval/episode_reward/standing_std :  88.71228790283203
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  3.5496180057525635
+ eval/sps :  36060.21825237569
+[2025-07-07 11:49:10,910][absl][INFO] - total steps: 10000640
+time to jit: 0:01:11.431959
+time to train: 0:11:34.934333

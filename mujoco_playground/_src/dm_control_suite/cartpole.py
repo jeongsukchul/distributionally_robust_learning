@@ -288,51 +288,55 @@ class Balance(mjx_env.MjxEnv):
     return self._mjx_model
 
 FLOOR_GEOM_ID = 0
-TORSO_BODY_ID = 1
+POLE_BODY_ID = 2
 
 def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, deterministic_cfg : dict):
   @jax.vmap
+  def shift_dynamics(rng):
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(deterministic_cfg['floor_friction'])
+    dof_frictionloss = model.dof_frictionloss.at[:].set(deterministic_cfg['dof_friction']*jp.ones((model.nv,)))
+    offset = jp.array((deterministic_cfg['com_offset_x'], deterministic_cfg["com_offset_y"], deterministic_cfg["com_offset_z"]))
+
+    body_ipos = model.body_ipos.at[POLE_BODY_ID].set(
+        model.body_ipos[POLE_BODY_ID] + offset
+      )
+    body_mass = jp.ones((model.nbody,))
+    for i in range(1, model.nbody):
+      body_mass = body_mass.at[i].set(model.body_mass[i] * deterministic_cfg[f'body{i}_mass'])
+    return (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    )
+  @jax.vmap
   def rand_dynamics(rng):
     # floor friction
-    if deterministic_cfg['floor_friction'] is not None:
-      geom_friction = deterministic_cfg['floor_friction']
-    else:
-      rng, key = jax.random.split(rng)
-      geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
-        jax.random.uniform(key, minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max'])
-      )
+    rng, key = jax.random.split(rng)
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
+      jax.random.uniform(key, minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max'])
+    )
 
-    # static friction
-    if deterministic_cfg['dof_friction'] is not None:
-      dof_frictionloss = model.dof_frictionloss.at[6:].set(deterministic_cfg['dof_friction'])
-    else:
+  # static friction
+    rng, key = jax.random.split(rng)
+    frictionloss = model.dof_frictionloss[:] * jax.random.uniform(
+        key, shape=(model.nv,), minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']
+    )
+    dof_frictionloss = model.dof_frictionloss.at[:].set(frictionloss)
+  
+  # com pos offset
+    rng, key = jax.random.split(rng)
+    dpos = jax.random.uniform(key, (3,), minval=-stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max'])
+    body_ipos = model.body_ipos.at[POLE_BODY_ID].set(
+        model.body_ipos[POLE_BODY_ID] + dpos
+    )
+  
+  # link mass 
+    body_mass = jp.ones((model.nbody,))
+    for i in range(1, model.nbody):
       rng, key = jax.random.split(rng)
-      frictionloss = model.dof_frictionloss[6:] * jax.random.uniform(
-          key, shape=(12,), minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']
-      )
-      dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
-    
-    # com pos offset
-    if deterministic_cfg['com_offset'] is not None:
-      body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-        model.body_ipos[TORSO_BODY_ID] + deterministic_cfg['com_offset']
-      )
-    else:
-      rng, key = jax.random.split(rng)
-      dpos = jax.random.uniform(key, (3,), minval=-stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max'])
-      body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-          model.body_ipos[TORSO_BODY_ID] + dpos
-      )
-    
-    # link mass 
-    body_mass = jp.zeros((model.nbody,))
-    for i in range(model.nbody):
-      if deterministic_cfg[f'body{i}_mass'] is not None:
-        body_mass[i] = model.body_mass[i].set(model.body_mass * deterministic_cfg[f'body{i}_mass'])
-      else:
-        rng, key = jax.random.split(rng)
-        dmass = jax.random.uniform(key, minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max'])
-        body_mass[i] = model.body_mass[i].set(model.body_mass * dmass)
+      dmass = jax.random.uniform(key, minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max'])
+      body_mass = body_mass.at[i].set(model.body_mass[i] * dmass)
 
     return (
       geom_friction,
@@ -340,13 +344,17 @@ def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, det
       body_mass,
       dof_frictionloss,
     )
-  (
-    geom_friction,
-    body_ipos,
-    body_mass,
-    dof_frictionloss,
-  ) = rand_dynamics(rng)
-
+  
+  if deterministic_cfg is not None:
+    # If deterministic_cfg is provided, use it to shift the dynamics.
+    (geom_friction, body_ipos, body_mass, dof_frictionloss) = shift_dynamics(rng)
+  else:
+    (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    ) = rand_dynamics(rng)
   in_axes = jax.tree_util.tree_map(lambda x: None, model)
   in_axes = in_axes.tree_replace({
       "geom_friction": 0,
@@ -360,5 +368,85 @@ def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, det
       "body_mass": body_mass,
       "dof_frictionloss": dof_frictionloss,
   })
+  print("model geom_friction", model.geom_friction.shape)
+  return model, in_axes
 
+
+def domain_randomize_eval(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, deterministic_cfg : dict):
+
+  def shift_dynamics(rng):
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(deterministic_cfg['floor_friction'])
+    dof_frictionloss = model.dof_frictionloss.at[:].set(deterministic_cfg['dof_friction']*jp.ones((model.nv,)))
+    offset = jp.array((deterministic_cfg['com_offset_x'], deterministic_cfg["com_offset_y"], deterministic_cfg["com_offset_z"]))
+
+    body_ipos = model.body_ipos.at[POLE_BODY_ID].set(
+        model.body_ipos[POLE_BODY_ID] + offset
+      )
+    body_mass = jp.ones((model.nbody,))
+    for i in range(1, model.nbody):
+      body_mass = body_mass.at[i].set(model.body_mass[i] * deterministic_cfg[f'body{i}_mass'])
+    return (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    )
+  def rand_dynamics(rng):
+    # floor friction
+    rng, key = jax.random.split(rng)
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
+      jax.random.uniform(key, minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max'])
+    )
+
+  # static friction
+    rng, key = jax.random.split(rng)
+    frictionloss = model.dof_frictionloss[:] * jax.random.uniform(
+        key, shape=(model.nv,), minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']
+    )
+    dof_frictionloss = model.dof_frictionloss.at[:].set(frictionloss)
+  
+  # com pos offset
+    rng, key = jax.random.split(rng)
+    dpos = jax.random.uniform(key, (3,), minval=-stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max'])
+    body_ipos = model.body_ipos.at[POLE_BODY_ID].set(
+        model.body_ipos[POLE_BODY_ID] + dpos
+    )
+  
+  # link mass 
+    body_mass = jp.ones((model.nbody,))
+    for i in range(1, model.nbody):
+      rng, key = jax.random.split(rng)
+      dmass = jax.random.uniform(key, minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max'])
+      body_mass = body_mass.at[i].set(model.body_mass[i] * dmass)
+
+    return (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    )
+  
+  if deterministic_cfg is not None:
+    # If deterministic_cfg is provided, use it to shift the dynamics.
+    (geom_friction, body_ipos, body_mass, dof_frictionloss) = shift_dynamics(rng)
+  else:
+    (
+      geom_friction,
+      body_ipos,
+      body_mass,
+      dof_frictionloss,
+    ) = rand_dynamics(rng)
+  in_axes = jax.tree_util.tree_map(lambda x: None, model)
+  in_axes = in_axes.tree_replace({
+      "geom_friction": 0,
+      "body_ipos": 0,
+      "body_mass": 0,
+      "dof_frictionloss": 0,
+  })
+  model = model.tree_replace({
+      "geom_friction": geom_friction,
+      "body_ipos": body_ipos,
+      "body_mass": body_mass,
+      "dof_frictionloss": dof_frictionloss,
+  })
   return model, in_axes

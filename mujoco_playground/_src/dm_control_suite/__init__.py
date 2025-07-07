@@ -15,8 +15,11 @@
 """DeepMind Control Suite Environments."""
 
 from functools import partial  # pylint: disable=g-importing-member
-from typing import Any, Callable, Dict, Optional, Type, Union
+from typing import Any, Callable, Dict, Optional, Type, Union, Tuple
 
+from mujoco import mjx
+import jax
+from mujoco_playground._src import mjx_env
 from ml_collections import config_dict
 
 from mujoco_playground._src import mjx_env
@@ -106,7 +109,12 @@ _randomizer = {
   "HopperHop" : hopper.domain_randomize,
   "CheetahRun" : cheetah.domain_randomize,
 }
+_randomizer_eval = {
 
+  "CartpoleSwingup": cartpole.domain_randomize_eval,
+  "HopperHop" : hopper.domain_randomize_eval,
+  "CheetahRun" : cheetah.domain_randomize_eval,
+}
 
 def __getattr__(name):
   if name == "ALL_ENVS":
@@ -162,3 +170,28 @@ def load(
     )
   config = config or get_default_config(env_name)
   return _envs[env_name](config=config, config_overrides=config_overrides)
+
+
+def get_domain_randomizer(
+    env_name: str,
+) -> Optional[Callable[[mjx.Model, jax.Array], Tuple[mjx.Model, mjx.Model]]]:
+  """Get the default domain randomizer for an environment."""
+  if env_name not in _randomizer:
+    print(
+        f"Env '{env_name}' does not have a domain randomizer in the"
+        " manipulation registry."
+    )
+    return None
+  return _randomizer[env_name]
+
+def get_domain_randomizer_eval(
+    env_name: str,
+) -> Optional[Callable[[mjx.Model, jax.Array], Tuple[mjx.Model, mjx.Model]]]:
+  """Get the default domain randomizer for an environment."""
+  if env_name not in _randomizer:
+    print(
+        f"Env '{env_name}' does not have a domain randomizer in the"
+        " manipulation registry."
+    )
+    return None
+  return _randomizer_eval[env_name]

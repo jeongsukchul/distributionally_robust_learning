@@ -1,0 +1,2 @@
+- task=CartpoleSwingup
+- policy=ppo

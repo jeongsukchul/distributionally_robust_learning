@@ -1,0 +1,50 @@
+[34m[1mwandb[0m: [33mWARNING[0m Saving files without folders. If you want to preserve subdirectories pass base_path to wandb.save, i.e. wandb.save("/mnt/folder/file.h5", base_path="/mnt")
+INFO:2025-07-07 19:21:38,863:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 19:21:38,863][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 19:21:39,024][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 19:21:39,024][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 19:21:39,234][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 19:21:41,966][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 19:21:41,967][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 19:21:46,519][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 19:21:46,519][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Error executing job with overrides: ['task=CartpoleSwingup']
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 241, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 210, in train_sac
+    make_inference_fn, params, metrics = train_fn(
+                                         ^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 516, in train
+    eval_env = wrap_for_training(
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/wrapper.py", line 119, in wrap_for_brax_training
+    env = BraxDomainRandomizationVmapWrapper(env, randomization_fn)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/wrapper.py", line 162, in __init__
+    self._mjx_model_v, self._in_axes = randomization_fn(self.mjx_model)
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/dm_control_suite/cartpole.py", line 358, in domain_randomize
+    ) = rand_dynamics(rng)
+        ^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/dm_control_suite/cartpole.py", line 317, in rand_dynamics
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py", line 814, in set
+    return scatter._scatter_update(self.array, self.index, values, lax.scatter,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/ops/scatter.py", line 92, in _scatter_update
+    return internal_scatter(x, y, dynamic_idx)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/ops/scatter.py", line 145, in _scatter_impl
+    out = scatter_op(
+          ^^^^^^^^^^^
+jax.errors.UnexpectedTracerError: Encountered an unexpected tracer. A function transformed by JAX had a side effect, allowing for a reference to an intermediate value with type float32[5,3] wrapped in a BatchTracer to escape the scope of the transformation.
+JAX transformations require that functions explicitly return their outputs, and disallow saving intermediate values to global state.
+To catch the leak earlier, try setting the environment variable JAX_CHECK_TRACER_LEAKS or using the `jax.checking_leaks` context manager.
+See https://docs.jax.dev/en/latest/errors.html#jax.errors.UnexpectedTracerError
+--------------------
+For simplicity, JAX has removed its internal frames from the traceback of the following exception. Set JAX_TRACEBACK_FILTERING=off to include these.
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

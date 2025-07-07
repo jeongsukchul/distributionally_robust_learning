@@ -1,0 +1,3 @@
+- task=HumanoidRun
+- policy=sac
+- seed=2

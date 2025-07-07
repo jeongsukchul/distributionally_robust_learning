@@ -62,8 +62,19 @@ def load(
 
 
 def get_domain_randomizer(env_name: str) -> Optional[DomainRandomizer]:
-  # if env_name in dm_control_suite.ALL_ENVS:
-  #   return dm_control_suite.get_domain_randomizer(env_name)
+  if env_name in dm_control_suite.ALL_ENVS:
+    return dm_control_suite.get_domain_randomizer(env_name)
+  if env_name in manipulation.ALL_ENVS:
+    return manipulation.get_domain_randomizer(env_name)
+
+  if env_name in locomotion.ALL_ENVS:
+    return locomotion.get_domain_randomizer(env_name)
+
+  return None
+
+def get_domain_randomizer_eval(env_name: str) -> Optional[DomainRandomizer]:
+  if env_name in dm_control_suite.ALL_ENVS:
+    return dm_control_suite.get_domain_randomizer_eval(env_name)
   if env_name in manipulation.ALL_ENVS:
     return manipulation.get_domain_randomizer(env_name)
 

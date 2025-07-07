@@ -1,0 +1,288 @@
+INFO:2025-07-07 15:42:46,536:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 15:42:46,536][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 15:42:46,693][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 15:42:46,693][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 15:42:46,924][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 15:42:47,273][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 15:42:47,274][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 15:42:52,747][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 15:42:52,747][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 15:43:01,324][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 15:43:01,325][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 15:43:16,446][absl][INFO] - {'eval/walltime': 14.98571491241455, 'eval/episode_reward': Array(150.641, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(649.6, dtype=float32), 'eval/episode_reward/small_control': Array(849.234, dtype=float32), 'eval/episode_reward/small_velocity': Array(578.647, dtype=float32), 'eval/episode_reward/upright': Array(482.176, dtype=float32), 'eval/episode_reward_std': Array(15.348, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(19.005, dtype=float32), 'eval/episode_reward/small_control_std': Array(9.627, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(20.793, dtype=float32), 'eval/episode_reward/upright_std': Array(14.801, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 14.98571491241455, 'eval/sps': 8541.467707620777}
+ eval/walltime :  14.98571491241455
+ eval/episode_reward :  150.64144897460938
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  649.600341796875
+ eval/episode_reward/small_control :  849.233642578125
+ eval/episode_reward/small_velocity :  578.6467895507812
+ eval/episode_reward/upright :  482.17559814453125
+ eval/episode_reward_std :  15.347784042358398
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  19.00542640686035
+ eval/episode_reward/small_control_std :  9.626660346984863
+ eval/episode_reward/small_velocity_std :  20.793460845947266
+ eval/episode_reward/upright_std :  14.800504684448242
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  14.98571491241455
+ eval/sps :  8541.467707620777
+[2025-07-07 15:43:25,298][absl][INFO] - replay size after prefill 8192
+[2025-07-07 15:43:25,346][absl][INFO] - step 0
+[2025-07-07 15:43:51,861][absl][INFO] - {'eval/walltime': 15.152936935424805, 'training/sps': 21087.22506323951, 'training/walltime': 35.201595306396484, 'training/actor_loss': Array(-17.734, dtype=float32), 'training/alpha': Array(0.131, dtype=float32), 'training/alpha_loss': Array(0.132, dtype=float32), 'training/buffer_current_size': Array(285632., dtype=float32), 'training/critic_loss': Array(0.018, dtype=float32), 'eval/episode_reward': Array(662.884, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(782.149, dtype=float32), 'eval/episode_reward/small_control': Array(963.634, dtype=float32), 'eval/episode_reward/small_velocity': Array(957.212, dtype=float32), 'eval/episode_reward/upright': Array(884.474, dtype=float32), 'eval/episode_reward_std': Array(4.527, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(6.59, dtype=float32), 'eval/episode_reward/small_control_std': Array(2.227, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.965, dtype=float32), 'eval/episode_reward/upright_std': Array(2.273, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.1672220230102539, 'eval/sps': 765449.4168638969}
+ eval/walltime :  15.152936935424805
+ training/sps :  21087.22506323951
+ training/walltime :  35.201595306396484
+ training/actor_loss :  -17.73365020751953
+ training/alpha :  0.1305401474237442
+ training/alpha_loss :  0.1320137083530426
+ training/buffer_current_size :  285632.0
+ training/critic_loss :  0.018104305490851402
+ eval/episode_reward :  662.884033203125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  782.1494140625
+ eval/episode_reward/small_control :  963.634033203125
+ eval/episode_reward/small_velocity :  957.2120361328125
+ eval/episode_reward/upright :  884.4740600585938
+ eval/episode_reward_std :  4.526827812194824
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  6.589777946472168
+ eval/episode_reward/small_control_std :  2.226982593536377
+ eval/episode_reward/small_velocity_std :  0.9645309448242188
+ eval/episode_reward/upright_std :  2.273138999938965
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1672220230102539
+ eval/sps :  765449.4168638969
+[2025-07-07 15:43:51,878][absl][INFO] - step 562944
+[2025-07-07 15:44:03,397][absl][INFO] - {'eval/walltime': 15.321135997772217, 'training/sps': 48899.787350688006, 'training/walltime': 46.546266317367554, 'training/actor_loss': Array(-50.284, dtype=float32), 'training/alpha': Array(0.035, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(840383.94, dtype=float32), 'training/critic_loss': Array(0.04, dtype=float32), 'eval/episode_reward': Array(838.956, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(950.909, dtype=float32), 'eval/episode_reward/small_control': Array(972.874, dtype=float32), 'eval/episode_reward/small_velocity': Array(957.447, dtype=float32), 'eval/episode_reward/upright': Array(886.659, dtype=float32), 'eval/episode_reward_std': Array(9.627, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(7.677, dtype=float32), 'eval/episode_reward/small_control_std': Array(2.111, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.762, dtype=float32), 'eval/episode_reward/upright_std': Array(0.649, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.1681990623474121, 'eval/sps': 761003.0532490028}
+ eval/walltime :  15.321135997772217
+ training/sps :  48899.787350688006
+ training/walltime :  46.546266317367554
+ training/actor_loss :  -50.283634185791016
+ training/alpha :  0.0348014160990715
+ training/alpha_loss :  5.1151331717846915e-05
+ training/buffer_current_size :  840383.9375
+ training/critic_loss :  0.039563968777656555
+ eval/episode_reward :  838.9561767578125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  950.9087524414062
+ eval/episode_reward/small_control :  972.87353515625
+ eval/episode_reward/small_velocity :  957.4467163085938
+ eval/episode_reward/upright :  886.659423828125
+ eval/episode_reward_std :  9.626724243164062
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  7.676508903503418
+ eval/episode_reward/small_control_std :  2.1107287406921387
+ eval/episode_reward/small_velocity_std :  0.7623085975646973
+ eval/episode_reward/upright_std :  0.649066686630249
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1681990623474121
+ eval/sps :  761003.0532490028
+[2025-07-07 15:44:03,405][absl][INFO] - step 1117696
+[2025-07-07 15:44:14,895][absl][INFO] - {'eval/walltime': 15.497848272323608, 'training/sps': 49061.44276130827, 'training/walltime': 57.853557109832764, 'training/actor_loss': Array(-69.575, dtype=float32), 'training/alpha': Array(0.026, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(1.395e+06, dtype=float32), 'training/critic_loss': Array(0.022, dtype=float32), 'eval/episode_reward': Array(851.758, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(958.792, dtype=float32), 'eval/episode_reward/small_control': Array(977.21, dtype=float32), 'eval/episode_reward/small_velocity': Array(956.304, dtype=float32), 'eval/episode_reward/upright': Array(887.372, dtype=float32), 'eval/episode_reward_std': Array(2.618, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(1.939, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.704, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.481, dtype=float32), 'eval/episode_reward/upright_std': Array(0.534, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.1767122745513916, 'eval/sps': 724341.3075008264}
+ eval/walltime :  15.497848272323608
+ training/sps :  49061.44276130827
+ training/walltime :  57.853557109832764
+ training/actor_loss :  -69.57495880126953
+ training/alpha :  0.026479851454496384
+ training/alpha_loss :  3.777467645704746e-05
+ training/buffer_current_size :  1395135.875
+ training/critic_loss :  0.022231565788388252
+ eval/episode_reward :  851.7578125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  958.7919921875
+ eval/episode_reward/small_control :  977.2100830078125
+ eval/episode_reward/small_velocity :  956.304443359375
+ eval/episode_reward/upright :  887.3721313476562
+ eval/episode_reward_std :  2.6184513568878174
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  1.9389936923980713
+ eval/episode_reward/small_control_std :  0.7038612961769104
+ eval/episode_reward/small_velocity_std :  0.4810104966163635
+ eval/episode_reward/upright_std :  0.5339133739471436
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1767122745513916
+ eval/sps :  724341.3075008264
+[2025-07-07 15:44:14,902][absl][INFO] - step 1672448
+[2025-07-07 15:44:26,613][absl][INFO] - {'eval/walltime': 15.667690992355347, 'training/sps': 48101.22093842424, 'training/walltime': 69.38656997680664, 'training/actor_loss': Array(-77.134, dtype=float32), 'training/alpha': Array(0.021, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(1.95e+06, dtype=float32), 'training/critic_loss': Array(0.016, dtype=float32), 'eval/episode_reward': Array(848.073, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(954.172, dtype=float32), 'eval/episode_reward/small_control': Array(978.51, dtype=float32), 'eval/episode_reward/small_velocity': Array(956.184, dtype=float32), 'eval/episode_reward/upright': Array(887.344, dtype=float32), 'eval/episode_reward_std': Array(1.306, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(0.74, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.608, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.518, dtype=float32), 'eval/episode_reward/upright_std': Array(0.492, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.16984272003173828, 'eval/sps': 753638.4248679061}
+ eval/walltime :  15.667690992355347
+ training/sps :  48101.22093842424
+ training/walltime :  69.38656997680664
+ training/actor_loss :  -77.13361358642578
+ training/alpha :  0.02067914791405201
+ training/alpha_loss :  2.0001622033305466e-05
+ training/buffer_current_size :  1949887.875
+ training/critic_loss :  0.01564975455403328
+ eval/episode_reward :  848.0726318359375
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  954.1719970703125
+ eval/episode_reward/small_control :  978.5103759765625
+ eval/episode_reward/small_velocity :  956.1841430664062
+ eval/episode_reward/upright :  887.343994140625
+ eval/episode_reward_std :  1.3056089878082275
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  0.7403273582458496
+ eval/episode_reward/small_control_std :  0.6077660918235779
+ eval/episode_reward/small_velocity_std :  0.5177192091941833
+ eval/episode_reward/upright_std :  0.4915907680988312
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.16984272003173828
+ eval/sps :  753638.4248679061
+[2025-07-07 15:44:26,634][absl][INFO] - step 2227200
+[2025-07-07 15:44:38,162][absl][INFO] - {'eval/walltime': 15.844250202178955, 'training/sps': 48897.569731838856, 'training/walltime': 80.73175549507141, 'training/actor_loss': Array(-80.956, dtype=float32), 'training/alpha': Array(0.018, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(2.505e+06, dtype=float32), 'training/critic_loss': Array(0.011, dtype=float32), 'eval/episode_reward': Array(854.505, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(958.657, dtype=float32), 'eval/episode_reward/small_control': Array(979.99, dtype=float32), 'eval/episode_reward/small_velocity': Array(957.075, dtype=float32), 'eval/episode_reward/upright': Array(887.967, dtype=float32), 'eval/episode_reward_std': Array(0.681, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(0.459, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.431, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.46, dtype=float32), 'eval/episode_reward/upright_std': Array(0.392, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.1765592098236084, 'eval/sps': 724969.2617444227}
+ eval/walltime :  15.844250202178955
+ training/sps :  48897.569731838856
+ training/walltime :  80.73175549507141
+ training/actor_loss :  -80.95630645751953
+ training/alpha :  0.01798257604241371
+ training/alpha_loss :  1.2146580957050901e-05
+ training/buffer_current_size :  2504640.0
+ training/critic_loss :  0.011424451135098934
+ eval/episode_reward :  854.5045166015625
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  958.65673828125
+ eval/episode_reward/small_control :  979.9900512695312
+ eval/episode_reward/small_velocity :  957.0745849609375
+ eval/episode_reward/upright :  887.9668579101562
+ eval/episode_reward_std :  0.6810438632965088
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  0.45877373218536377
+ eval/episode_reward/small_control_std :  0.43083491921424866
+ eval/episode_reward/small_velocity_std :  0.45971012115478516
+ eval/episode_reward/upright_std :  0.3920708894729614
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1765592098236084
+ eval/sps :  724969.2617444227
+[2025-07-07 15:44:38,169][absl][INFO] - step 2781952
+[2025-07-07 15:44:49,730][absl][INFO] - {'eval/walltime': 16.0209059715271, 'training/sps': 48756.171665165755, 'training/walltime': 92.10984325408936, 'training/actor_loss': Array(-83.439, dtype=float32), 'training/alpha': Array(0.017, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(3.059e+06, dtype=float32), 'training/critic_loss': Array(0.01, dtype=float32), 'eval/episode_reward': Array(855.72, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(959.681, dtype=float32), 'eval/episode_reward/small_control': Array(979.956, dtype=float32), 'eval/episode_reward/small_velocity': Array(957.106, dtype=float32), 'eval/episode_reward/upright': Array(888.191, dtype=float32), 'eval/episode_reward_std': Array(1.764, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(1.857, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.497, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.533, dtype=float32), 'eval/episode_reward/upright_std': Array(0.444, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.17665576934814453, 'eval/sps': 724572.9956758099}
+ eval/walltime :  16.0209059715271
+ training/sps :  48756.171665165755
+ training/walltime :  92.10984325408936
+ training/actor_loss :  -83.43891906738281
+ training/alpha :  0.016703596338629723
+ training/alpha_loss :  1.467684796807589e-06
+ training/buffer_current_size :  3059392.0
+ training/critic_loss :  0.010088585317134857
+ eval/episode_reward :  855.7197265625
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  959.6805419921875
+ eval/episode_reward/small_control :  979.9556884765625
+ eval/episode_reward/small_velocity :  957.1064453125
+ eval/episode_reward/upright :  888.1914672851562
+ eval/episode_reward_std :  1.7644603252410889
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  1.8573174476623535
+ eval/episode_reward/small_control_std :  0.49685779213905334
+ eval/episode_reward/small_velocity_std :  0.5327015519142151
+ eval/episode_reward/upright_std :  0.44352808594703674
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.17665576934814453
+ eval/sps :  724572.9956758099
+[2025-07-07 15:44:49,737][absl][INFO] - step 3336704
+[2025-07-07 15:45:01,233][absl][INFO] - {'eval/walltime': 16.200867414474487, 'training/sps': 49068.01775897272, 'training/walltime': 103.41561889648438, 'training/actor_loss': Array(-84.944, dtype=float32), 'training/alpha': Array(0.016, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(3.614e+06, dtype=float32), 'training/critic_loss': Array(0.009, dtype=float32), 'eval/episode_reward': Array(857.065, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(959.532, dtype=float32), 'eval/episode_reward/small_control': Array(980.315, dtype=float32), 'eval/episode_reward/small_velocity': Array(957.395, dtype=float32), 'eval/episode_reward/upright': Array(889.086, dtype=float32), 'eval/episode_reward_std': Array(0.683, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(0.836, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.49, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.422, dtype=float32), 'eval/episode_reward/upright_std': Array(0.405, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.1799614429473877, 'eval/sps': 711263.4679052958}
+ eval/walltime :  16.200867414474487
+ training/sps :  49068.01775897272
+ training/walltime :  103.41561889648438
+ training/actor_loss :  -84.94441986083984
+ training/alpha :  0.015870602801442146
+ training/alpha_loss :  5.55925362277776e-06
+ training/buffer_current_size :  3614144.0
+ training/critic_loss :  0.00878624152392149
+ eval/episode_reward :  857.064697265625
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  959.5323486328125
+ eval/episode_reward/small_control :  980.315185546875
+ eval/episode_reward/small_velocity :  957.3945922851562
+ eval/episode_reward/upright :  889.0855712890625
+ eval/episode_reward_std :  0.6832131743431091
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  0.8364424109458923
+ eval/episode_reward/small_control_std :  0.4901350736618042
+ eval/episode_reward/small_velocity_std :  0.4221518337726593
+ eval/episode_reward/upright_std :  0.4045342803001404
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1799614429473877
+ eval/sps :  711263.4679052958
+[2025-07-07 15:45:01,246][absl][INFO] - step 3891456
+[2025-07-07 15:45:15,412][absl][INFO] - {'eval/walltime': 16.384121656417847, 'training/sps': 39700.842541339414, 'training/walltime': 117.38892436027527, 'training/actor_loss': Array(-86.527, dtype=float32), 'training/alpha': Array(0.014, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.112e+06, dtype=float32), 'training/critic_loss': Array(0.007, dtype=float32), 'eval/episode_reward': Array(852.418, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(953.092, dtype=float32), 'eval/episode_reward/small_control': Array(981.85, dtype=float32), 'eval/episode_reward/small_velocity': Array(958.13, dtype=float32), 'eval/episode_reward/upright': Array(889.339, dtype=float32), 'eval/episode_reward_std': Array(2.405, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(2.692, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.451, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.474, dtype=float32), 'eval/episode_reward/upright_std': Array(0.381, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.18325424194335938, 'eval/sps': 698483.1491080164}
+ eval/walltime :  16.384121656417847
+ training/sps :  39700.842541339414
+ training/walltime :  117.38892436027527
+ training/actor_loss :  -86.52684020996094
+ training/alpha :  0.01442998368293047
+ training/alpha_loss :  9.638657502364367e-06
+ training/buffer_current_size :  4111674.25
+ training/critic_loss :  0.006576126907020807
+ eval/episode_reward :  852.4179077148438
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  953.0916748046875
+ eval/episode_reward/small_control :  981.8496704101562
+ eval/episode_reward/small_velocity :  958.1298828125
+ eval/episode_reward/upright :  889.3385009765625
+ eval/episode_reward_std :  2.4054272174835205
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  2.691866636276245
+ eval/episode_reward/small_control_std :  0.4505227506160736
+ eval/episode_reward/small_velocity_std :  0.4742646813392639
+ eval/episode_reward/upright_std :  0.3808182179927826
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.18325424194335938
+ eval/sps :  698483.1491080164
+[2025-07-07 15:45:15,419][absl][INFO] - step 4446208
+[2025-07-07 15:45:32,725][absl][INFO] - {'eval/walltime': 16.562690258026123, 'training/sps': 32400.0593389888, 'training/walltime': 134.51086831092834, 'training/actor_loss': Array(-91.078, dtype=float32), 'training/alpha': Array(0.011, dtype=float32), 'training/alpha_loss': Array(0., dtype=float32), 'training/buffer_current_size': Array(4.194e+06, dtype=float32), 'training/critic_loss': Array(0.001, dtype=float32), 'eval/episode_reward': Array(859.407, dtype=float32), 'eval/episode_reward/angle_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds': Array(0., dtype=float32), 'eval/episode_reward/centered': Array(959.203, dtype=float32), 'eval/episode_reward/small_control': Array(982.276, dtype=float32), 'eval/episode_reward/small_velocity': Array(958.822, dtype=float32), 'eval/episode_reward/upright': Array(889.394, dtype=float32), 'eval/episode_reward_std': Array(0.852, dtype=float32), 'eval/episode_reward/angle_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/cart_in_bounds_std': Array(0., dtype=float32), 'eval/episode_reward/centered_std': Array(1.091, dtype=float32), 'eval/episode_reward/small_control_std': Array(0.419, dtype=float32), 'eval/episode_reward/small_velocity_std': Array(0.49, dtype=float32), 'eval/episode_reward/upright_std': Array(0.381, dtype=float32), 'eval/avg_episode_length': Array(1000., dtype=float32), 'eval/std_episode_length': Array(0., dtype=float32), 'eval/epoch_eval_time': 0.17856860160827637, 'eval/sps': 716811.3478358975}
+ eval/walltime :  16.562690258026123
+ training/sps :  32400.0593389888
+ training/walltime :  134.51086831092834
+ training/actor_loss :  -91.07840728759766
+ training/alpha :  0.011403121054172516
+ training/alpha_loss :  7.215116966108326e-06
+ training/buffer_current_size :  4194304.0
+ training/critic_loss :  0.001033397507853806
+ eval/episode_reward :  859.4073486328125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  959.20263671875
+ eval/episode_reward/small_control :  982.2759399414062
+ eval/episode_reward/small_velocity :  958.821533203125
+ eval/episode_reward/upright :  889.3936767578125
+ eval/episode_reward_std :  0.8518857359886169
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  1.0907100439071655
+ eval/episode_reward/small_control_std :  0.4194839596748352
+ eval/episode_reward/small_velocity_std :  0.4902450144290924
+ eval/episode_reward/upright_std :  0.3809833228588104
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.17856860160827637
+ eval/sps :  716811.3478358975
+[2025-07-07 15:45:34,017][absl][INFO] - total steps: 5000960
+time to jit: 0:00:29.526192
+time to train: 0:02:16.280067
+Saving parameters to /home/sukchul/distributionally_robust_learning/learning/logs/CartpoleSwingup/3/sac/models

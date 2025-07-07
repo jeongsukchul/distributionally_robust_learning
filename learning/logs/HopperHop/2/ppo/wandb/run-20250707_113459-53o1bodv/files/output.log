@@ -1,0 +1,240 @@
+env name : FishSwim
+INFO:2025-07-07 11:35:00,670:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:35:00,670][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:35:00,815][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:35:00,816][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+sac params:  {'action_repeat': 1, 'batch_size': 512, 'discounting': 0.99, 'episode_length': 1000, 'grad_updates_per_step': 8, 'learning_rate': 0.001, 'max_replay_size': 4194304, 'min_replay_size': 8192, 'normalize_observations': True, 'num_envs': 128, 'num_evals': 10, 'num_timesteps': 5000000, 'reward_scaling': 1.0}
+[2025-07-07 11:35:01,067][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 11:35:01,444][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:35:01,444][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:35:07,388][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:35:07,388][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 215, in <module>
+    train()
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+          ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 202, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 171, in train_sac
+    make_inference_fn, params, metrics = train_fn(
+                                         ^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 502, in train
+    env_state = jax.pmap(env.reset)(env_keys)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1708, in cache_miss
+    execute = pxla.xla_pmap_impl_lazy(p.flat_fun, *p.flat_args, **params)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 353, in xla_pmap_impl_lazy
+    compiled_fun, fingerprint = parallel_callable(
+                                ^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 471, in memoized_fun
+    ans = call(fun, *args)
+          ^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 630, in parallel_callable
+    closed_jaxpr, xc_backend, replicas, shards, pci = get_pmap_jaxpr(
+                                                      ^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 764, in get_pmap_jaxpr
+    jaxpr, consts, replicas, shards = stage_parallel_callable(pci, fun)
+                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 727, in stage_parallel_callable
+    jaxpr, out_sharded_avals, consts, _ = pe.trace_to_jaxpr_dynamic(
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/profiler.py", line 354, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/partial_eval.py", line 2292, in trace_to_jaxpr_dynamic
+    ans = fun.call_wrapped(*in_tracers)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 211, in call_wrapped
+    return self.f_transformed(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 703, in _change_argument_ranks
+    results = f(*args)
+              ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api_util.py", line 73, in flatten_fun
+    ans = f(*py_args, **py_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api_util.py", line 439, in _flat_out_axes
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 396, in _get_result_paths_thunk
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/wrapper.py", line 129, in reset
+    state = self.env.reset(rng)
+            ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/envs/wrappers/training.py", line 83, in reset
+    state = self.env.reset(rng)
+            ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/envs/wrappers/training.py", line 68, in reset
+    return jax.vmap(self.env.reset)(rng)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1129, in vmap_f
+    out_flat = batching.batch(
+               ^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 211, in call_wrapped
+    return self.f_transformed(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 618, in _batch_outer
+    outs, trace = f(tag, in_dims, *in_vals)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 634, in _batch_inner
+    outs = f(*in_tracers)
+           ^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 342, in flatten_fun_for_vmap
+    ans = f(*py_args, **py_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 396, in _get_result_paths_thunk
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/dm_control_suite/hopper.py", line 106, in reset
+    data = mjx_env.init(self.mjx_model, qpos=qpos)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/mjx_env.py", line 151, in init
+    data = mjx.forward(model, data)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/forward.py", line 61, in wrapper
+    res = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/forward.py", line 429, in forward
+    d = fwd_position(m, d)
+        ^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/forward.py", line 61, in wrapper
+    res = fn(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/forward.py", line 71, in fwd_position
+    d = smooth.kinematics(m, d)
+        ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/smooth.py", line 89, in kinematics
+    qpos, xanchor, xaxis, xpos, xquat, xmat = scan.body_tree(
+                                              ^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/scan.py", line 477, in body_tree
+    key_y[key] = _nvmap(f, carry, *f_args)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/scan.py", line 130, in _nvmap
+    return jax.vmap(outer_f, in_axes=in_axes)(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/api.py", line 1129, in vmap_f
+    out_flat = batching.batch(
+               ^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 211, in call_wrapped
+    return self.f_transformed(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 618, in _batch_outer
+    outs, trace = f(tag, in_dims, *in_vals)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 634, in _batch_inner
+    outs = f(*in_tracers)
+           ^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 342, in flatten_fun_for_vmap
+    ans = f(*py_args, **py_kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/linear_util.py", line 396, in _get_result_paths_thunk
+    ans = _fun(*args, **kwargs)
+          ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/scan.py", line 128, in outer_f
+    return f(*args)
+           ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/smooth.py", line 85, in fn
+    mat = math.quat_to_mat(quat)
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/math.py", line 195, in quat_to_mat
+    q[0, 0] - q[1, 1] - q[2, 2] + q[3, 3],
+                                  ~^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py", line 1083, in op
+    return getattr(self.aval, f"_{name}")(self, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py", line 657, in _getitem
+    return indexing.rewriting_take(self, item)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/indexing.py", line 630, in rewriting_take
+    result = _attempt_rewriting_take_via_slice(arr, idx, mode, out_sharding)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/indexing.py", line 600, in _attempt_rewriting_take_via_slice
+    arr = lax.slice(
+          ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/slicing.py", line 108, in slice
+    return slice_p.bind(operand, start_indices=tuple(start_indices),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 536, in bind
+    return self._true_bind(*args, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 552, in _true_bind
+    return self.bind_with_trace(prev_trace, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 562, in bind_with_trace
+    return trace.process_primitive(self, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 505, in process_primitive
+    val_out, dim_out = primitive_batchers[p](vals_in, dims_in, **params)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/slicing.py", line 1412, in _slice_batching_rule
+    out = slice(operand, new_start_indices, new_limit_indices, new_strides)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/slicing.py", line 108, in slice
+    return slice_p.bind(operand, start_indices=tuple(start_indices),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 536, in bind
+    return self._true_bind(*args, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 552, in _true_bind
+    return self.bind_with_trace(prev_trace, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 562, in bind_with_trace
+    return trace.process_primitive(self, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/batching.py", line 505, in process_primitive
+    val_out, dim_out = primitive_batchers[p](vals_in, dims_in, **params)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/slicing.py", line 1412, in _slice_batching_rule
+    out = slice(operand, new_start_indices, new_limit_indices, new_strides)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/slicing.py", line 108, in slice
+    return slice_p.bind(operand, start_indices=tuple(start_indices),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 536, in bind
+    return self._true_bind(*args, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 552, in _true_bind
+    return self.bind_with_trace(prev_trace, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 562, in bind_with_trace
+    return trace.process_primitive(self, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/partial_eval.py", line 1999, in process_primitive
+    return self.default_process_primitive(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/partial_eval.py", line 2005, in default_process_primitive
+    out_avals, effs = primitive.abstract_eval(*aval_qdds, **params)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 596, in abstract_eval_
+    def abstract_eval_(*args, **kwargs):
+
+KeyboardInterrupt

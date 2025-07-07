@@ -1,0 +1,16 @@
+training with ppo
+Error executing job with overrides: ['task=Go1Getup']
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 252, in train
+    make_inference_fn, params, metrics = train_ppo(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 117, in train_ppo
+    shutil.copy(dynamics_path, cfg.work_dir / "dynamics_shift" / "stochastic")
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/shutil.py", line 435, in copy
+    copyfile(src, dst, follow_symlinks=follow_symlinks)
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/shutil.py", line 260, in copyfile
+    with open(src, 'rb') as fsrc:
+         ^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/home/sukchul/distributionally_robust_learning/learning/dynamics_shift/stochastic/Go1Getup.yaml'
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

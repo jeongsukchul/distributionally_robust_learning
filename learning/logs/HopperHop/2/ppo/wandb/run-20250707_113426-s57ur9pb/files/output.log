@@ -1,0 +1,129 @@
+INFO:2025-07-07 11:34:27,669:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:34:27,669][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:34:27,827][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:34:27,827][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+sac params:  {'action_repeat': 1, 'batch_size': 512, 'discounting': 0.99, 'episode_length': 1000, 'grad_updates_per_step': 8, 'learning_rate': 0.001, 'max_replay_size': 4194304, 'min_replay_size': 8192, 'normalize_observations': True, 'num_envs': 128, 'num_evals': 10, 'num_timesteps': 5000000, 'reward_scaling': 1.0}
+[2025-07-07 11:34:28,054][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 11:34:28,399][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:34:28,399][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 215, in <module>
+    train()
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+          ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 202, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 171, in train_sac
+    make_inference_fn, params, metrics = train_fn(
+                                         ^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 477, in train
+    training_state = _init_training_state(
+                     ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 88, in _init_training_state
+    policy_optimizer_state = policy_optimizer.init(policy_params)
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/optax/transforms/_combining.py", line 78, in init_fn
+    return tuple(fn(params) for fn in init_fns)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/optax/transforms/_combining.py", line 78, in <genexpr>
+    return tuple(fn(params) for fn in init_fns)
+                 ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/optax/_src/transform.py", line 277, in init_fn
+    mu = optax.tree.zeros_like(params, dtype=mu_dtype)  # First moment
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/optax/tree_utils/_tree_math.py", line 271, in tree_zeros_like
+    return jax.tree.map(lambda x: jnp.zeros_like(x, dtype=dtype), tree)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/tree.py", line 155, in map
+    return tree_util.tree_map(f, tree, *rest, is_leaf=is_leaf)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/tree_util.py", line 362, in tree_map
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/tree_util.py", line 362, in <genexpr>
+    return treedef.unflatten(f(*xs) for xs in zip(*all_leaves))
+                             ^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/optax/tree_utils/_tree_math.py", line 271, in <lambda>
+    return jax.tree.map(lambda x: jnp.zeros_like(x, dtype=dtype), tree)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/numpy/array_creation.py", line 260, in zeros_like
+    return lax.full_like(a, 0, dtype, shape, sharding=util.normalize_device_to_sharding(device))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/lax.py", line 3579, in full_like
+    val = full(fill_shape, _convert_element_type(fill_value, dtype, weak_type),
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/lax.py", line 3356, in full
+    return broadcast(fill_value, shape)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/lax.py", line 2691, in broadcast
+    return broadcast_in_dim(operand, tuple(sizes) + np.shape(operand), dims,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/lax/lax.py", line 2725, in broadcast_in_dim
+    return broadcast_in_dim_p.bind(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 536, in bind
+    return self._true_bind(*args, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 552, in _true_bind
+    return self.bind_with_trace(prev_trace, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 562, in bind_with_trace
+    return trace.process_primitive(self, args, params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/core.py", line 1066, in process_primitive
+    return primitive.impl(*args, **params)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/dispatch.py", line 91, in apply_primitive
+    outs = fun(*args)
+           ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 292, in cache_miss
+    executable, pgle_profiler) = _python_pjit_helper(fun, jit_info, *args, **kwargs)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 153, in _python_pjit_helper
+    out_flat, compiled, profiler = _pjit_call_impl_python(*args_flat, **p.params)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 1855, in _pjit_call_impl_python
+    ).compile()
+      ^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2410, in compile
+    executable = UnloadedMeshExecutable.from_hlo(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2952, in from_hlo
+    xla_executable = _cached_compilation(
+                     ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2743, in _cached_compilation
+    xla_executable = compiler.compile_or_get_cached(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 500, in compile_or_get_cached
+    return _compile_and_write_cache(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 768, in _compile_and_write_cache
+    executable = backend_compile_and_load(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/profiler.py", line 354, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 385, in backend_compile_and_load
+    return backend.compile_and_load(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

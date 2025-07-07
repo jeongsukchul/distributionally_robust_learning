@@ -66,7 +66,7 @@ warnings.filterwarnings("ignore", category=UserWarning, module="absl")
 
 _ENV_NAME = flags.DEFINE_string(
     "env_name",
-    "LeapCubeReorient",
+    "Go1Getup",
     f"Name of the environment. One of {', '.join(registry.ALL_ENVS)}",
 )
 _VISION = flags.DEFINE_boolean("vision", False, "Use vision input")
@@ -86,7 +86,7 @@ _USE_TB = flags.DEFINE_boolean(
     "use_tb", False, "Use TensorBoard for logging (ignored in play-only mode)"
 )
 _DOMAIN_RANDOMIZATION = flags.DEFINE_boolean(
-    "domain_randomization", False, "Use domain randomization"
+    "domain_randomization", True, "Use domain randomization"
 )
 _SEED = flags.DEFINE_integer("seed", 1, "Random seed")
 _NUM_TIMESTEPS = flags.DEFINE_integer(

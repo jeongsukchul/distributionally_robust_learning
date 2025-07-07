@@ -1,0 +1,17 @@
+training with ppo
+Error executing job with overrides: ['task=CheetahRUn', 'policy=ppo', 'seed=3']
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 210, in train
+    make_inference_fn, params, metrics = train_ppo(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 97, in train_ppo
+    ppo_params = dm_control_suite_params.brax_ppo_config(cfg.task)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/config/dm_control_suite_params.py", line 24, in brax_ppo_config
+    env_config = dm_control_suite.get_default_config(env_name)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/mujoco_playground/_src/dm_control_suite/__init__.py", line 144, in get_default_config
+    raise ValueError(
+ValueError: Env 'CheetahRUn' not found in default configs. Available configs: ['AcrobotSwingup', 'AcrobotSwingupSparse', 'BallInCup', 'CartpoleBalance', 'CartpoleBalanceSparse', 'CartpoleSwingup', 'CartpoleSwingupSparse', 'CheetahRun', 'FingerSpin', 'FingerTurnEasy', 'FingerTurnHard', 'FishSwim', 'HopperHop', 'HopperStand', 'HumanoidRun', 'HumanoidStand', 'HumanoidWalk', 'PendulumSwingup', 'PointMass', 'ReacherEasy', 'ReacherHard', 'SwimmerSwimmer6', 'WalkerRun', 'WalkerStand', 'WalkerWalk']
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

@@ -1,0 +1,124 @@
+_wandb:
+    value:
+        cli_version: 0.21.0
+        e:
+            hfafibvc6xa1bse8w2d5hfjp0qwpi48d:
+                args:
+                    - task=CheetahRUn
+                    - policy=ppo
+                    - seed=3
+                codePath: learning/train.py
+                codePathLocal: train.py
+                cpu_count: 18
+                cpu_count_logical: 36
+                cudaVersion: "12.9"
+                disk:
+                    /:
+                        total: "982818799616"
+                        used: "259876622336"
+                email: tjrcjf410@snu.ac.kr
+                executable: /home/sukchul/miniconda3/envs/mujoco/bin/python
+                git:
+                    commit: e62d395ddfd3ce9ade14bd76c41c94898f9be6bb
+                    remote: https://github.com/jeongsukchul/distributionally_robust_learning.git
+                gpu: NVIDIA GeForce RTX 3090
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10496
+                      memoryTotal: "25769803776"
+                      name: NVIDIA GeForce RTX 3090
+                      uuid: GPU-c51989f8-2e30-43af-7f44-31dec04b5db9
+                host: sukchul-System-Product-Name
+                memory:
+                    total: "67080474624"
+                os: Linux-6.8.0-60-generic-x86_64-with-glibc2.35
+                program: /home/sukchul/distributionally_robust_learning/learning/train.py
+                python: CPython 3.12.11
+                root: /home/sukchul/distributionally_robust_learning/learning/logs/CheetahRUn/3/ppo
+                startedAt: "2025-07-07T09:17:22.656118Z"
+                writerId: hfafibvc6xa1bse8w2d5hfjp0qwpi48d
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 12
+                - 45
+                - 50
+            "2":
+                - 12
+                - 45
+                - 50
+            "3":
+                - 13
+                - 16
+            "4": 3.12.11
+            "5": 0.21.0
+            "12": 0.21.0
+            "13": linux-x86_64
+action_dim:
+    value: ???
+action_dims:
+    value: ???
+benchmark:
+    value: dm_control
+bin_size:
+    value: ???
+checkpoint:
+    value: ???
+dynamics_shift:
+    value: true
+dynamics_shift_type:
+    value: deterministic
+env_name:
+    value: CheetahRUn
+episode_length:
+    value: ???
+episode_lengths:
+    value: ???
+eval_episodes:
+    value: 1
+eval_freq:
+    value: 50000
+eval_pi:
+    value: true
+eval_value:
+    value: true
+exp_name:
+    value: test
+multitask:
+    value: ???
+obs:
+    value: state
+obs_shape:
+    value: ???
+obs_shapes:
+    value: ???
+policy:
+    value: ppo
+save_agent:
+    value: true
+save_csv:
+    value: true
+save_video:
+    value: true
+seed:
+    value: 3
+seed_steps:
+    value: ???
+task:
+    value: CheetahRUn
+task_title:
+    value: ???
+tasks:
+    value: ???
+use_wandb:
+    value: true
+wandb_entity:
+    value: tjrcjf410-seoul-national-university
+wandb_project:
+    value: td-mpc(jax)
+wandb_silent:
+    value: false
+work_dir:
+    value: /home/sukchul/distributionally_robust_learning/learning/logs/CheetahRUn/3/ppo

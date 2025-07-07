@@ -1,0 +1,3 @@
+- task=CheetahRUn
+- policy=ppo
+- seed=3

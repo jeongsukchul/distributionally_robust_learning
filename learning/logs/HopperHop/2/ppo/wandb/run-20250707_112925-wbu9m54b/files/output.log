@@ -1,0 +1,92 @@
+INFO:2025-07-07 11:29:26,409:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:29:26,409][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 11:29:26,566][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:29:26,566][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+sac params:  {'action_repeat': 1, 'batch_size': 512, 'discounting': 0.99, 'episode_length': 1000, 'grad_updates_per_step': 8, 'learning_rate': 0.001, 'max_replay_size': 4194304, 'min_replay_size': 8192, 'normalize_observations': True, 'num_envs': 128, 'num_evals': 10, 'num_timesteps': 5000000, 'reward_scaling': 1.0}
+[2025-07-07 11:29:26,840][absl][INFO] - local_device_count: 1; total_device_count: 1
+[2025-07-07 11:29:27,224][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:29:27,224][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:29:33,148][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:29:33,148][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 11:29:52,579][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 11:29:52,579][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+Traceback (most recent call last):
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2743, in _cached_compilation
+    xla_executable = compiler.compile_or_get_cached(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 500, in compile_or_get_cached
+    return _compile_and_write_cache(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 768, in _compile_and_write_cache
+    executable = backend_compile_and_load(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/profiler.py", line 354, in wrapper
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 395, in backend_compile_and_load
+    raise e
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/compiler.py", line 385, in backend_compile_and_load
+    return backend.compile_and_load(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+jaxlib._jax.XlaRuntimeError: INTERNAL: ptxas exited with non-zero error code 2, output:
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 215, in <module>
+    train()
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/main.py", line 94, in decorated_main
+    _run_hydra(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 394, in _run_hydra
+    _run_app(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 457, in _run_app
+    run_and_report(
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+           ^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/utils.py", line 458, in <lambda>
+    lambda: hydra.run(
+            ^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/_internal/hydra.py", line 119, in run
+    ret = run_job(
+          ^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/hydra/core/utils.py", line 186, in run_job
+    ret.return_value = task_function(task_cfg)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 202, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 171, in train_sac
+    make_inference_fn, params, metrics = train_fn(
+                                         ^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/agents/sac/train.py", line 535, in train
+    metrics = evaluator.run_evaluation(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/brax/brax/training/acting.py", line 133, in run_evaluation
+    eval_state = self._generate_eval_unroll(policy_params, unroll_key)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/traceback_util.py", line 182, in reraise_with_filtered_traceback
+    return fun(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 292, in cache_miss
+    executable, pgle_profiler) = _python_pjit_helper(fun, jit_info, *args, **kwargs)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 153, in _python_pjit_helper
+    out_flat, compiled, profiler = _pjit_call_impl_python(*args_flat, **p.params)
+                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/pjit.py", line 1855, in _pjit_call_impl_python
+    ).compile()
+      ^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2410, in compile
+    executable = UnloadedMeshExecutable.from_hlo(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2952, in from_hlo
+    xla_executable = _cached_compilation(
+                     ^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/interpreters/pxla.py", line 2740, in _cached_compilation
+    with dispatch.log_elapsed_time(
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sukchul/miniconda3/envs/mujoco/lib/python3.12/site-packages/jax/_src/dispatch.py", line 190, in __exit__
+    def __exit__(self, exc_type, exc_value, traceback):
+
+KeyboardInterrupt

@@ -1,0 +1,11 @@
+Error executing job with overrides: ['task=Go1Getup']
+Traceback (most recent call last):
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 250, in train
+    make_inference_fn, params, metrics = train_sac(cfg)
+                                         ^^^^^^^^^^^^^^
+  File "/home/sukchul/distributionally_robust_learning/learning/train.py", line 168, in train_sac
+    sac_params = locomotion_params.brax_sac_config(cfg.task)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'mujoco_playground.config.locomotion_params' has no attribute 'brax_sac_config'. Did you mean: 'brax_ppo_config'?
+
+Set the environment variable HYDRA_FULL_ERROR=1 for a complete stack trace.

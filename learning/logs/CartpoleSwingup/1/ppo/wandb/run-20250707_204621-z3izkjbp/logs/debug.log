@@ -20,3 +20,4 @@ config: {'benchmark': 'dm_control', 'task': 'CartpoleSwingup', 'obs': 'state', '
 2025-07-07 20:46:22,670 INFO    MainThread:513803 [wandb_run.py:_redirect():2398] Redirects installed.
 2025-07-07 20:46:22,672 INFO    MainThread:513803 [wandb_init.py:init():1075] run started, returning control to user process
 2025-07-07 20:46:22,672 INFO    MainThread:513803 [wandb_run.py:_config_callback():1363] config_cb None None {'env_name': 'CartpoleSwingup'}
+2025-07-07 20:49:18,670 INFO    MsgRouterThr:513803 [mailbox.py:close():129] [no run ID] Closing mailbox, abandoning 1 handles.

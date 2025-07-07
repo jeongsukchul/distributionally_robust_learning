@@ -58,7 +58,7 @@ xla_flags += " --xla_gpu_triton_gemm_any=True"
 os.environ["XLA_FLAGS"] = xla_flags
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["MUJOCO_GL"] = "egl"
-
+#egl로 바꾸는 게 왜인지 모르겠지만 RAM을 적게 먹는다.
 # Ignore the info logs from brax
 logging.set_verbosity(logging.WARNING)
 
@@ -217,18 +217,18 @@ def train_sac(cfg:dict):
         randomization_fn = None
     def progress(num_steps, metrics, use_wandb=True):
         times.append(datetime.now())
-        
-
         if use_wandb:
             wandb_metrics={}
             wandb_metrics["eval/episode_reward"] = metrics["eval/episode_reward"]
             wandb_metrics["eval/episode_length"] = metrics["eval/avg_episode_length"]
             wandb.log(wandb_metrics, step=num_steps)
-            for k,v in metrics.items():
-                print(f" {k} :  {v}")
-        else:
-            for k,v in metrics.items():
-                print(f" {k} :  {v}")
+        print("-------------------------------------------------------------------")
+        print(f" num_steps: {num_steps}")
+        
+        for k,v in metrics.items():
+            print(f" {k} :  {v}")
+        print("-------------------------------------------------------------------")
+        
         
     progress = functools.partial(progress, use_wandb=cfg.use_wandb)
     train_fn = functools.partial(
@@ -256,10 +256,14 @@ def train(cfg: dict):
     print("cfg :", cfg)
 
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
+    if cfg.dynamics_shift:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
     wandb.init(
         project=cfg.wandb_project, 
         entity=cfg.wandb_entity, 
-        name=f"{cfg.task}.{cfg.policy}.{cfg.seed}",
+        name=wandb_name,
         dir=make_dir(cfg.work_dir),
         config=OmegaConf.to_container(cfg, resolve=True),
     )

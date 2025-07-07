@@ -18,8 +18,8 @@ policy : ppo
 
 
 #dynamics shift
-dynamics_shift: false
-dynamics_shift_type: deterministic  # or deterministic
+dynamics_shift: true
+dynamics_shift_type: stochastic  # or deterministic
 
 # logging
 wandb_project: td-mpc(jax)

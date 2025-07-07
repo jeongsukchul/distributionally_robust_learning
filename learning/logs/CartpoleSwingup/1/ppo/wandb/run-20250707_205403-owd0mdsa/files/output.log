@@ -1,0 +1,290 @@
+training with ppo
+INFO:2025-07-07 20:54:04,687:jax._src.xla_bridge:752: Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 20:54:04,687][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+[2025-07-07 20:54:04,855][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 20:54:04,856][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+[2025-07-07 20:54:05,023][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 20:54:05,023][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+model geom_friction (2048, 5, 3)
+[2025-07-07 20:54:08,238][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 20:54:08,238][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+model geom_friction (128, 5, 3)
+[2025-07-07 20:54:21,226][root][INFO] - Using JAX default device: cuda:0.
+[2025-07-07 20:54:21,227][root][INFO] - MJX Warp is disabled via MJX_WARP_ENABLED=false.
+-------------------------------------------------------------------
+num_steps: 0
+ eval/walltime :  15.205643653869629
+ eval/episode_reward :  33.605674743652344
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  828.417236328125
+ eval/episode_reward/small_control :  941.35888671875
+ eval/episode_reward/small_velocity :  913.9307861328125
+ eval/episode_reward/upright :  53.100929260253906
+ eval/episode_reward_std :  25.410003662109375
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  64.38810729980469
+ eval/episode_reward/small_control_std :  2.653172731399536
+ eval/episode_reward/small_velocity_std :  45.754310607910156
+ eval/episode_reward/upright_std :  46.1264762878418
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  15.205643653869629
+ eval/sps :  8417.927114017679
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 6881280
+ eval/walltime :  15.404689073562622
+ training/sps :  216489.4441061792
+ training/walltime :  31.78575301170349
+ training/entropy_loss :  -0.004984122700989246
+ training/policy_loss :  -0.006346778012812138
+ training/total_loss :  242.9535369873047
+ training/v_loss :  242.96485900878906
+ eval/episode_reward :  220.03587341308594
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  765.5144653320312
+ eval/episode_reward/small_control :  923.4267578125
+ eval/episode_reward/small_velocity :  600.604736328125
+ eval/episode_reward/upright :  501.18365478515625
+ eval/episode_reward_std :  21.85544776916504
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  32.201072692871094
+ eval/episode_reward/small_control_std :  10.86197280883789
+ eval/episode_reward/small_velocity_std :  31.115520477294922
+ eval/episode_reward/upright_std :  34.707366943359375
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.19904541969299316
+ eval/sps :  643069.3064800319
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 13762560
+ eval/walltime :  15.59577226638794
+ training/sps :  514178.9496737535
+ training/walltime :  45.168797969818115
+ training/entropy_loss :  -0.001075786305591464
+ training/policy_loss :  -0.003948756493628025
+ training/total_loss :  119.7333984375
+ training/v_loss :  119.73841857910156
+ eval/episode_reward :  263.17828369140625
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  752.7642822265625
+ eval/episode_reward/small_control :  923.085693359375
+ eval/episode_reward/small_velocity :  652.8446044921875
+ eval/episode_reward/upright :  531.1336669921875
+ eval/episode_reward_std :  48.63206481933594
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  14.997810363769531
+ eval/episode_reward/small_control_std :  11.411661148071289
+ eval/episode_reward/small_velocity_std :  57.67409896850586
+ eval/episode_reward/upright_std :  49.10200881958008
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.19108319282531738
+ eval/sps :  669865.2984986169
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 20643840
+ eval/walltime :  15.768186807632446
+ training/sps :  523988.50451561005
+ training/walltime :  58.301299810409546
+ training/entropy_loss :  -0.0024806088767945766
+ training/policy_loss :  -0.007109601981937885
+ training/total_loss :  377.4053039550781
+ training/v_loss :  377.41485595703125
+ eval/episode_reward :  788.0696411132812
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  910.1302490234375
+ eval/episode_reward/small_control :  968.56298828125
+ eval/episode_reward/small_velocity :  961.8043212890625
+ eval/episode_reward/upright :  879.4302978515625
+ eval/episode_reward_std :  34.43453598022461
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  28.992395401000977
+ eval/episode_reward/small_control_std :  2.48884654045105
+ eval/episode_reward/small_velocity_std :  10.11728572845459
+ eval/episode_reward/upright_std :  11.73672866821289
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.17241454124450684
+ eval/sps :  742396.7785784316
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 27525120
+ eval/walltime :  15.960475444793701
+ training/sps :  507129.23507670587
+ training/walltime :  71.87038540840149
+ training/entropy_loss :  -0.0011680708266794682
+ training/policy_loss :  -0.011802776716649532
+ training/total_loss :  182.15797424316406
+ training/v_loss :  182.17092895507812
+ eval/episode_reward :  774.0919189453125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  914.974853515625
+ eval/episode_reward/small_control :  972.3713989257812
+ eval/episode_reward/small_velocity :  943.0835571289062
+ eval/episode_reward/upright :  855.2670288085938
+ eval/episode_reward_std :  52.220855712890625
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  26.51910972595215
+ eval/episode_reward/small_control_std :  4.511640548706055
+ eval/episode_reward/small_velocity_std :  24.647092819213867
+ eval/episode_reward/upright_std :  39.692161560058594
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.19228863716125488
+ eval/sps :  665665.9586840699
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 34406400
+ eval/walltime :  16.140435934066772
+ training/sps :  501466.93589874124
+ training/walltime :  85.59268593788147
+ training/entropy_loss :  0.0020553055219352245
+ training/policy_loss :  -0.008410703390836716
+ training/total_loss :  104.84605407714844
+ training/v_loss :  104.85240936279297
+ eval/episode_reward :  782.5703735351562
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  963.5196533203125
+ eval/episode_reward/small_control :  973.9720458984375
+ eval/episode_reward/small_velocity :  927.681884765625
+ eval/episode_reward/upright :  834.7210693359375
+ eval/episode_reward_std :  41.81595993041992
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  21.87506866455078
+ eval/episode_reward/small_control_std :  4.118776321411133
+ eval/episode_reward/small_velocity_std :  18.885866165161133
+ eval/episode_reward/upright_std :  27.866561889648438
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1799604892730713
+ eval/sps :  711267.2371421114
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 41287680
+ eval/walltime :  16.323453426361084
+ training/sps :  516606.9006186947
+ training/walltime :  98.91283321380615
+ training/entropy_loss :  0.0028046213556081057
+ training/policy_loss :  -0.00437904940918088
+ training/total_loss :  145.09341430664062
+ training/v_loss :  145.094970703125
+ eval/episode_reward :  754.3875732421875
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  928.1107177734375
+ eval/episode_reward/small_control :  970.96240234375
+ eval/episode_reward/small_velocity :  932.052978515625
+ eval/episode_reward/upright :  845.4619140625
+ eval/episode_reward_std :  66.67028045654297
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  49.878944396972656
+ eval/episode_reward/small_control_std :  4.926982402801514
+ eval/episode_reward/small_velocity_std :  24.741395950317383
+ eval/episode_reward/upright_std :  32.54851150512695
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.18301749229431152
+ eval/sps :  699386.7001202401
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 48168960
+ eval/walltime :  16.522432804107666
+ training/sps :  474688.1427438297
+ training/walltime :  113.40925598144531
+ training/entropy_loss :  0.002693509915843606
+ training/policy_loss :  -0.009367017075419426
+ training/total_loss :  165.2399139404297
+ training/v_loss :  165.24658203125
+ eval/episode_reward :  839.675537109375
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  949.8253784179688
+ eval/episode_reward/small_control :  977.5699462890625
+ eval/episode_reward/small_velocity :  959.920166015625
+ eval/episode_reward/upright :  889.2926635742188
+ eval/episode_reward_std :  17.81525993347168
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  19.299278259277344
+ eval/episode_reward/small_control_std :  0.8778384327888489
+ eval/episode_reward/small_velocity_std :  0.37978395819664
+ eval/episode_reward/upright_std :  1.7628511190414429
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.19897937774658203
+ eval/sps :  643282.7434158499
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 55050240
+ eval/walltime :  16.714740991592407
+ training/sps :  502874.27265358483
+ training/walltime :  127.09315347671509
+ training/entropy_loss :  0.006155059672892094
+ training/policy_loss :  -0.008998185396194458
+ training/total_loss :  51.52616500854492
+ training/v_loss :  51.52900695800781
+ eval/episode_reward :  828.0015869140625
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  940.282470703125
+ eval/episode_reward/small_control :  978.2962646484375
+ eval/episode_reward/small_velocity :  955.885498046875
+ eval/episode_reward/upright :  885.8186645507812
+ eval/episode_reward_std :  61.58496856689453
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  30.840044021606445
+ eval/episode_reward/small_control_std :  5.243906497955322
+ eval/episode_reward/small_velocity_std :  32.75434112548828
+ eval/episode_reward/upright_std :  34.47020721435547
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.1923081874847412
+ eval/sps :  665598.2861372256
+-------------------------------------------------------------------
+-------------------------------------------------------------------
+num_steps: 61931520
+ eval/walltime :  16.910274028778076
+ training/sps :  459861.8598563561
+ training/walltime :  142.05695152282715
+ training/entropy_loss :  0.00780648784711957
+ training/policy_loss :  -0.0048614079132676125
+ training/total_loss :  57.036163330078125
+ training/v_loss :  57.0332145690918
+ eval/episode_reward :  856.3175048828125
+ eval/episode_reward/angle_in_bounds :  0.0
+ eval/episode_reward/cart_in_bounds :  0.0
+ eval/episode_reward/centered :  962.8438720703125
+ eval/episode_reward/small_control :  980.26904296875
+ eval/episode_reward/small_velocity :  959.3560791015625
+ eval/episode_reward/upright :  889.6461181640625
+ eval/episode_reward_std :  3.3885538578033447
+ eval/episode_reward/angle_in_bounds_std :  0.0
+ eval/episode_reward/cart_in_bounds_std :  0.0
+ eval/episode_reward/centered_std :  3.361564874649048
+ eval/episode_reward/small_control_std :  0.4346542954444885
+ eval/episode_reward/small_velocity_std :  0.3772519826889038
+ eval/episode_reward/upright_std :  1.4118143320083618
+ eval/avg_episode_length :  1000.0
+ eval/std_episode_length :  0.0
+ eval/epoch_eval_time :  0.19553303718566895
+ eval/sps :  654620.8346288676
+-------------------------------------------------------------------
+time to jit: 0:00:32.050780
+time to train: 0:02:26.551669
+Saving parameters to /home/sukchul/distributionally_robust_learning/learning/logs/CartpoleSwingup/1/ppo/models

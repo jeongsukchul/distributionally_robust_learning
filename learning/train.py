@@ -102,13 +102,12 @@ def train_ppo(cfg:dict):
     
     def progress(num_steps, metrics, use_wandb=True):
         times.append(datetime.now())
-        wandb_metrics={}
-        wandb_metrics["eval/episode_reward"] = metrics["eval/episode_reward"]
-        wandb_metrics["eval/episode_length"] = metrics["eval/avg_episode_length"]
-        for k,v in metrics.items():
-            if not "eval" in k:
-                wandb_metrics[k] = v
+        
+
         if use_wandb:
+            wandb_metrics={}
+            wandb_metrics["eval/episode_reward"] = metrics["eval/episode_reward"]
+            wandb_metrics["eval/episode_length"] = metrics["eval/avg_episode_length"]
             wandb.log(wandb_metrics, step=num_steps)
             for k,v in metrics.items():
                 print(f" {k} :  {v}")
@@ -187,6 +186,7 @@ def train(cfg: dict):
     xla_flags += ' --xla_gpu_triton_gemm_any=True'
     os.environ['XLA_FLAGS'] = xla_flags
     os.environ['JAX_PLATFORM_NAME'] = 'gpu'
+    # os.environ["MJX_WARP_ENABLED"] = "true"
     # More legible printing from numpy.
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
     wandb.init(
@@ -205,7 +205,7 @@ def train(cfg: dict):
     #     train_tdmpc(cfg)
     else:
         print("no policy!")
-    save_dir = make_dir(cfg.wrok_dir / "models")
+    save_dir = make_dir(cfg.work_dir / "models")
 
     with open(os.path.join(save_dir, f"{cfg.policy}_params.pkl"), "wb") as f:
         pickle.dump(params, f)

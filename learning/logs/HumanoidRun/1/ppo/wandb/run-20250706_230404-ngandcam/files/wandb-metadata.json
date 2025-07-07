@@ -1,0 +1,41 @@
+{
+  "os":  "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.31",
+  "python":  "CPython 3.12.11",
+  "startedAt":  "2025-07-06T14:04:04.673675Z",
+  "args":  [
+    "task=HumanoidRun"
+  ],
+  "program":  "/home/ros/mujoco_playground/learning/train.py",
+  "codePath":  "learning/train.py",
+  "codePathLocal":  "train.py",
+  "git":  {
+    "commit":  "4fa7ddb67825e8e11e5abec99959af7d6f0c21a6"
+  },
+  "email":  "tjrcjf410@snu.ac.kr",
+  "root":  "/home/ros/mujoco_playground/learning/logs/HumanoidRun/1/ppo",
+  "host":  "DESKTOP-ENONDU4",
+  "executable":  "/home/ros/miniconda3/envs/mujoco/bin/python",
+  "cpu_count":  6,
+  "cpu_count_logical":  12,
+  "gpu":  "NVIDIA GeForce RTX 3060",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "1081101176832",
+      "used":  "59693015040"
+    }
+  },
+  "memory":  {
+    "total":  "16723943424"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 3060",
+      "memoryTotal":  "12884901888",
+      "architecture":  "Ampere",
+      "uuid":  "GPU-055e979c-be98-4fb4-1b6d-a18734cc5a72"
+    }
+  ],
+  "cudaVersion":  "12.6",
+  "writerId":  "tliwz042cs6xb42qqh9ng9nxkh1anecx"
+}

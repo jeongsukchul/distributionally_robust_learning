@@ -1,0 +1,6 @@
+{"time":"2025-07-06T23:01:05.043333176+09:00","level":"INFO","msg":"stream: starting","core version":"0.21.0"}
+{"time":"2025-07-06T23:01:05.448037074+09:00","level":"INFO","msg":"stream: created new stream","id":"edstdntf"}
+{"time":"2025-07-06T23:01:05.448103474+09:00","level":"INFO","msg":"stream: started","id":"edstdntf"}
+{"time":"2025-07-06T23:01:05.448131774+09:00","level":"INFO","msg":"handler: started","stream_id":"edstdntf"}
+{"time":"2025-07-06T23:01:05.448157874+09:00","level":"INFO","msg":"writer: Do: started","stream_id":"edstdntf"}
+{"time":"2025-07-06T23:01:05.448165874+09:00","level":"INFO","msg":"sender: started","stream_id":"edstdntf"}

@@ -2,7 +2,6 @@ import os
 
 from omegaconf import OmegaConf
 os.environ['MUJOCO_GL'] = 'glfw'
-from typing import Callable, List, NamedTuple, Optional, Union
 import numpy as np
 
 import mediapy as media
@@ -11,12 +10,12 @@ import matplotlib.pyplot as plt
 import mujoco
 from absl import logging
 
-
+import imageio
 # @title Import MuJoCo, MJX, and Brax
 from datetime import datetime
 import functools
 import os
-from typing import Any, Dict, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Sequence, Tuple, Union
 from brax import base
 from brax import envs
 from brax import math
@@ -29,6 +28,8 @@ from brax.training.agents.ppo import networks as ppo_networks
 from brax.training.agents.ppo import train as ppo
 from brax.training.agents.sac import networks as sac_networks
 from brax.training.agents.sac import train as sac
+from agents.rambo import networks as rambo_networks
+from agents.rambo import train as rambo
 from etils import epath
 from flax import struct
 from flax.training import orbax_utils
@@ -45,6 +46,7 @@ from orbax import checkpoint as ocp
 import wandb
 from mujoco_playground.config import dm_control_suite_params
 from mujoco_playground.config import locomotion_params
+from configs.training_config import brax_rambo_config
 import mujoco_playground
 from mujoco_playground import wrapper
 import hydra
@@ -99,26 +101,81 @@ CAMERAS = {
 camera_name = CAMERAS[env_name]
 import pickle
 import shutil
+from mujoco_playground._src.wrapper import Wrapper
+from mujoco_playground._src import mjx_env
+
+class BraxDomainRandomizationWrapper(Wrapper):
+  """Brax wrapper for domain randomization."""
+  def __init__(
+      self,
+      env: mjx_env.MjxEnv,
+      randomization_fn: Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]],
+  ):
+    super().__init__(env)
+    self._mjx_model, self._in_axes = randomization_fn(self.env.mjx_model)
+    self.env.unwrapped._mjx_model = self._mjx_model
+
+  # def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
+  #   env = self.env
+  #   env.unwrapped._mjx_model = mjx_model
+  #   return env
+
+  def reset(self, rng: jax.Array) -> mjx_env.State:
+    # def reset(mjx_model, rng):
+    #   env = self._env_fn(mjx_model=mjx_model)
+    #   return env.reset(rng)
+
+    state = self.env.reset(rng)
+    return state
+
+  def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
+    # def step(mjx_model, s, a):
+    #   env = self._env_fn(mjx_model=mjx_model)
+    #   return env.step(s, a)
+
+    res = self.env.step(state, action)
+    return res
+
 def policy_params_fn(current_step, make_policy, params, ckpt_path: epath.Path):
   orbax_checkpointer = ocp.PyTreeCheckpointer()
   save_args = orbax_utils.save_args_from_target(params)
   path = ckpt_path / f"{current_step}"
   orbax_checkpointer.save(path, params, force=True, save_args=save_args)
-
+def progress_fn(num_steps, metrics, use_wandb=True):
+    if use_wandb:
+        wandb.log(metrics, step=num_steps)
+    print("-------------------------------------------------------------------")
+    print(f"num_steps: {num_steps}")
+    
+    for k,v in metrics.items():
+        print(f" {k} :  {v}")
+    print("-------------------------------------------------------------------")
 
 
     # if cfg.save_video:
     #         logger.video.save(num_steps, key='results/video')
 
 
-def train_ppo(cfg:dict):
-    times = [datetime.now()]
+def train_ppo(cfg:dict, randomization_fn, env, eval_env):
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         ppo_params = dm_control_suite_params.brax_ppo_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
         ppo_params = locomotion_params.brax_ppo_config(cfg.task)
+    if cfg.dynamics_shift:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
     ppo_training_params = dict(ppo_params)
     network_factory = ppo_networks.make_ppo_networks
     if "network_factory" in ppo_params:
@@ -127,41 +184,8 @@ def train_ppo(cfg:dict):
             ppo_networks.make_ppo_networks,
             **ppo_params.network_factory
         )
-    if cfg.dynamics_shift:
-        path = epath.Path(".").resolve()
-        if cfg.dynamics_shift_type == "stochastic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
-            shutil.copy(dynamics_path, cfg.work_dir / "dynamics_shift" / "stochastic")
-            stochastic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn,deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
-
-        elif cfg.dynamics_shift_type == "deterministic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
-            make_dir(cfg.work_dir / "dynamics_shift" / "deterministic")
-            shutil.copy(dynamics_path, cfg.work_dir / "dynamics_shift" / "deterministic")
-            deterministic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
-        else:
-            raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
-    else:
-        randomization_fn = None
-    def progress(num_steps, metrics, use_wandb=True):
-        times.append(datetime.now())
-        if use_wandb:
-            wandb_metrics={}
-            wandb_metrics["eval/episode_reward"] = metrics["eval/episode_reward"]
-            wandb_metrics["eval/episode_length"] = metrics["eval/avg_episode_length"]
-            wandb.log(wandb_metrics, step=num_steps)
-        print("-------------------------------------------------------------------")
-        print(f"num_steps: {num_steps}")
         
-        for k,v in metrics.items():
-            print(f" {k} :  {v}")
-        print("-------------------------------------------------------------------")
-        
-    progress = functools.partial(progress, use_wandb=cfg.use_wandb)
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
 
     train_fn = functools.partial(
         ppo.train, **dict(ppo_training_params),
@@ -171,24 +195,32 @@ def train_ppo(cfg:dict):
         randomization_fn=randomization_fn,
     )
 
-    env_cfg = registry.get_default_config(cfg.task)
-    env = registry.load(cfg.task, config=env_cfg)
     make_inference_fn, params, metrics = train_fn(
         environment=env,
-        eval_env = registry.load(cfg.task, config=env_cfg),
+        eval_env = eval_env,
         wrap_env_fn=wrapper.wrap_for_brax_training,
     )
-    print(f"time to jit: {times[1] - times[0]}")
-    print(f"time to train: {times[-1] - times[1]}")
     return make_inference_fn, params, metrics
 
-def train_sac(cfg:dict):
-    times = [datetime.now()]
+def train_sac(cfg:dict, randomization_fn, env, eval_env):
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         sac_params = dm_control_suite_params.brax_sac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
         sac_params = locomotion_params.brax_sac_config(cfg.task)
     sac_training_params = dict(sac_params)
+    if cfg.dynamics_shift:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
     network_factory = sac_networks.make_sac_networks
     if "network_factory" in sac_params:
         del sac_training_params["network_factory"]
@@ -196,41 +228,8 @@ def train_sac(cfg:dict):
             sac_networks.make_sac_networks,
             **sac_params.network_factory
         )
-
-    if cfg.dynamics_shift:
-        path = epath.Path(".").resolve()
-        if cfg.dynamics_shift_type == "stochastic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
-            wandb.save(dynamics_path)
-            stochastic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn, deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
-
-        elif cfg.dynamics_shift_type == "deterministic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
-            deterministic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
-        else:
-            raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
-    else:
-        randomization_fn = None
-    def progress(num_steps, metrics, use_wandb=True):
-        times.append(datetime.now())
-        if use_wandb:
-            wandb_metrics={}
-            wandb_metrics["eval/episode_reward"] = metrics["eval/episode_reward"]
-            wandb_metrics["eval/episode_length"] = metrics["eval/avg_episode_length"]
-            wandb.log(wandb_metrics, step=num_steps)
-        print("-------------------------------------------------------------------")
-        print(f" num_steps: {num_steps}")
         
-        for k,v in metrics.items():
-            print(f" {k} :  {v}")
-        print("-------------------------------------------------------------------")
-        
-        
-    progress = functools.partial(progress, use_wandb=cfg.use_wandb)
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
     train_fn = functools.partial(
         sac.train, **dict(sac_training_params),
         network_factory=network_factory,
@@ -238,15 +237,52 @@ def train_sac(cfg:dict):
         randomization_fn=randomization_fn,
     )
 
-    env_cfg = registry.get_default_config(cfg.task)
-    env = registry.load(cfg.task, config=env_cfg)
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
-        eval_env = registry.load(cfg.task, config=env_cfg),
+        eval_env = eval_env,
         wrap_env_fn=wrapper.wrap_for_brax_training,
     )
-    print(f"time to jit: {times[1] - times[0]}")
-    print(f"time to train: {times[-1] - times[1]}")
+    return make_inference_fn, params, metrics
+
+def train_rambo(cfg:dict, randomization_fn, env, eval_env):
+    times = [datetime.now()]
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        rambo_params = brax_rambo_config(cfg.task)
+    # elif cfg.task in mujoco_playground._src.locomotion._envs:
+    #     sac_params = locomotion_params.brax_sac_config(cfg.task)
+
+    if cfg.use_wandb:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.({rambo_params.rollout_length}, {rambo_params.adv_weight}, {rambo_params.real_ratio})"
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    rambo_training_params = dict(rambo_params)
+    network_factory = rambo_networks.make_rambo_networks
+    if "network_factory" in rambo_params:
+        del rambo_training_params["network_factory"]
+        network_factory = functools.partial(
+            rambo_networks.make_rambo_networks,
+            **rambo_params.network_factory
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        rambo.train, **dict(rambo_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrapper.wrap_for_brax_training,
+    )
     return make_inference_fn, params, metrics
 
 @hydra.main(config_name="config", config_path=".", version_base=None)
@@ -256,26 +292,47 @@ def train(cfg: dict):
     print("cfg :", cfg)
 
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
+
+    
     if cfg.dynamics_shift:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+        path = epath.Path(".").resolve()
+        if cfg.dynamics_shift_type == "stochastic":
+            dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
+            stochastic_cfg = OmegaConf.load(dynamics_path)
+            randomization_fn = registry.get_domain_randomizer(cfg.task)
+            randomization_fn = functools.partial(randomization_fn,deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
+
+        elif cfg.dynamics_shift_type == "deterministic":
+            dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
+            deterministic_cfg = OmegaConf.load(dynamics_path)
+            randomization_fn = registry.get_domain_randomizer(cfg.task)
+            randomization_fn = functools.partial(randomization_fn, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
+        else:
+            raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
     else:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
-    wandb.init(
-        project=cfg.wandb_project, 
-        entity=cfg.wandb_entity, 
-        name=wandb_name,
-        dir=make_dir(cfg.work_dir),
-        config=OmegaConf.to_container(cfg, resolve=True),
-    )
-    wandb.config.update({"env_name": cfg.task})
+        randomization_fn = None 
+
+    env_cfg = registry.get_default_config(cfg.task)
+    env = registry.load(cfg.task, config=env_cfg)
+    if cfg.eval_randomization:
+        eval_env = BraxDomainRandomizationWrapper(
+            env,
+            randomization_fn=randomization_fn,
+        )
+    else:
+        eval_env = Wrapper(env)
+
     if cfg.policy == "sac":
-        make_inference_fn, params, metrics = train_sac(cfg)
+        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, eval_env)
     elif cfg.policy == "ppo":
-        make_inference_fn, params, metrics = train_ppo(cfg)
+        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env, eval_env)
+    elif cfg.policy == "rambo":
+        make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, eval_env)
     # elif cfg.policy == "td-mpc":
     #     train_tdmpc(cfg)
     else:
         print("no policy!")
+
     save_dir = make_dir(cfg.work_dir / "models")
     print(f"Saving parameters to {save_dir}")
     with open(os.path.join(save_dir, f"{cfg.policy}_params_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pkl"), "wb") as f:
@@ -283,6 +340,30 @@ def train(cfg: dict):
     latest_path = os.path.join(save_dir, f"{cfg.policy}_params_latest.pkl")
     with open(latest_path, "wb") as f:
         pickle.dump(params, f)
+
+    if cfg.save_video and cfg.use_wandb:
+        jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
+        jit_reset = jax.jit(eval_env.reset)
+        jit_step = jax.jit(eval_env.step)
+        total_reward = 0.0
+
+        state = jit_reset(jax.random.PRNGKey(0))
+        rollout = [state]
+        rng = jax.random.PRNGKey(cfg.seed)
+        frames = []
+        for _ in range(env_cfg.episode_length):
+            act_rng, rng = jax.random.split(rng)
+            action, info = jit_inference_fn(state.obs, act_rng)
+            state = jit_step(state, action)
+            rollout.append(state)
+            total_reward += state.reward
+            
+            frame = eval_env.render(rollout)  
+            frames.append(frame)
+        frames = np.stack(frames).transpose(0, 3, 1, 2)
+        fps = 15
+        wandb.log({'eval_video': wandb.Video(frames, fps=fps, format='mp4')})
+        wandb.log({'final_eval_reward' : total_reward})
 
    
 if __name__ == "__main__":

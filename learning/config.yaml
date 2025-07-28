@@ -3,7 +3,7 @@
 
 # environment
 benchmark: dm_control
-task: CartpoleSwingup
+task: CheetahRun
 obs: state
 exp_name : test
 # evaluation
@@ -14,15 +14,15 @@ eval_value: true # evaluate value function approximation
 eval_freq: 50000
 
 #policy
-policy : ppo
+policy : rambo
 
 
 #dynamics shift
-dynamics_shift: true
+dynamics_shift: false
 dynamics_shift_type: stochastic  # or deterministic
-
+eval_randomization : false
 # logging
-wandb_project: td-mpc(jax)
+wandb_project: robust-rl
 wandb_entity: tjrcjf410-seoul-national-university
 wandb_silent: false
 use_wandb: true

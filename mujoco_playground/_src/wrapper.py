@@ -178,6 +178,7 @@ class BraxDomainRandomizationVmapWrapper(Wrapper):
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)
+    print("state episode done", state.info["episode_done"])
 
     res = jax.vmap(step, in_axes=[self._in_axes, 0, 0])(
         self._mjx_model_v, state, action

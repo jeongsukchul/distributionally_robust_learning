@@ -30,6 +30,8 @@ from brax.training.agents.sac import networks as sac_networks
 from brax.training.agents.sac import train as sac
 from agents.rambo import networks as rambo_networks
 from agents.rambo import train as rambo
+from agents.wdsac import train as wdsac
+from agents.wdsac import networks as wdsac_networks
 from etils import epath
 from flax import struct
 from flax.training import orbax_utils
@@ -46,7 +48,7 @@ from orbax import checkpoint as ocp
 import wandb
 from mujoco_playground.config import dm_control_suite_params
 from mujoco_playground.config import locomotion_params
-from configs.training_config import brax_rambo_config
+from configs.training_config import brax_rambo_config, brax_wdsac_config
 import mujoco_playground
 from mujoco_playground import wrapper
 import hydra
@@ -55,20 +57,22 @@ from helper import parse_cfg
 from helper import Logger
 from helper import make_dir
 import warnings
-xla_flags = os.environ.get("XLA_FLAGS", "")
-xla_flags += " --xla_gpu_triton_gemm_any=True"
-os.environ["XLA_FLAGS"] = xla_flags
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["MUJOCO_GL"] = "egl"
-#egl로 바꾸는 게 왜인지 모르겠지만 RAM을 적게 먹는다.
-# Ignore the info logs from brax
-logging.set_verbosity(logging.WARNING)
+import pickle
+import shutil
+from mujoco_playground._src.wrapper import Wrapper
+from mujoco_playground._src import mjx_env
 
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="jax")
-# Suppress DeprecationWarnings from JAX
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="jax")
-# Suppress UserWarnings from absl (used by JAX and TensorFlow)
-warnings.filterwarnings("ignore", category=UserWarning, module="absl")
+
+
+#egl로 바꾸는 게 왜인지 모르겠지만 RAM을 적게 먹는다.
+# # Ignore the info logs from brax
+# logging.set_verbosity(logging.WARNING)
+
+# warnings.filterwarnings("ignore", category=RuntimeWarning, module="jax")
+# # Suppress DeprecationWarnings from JAX
+# warnings.filterwarnings("ignore", category=DeprecationWarning, module="jax")
+# # Suppress UserWarnings from absl (used by JAX and TensorFlow)
+# warnings.filterwarnings("ignore", category=UserWarning, module="absl")
 
 env_name = "FishSwim"  # @param ["AcrobotSwingup", "AcrobotSwingupSparse", "BallInCup", "CartpoleBalance", "CartpoleBalanceSparse", "CartpoleSwingup", "CartpoleSwingupSparse", "CheetahRun", "FingerSpin", "FingerTurnEasy", "FingerTurnHard", "FishSwim", "HopperHop", "HopperStand", "HumanoidStand", "HumanoidWalk", "HumanoidRun", "PendulumSwingup", "PointMass", "ReacherEasy", "ReacherHard", "SwimmerSwimmer6", "WalkerRun", "WalkerStand", "WalkerWalk"]
 CAMERAS = {
@@ -99,10 +103,6 @@ CAMERAS = {
     "WalkerStand": "side",
 }
 camera_name = CAMERAS[env_name]
-import pickle
-import shutil
-from mujoco_playground._src.wrapper import Wrapper
-from mujoco_playground._src import mjx_env
 
 class BraxDomainRandomizationWrapper(Wrapper):
   """Brax wrapper for domain randomization."""
@@ -251,8 +251,12 @@ def train_rambo(cfg:dict, randomization_fn, env, eval_env):
     # elif cfg.task in mujoco_playground._src.locomotion._envs:
     #     sac_params = locomotion_params.brax_sac_config(cfg.task)
 
+    for param in rambo_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            rambo_params[param] = getattr(cfg, param)
     if cfg.use_wandb:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.({rambo_params.rollout_length}, {rambo_params.adv_weight}, {rambo_params.real_ratio})"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.({rambo_params.rollout_length},\
+              {rambo_params.adv_weight}, {rambo_params.real_ratio})_{rambo_params.batch_size}_{rambo_params.rollout_batch_size}"
         wandb.init(
             project=cfg.wandb_project, 
             entity=cfg.wandb_entity, 
@@ -285,6 +289,48 @@ def train_rambo(cfg:dict, randomization_fn, env, eval_env):
     )
     return make_inference_fn, params, metrics
 
+def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        wdsac_params = brax_wdsac_config(cfg.task)
+    elif cfg.task in mujoco_playground._src.locomotion._envs:
+        wdsac_params = locomotion_params.brax_sac_config(cfg.task)
+    wdsac_training_params = dict(wdsac_params)
+    if cfg.dynamics_shift:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    network_factory = wdsac_networks.make_wdsac_networks
+    if "network_factory" in wdsac_params:
+        del wdsac_training_params["network_factory"]
+        network_factory = functools.partial(
+            wdsac_networks.make_wdsac_networks,
+            **wdsac_params.network_factory
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        wdsac.train, **dict(wdsac_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrapper.wrap_for_brax_training,
+    )
+    return make_inference_fn, params, metrics
+
 @hydra.main(config_name="config", config_path=".", version_base=None)
 def train(cfg: dict):
     
@@ -293,22 +339,27 @@ def train(cfg: dict):
 
     np.set_printoptions(precision=3, suppress=True, linewidth=100)
 
+    rng = jax.random.PRNGKey(cfg.seed)
     
-    if cfg.dynamics_shift:
-        path = epath.Path(".").resolve()
-        if cfg.dynamics_shift_type == "stochastic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
-            stochastic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn,deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
+    # if cfg.dynamics_shift:
+    path = epath.Path(".").resolve()
+    if cfg.dynamics_shift_type == "stochastic":
+        dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
+        stochastic_cfg = OmegaConf.load(dynamics_path)
+        randomizer = registry.get_domain_randomizer(cfg.task)
+        rng, dynamics_rng = jax.random.split(rng)
+        randomizer = functools.partial(randomizer, deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
 
-        elif cfg.dynamics_shift_type == "deterministic":
-            dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
-            deterministic_cfg = OmegaConf.load(dynamics_path)
-            randomization_fn = registry.get_domain_randomizer(cfg.task)
-            randomization_fn = functools.partial(randomization_fn, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
-        else:
-            raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
+    elif cfg.dynamics_shift_type == "deterministic":
+        dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
+        deterministic_cfg = OmegaConf.load(dynamics_path)
+        randomizer = registry.get_domain_randomizer(cfg.task)
+        rng, dynamics_rng = jax.random.split(rng)
+        randomizer = functools.partial(randomizer, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
+    else:
+        raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
+    if cfg.dynamics_shift:
+        randomization_fn = randomizer
     else:
         randomization_fn = None 
 
@@ -317,10 +368,10 @@ def train(cfg: dict):
     if cfg.eval_randomization:
         eval_env = BraxDomainRandomizationWrapper(
             env,
-            randomization_fn=randomization_fn,
+            randomization_fn=randomizer,
         )
     else:
-        eval_env = Wrapper(env)
+        eval_env = registry.load(cfg.task)
 
     if cfg.policy == "sac":
         make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, eval_env)
@@ -328,6 +379,9 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env, eval_env)
     elif cfg.policy == "rambo":
         make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, eval_env)
+    elif cfg.policy == "wdsac":
+        make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env, eval_env)
+
     # elif cfg.policy == "td-mpc":
     #     train_tdmpc(cfg)
     else:
@@ -349,8 +403,6 @@ def train(cfg: dict):
 
         state = jit_reset(jax.random.PRNGKey(0))
         rollout = [state]
-        rng = jax.random.PRNGKey(cfg.seed)
-        frames = []
         for _ in range(env_cfg.episode_length):
             act_rng, rng = jax.random.split(rng)
             action, info = jit_inference_fn(state.obs, act_rng)
@@ -358,13 +410,18 @@ def train(cfg: dict):
             rollout.append(state)
             total_reward += state.reward
             
-            frame = eval_env.render(rollout)  
-            frames.append(frame)
+        frames = eval_env.render(rollout)  
         frames = np.stack(frames).transpose(0, 3, 1, 2)
-        fps = 15
+        fps=1.0 / env.dt
         wandb.log({'eval_video': wandb.Video(frames, fps=fps, format='mp4')})
         wandb.log({'final_eval_reward' : total_reward})
 
    
 if __name__ == "__main__":
+    xla_flags = os.environ.get("XLA_FLAGS", "")
+    xla_flags += " --xla_gpu_triton_gemm_any=True"
+    os.environ["XLA_FLAGS"] = xla_flags
+    os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+    os.environ["MUJOCO_GL"] = "egl"
+    os.environ['JAX_PLATFORM_NAME'] = 'gpu'
     train()

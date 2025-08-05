@@ -14,18 +14,18 @@ eval_value: true # evaluate value function approximation
 eval_freq: 50000
 
 #policy
-policy : rambo
+policy : wdsac
 
 
 #dynamics shift
-dynamics_shift: false
+dynamics_shift: true
 dynamics_shift_type: stochastic  # or deterministic
 eval_randomization : false
 # logging
-wandb_project: robust-rl
+wandb_project: wdsac
 wandb_entity: tjrcjf410-seoul-national-university
 wandb_silent: false
-use_wandb: true
+use_wandb: false
 save_csv: true
 
 # misc
@@ -46,4 +46,12 @@ action_dims: ???
 episode_lengths: ???
 seed_steps: ???
 bin_size: ???
+
+#rambo
+
+real_ratio : ???
+rollout_length : ???
+adv_weight : ???
+batch_size : ???
+rollout_batch_size : ???
 

@@ -180,18 +180,61 @@ def brax_rambo_config(env_name: str) -> config_dict.ConfigDict:
       episode_length=env_config.episode_length,
       normalize_observations=True,
       action_repeat=1,
-      discounting=0.99,
+      discounting=0.99,  
       learning_rate=1e-3,
       num_envs=128,
       batch_size=512,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192,
-      rollout_length =10,          #added
-      real_ratio = 0.5,           #added
+      rollout_length =1,          #added
+      real_ratio = 0.9,           #added
       adv_weight = 0.,          #added
       rollout_batch_size = 100000,   # added
-      model_train_freq = 250,        # added
+      model_train_freq = 500,        # added
+      termination_fn = get_termination_fn(env_name.lower()),     #added
+      network_factory=config_dict.create(
+          q_network_layer_norm=True,
+      ),
+  )
+
+  if env_name == "PendulumSwingUp":
+    rl_config.action_repeat = 4
+  if env_name =="HopperHop":
+    rl_config.num_timesteps = 10_000_000
+  if (
+      env_name.startswith("Acrobot")
+      or env_name.startswith("Swimmer")
+      or env_name.startswith("Finger")
+      or env_name.startswith("Hopper")
+      or env_name
+      in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
+  ):
+    rl_config.num_timesteps = 10_000_000
+
+  return rl_config
+
+def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
+  """Returns tuned Brax SAC config for the given environment."""
+  
+  env_config = dm_control_suite.get_default_config(env_name)
+
+  rl_config = config_dict.create(
+      num_timesteps=5_000_000,
+      num_evals=10,
+      reward_scaling=1.0,
+      episode_length=env_config.episode_length,
+      normalize_observations=True,
+      action_repeat=1,
+      discounting=0.99,  
+      learning_rate=1e-3,
+      num_envs=128,
+      batch_size=512,
+      grad_updates_per_step=8,
+      max_replay_size=1048576 * 4,
+      min_replay_size=8192,
+      n_nominals = 10,
+      delta = 0.1,
       termination_fn = get_termination_fn(env_name.lower()),     #added
       network_factory=config_dict.create(
           q_network_layer_norm=True,

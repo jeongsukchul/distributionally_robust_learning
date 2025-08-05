@@ -368,7 +368,6 @@ def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, det
       "body_mass": body_mass,
       "dof_frictionloss": dof_frictionloss,
   })
-  print("model geom_friction", model.geom_friction.shape)
   return model, in_axes
 
 

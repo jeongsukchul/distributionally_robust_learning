@@ -113,7 +113,7 @@ class EnsembleDynamicsModel(nn.Module):
 def make_dynamics_network(obs_size, action_size, 
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor, 
     postprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor, 
-    n_ensemble : int = 5, 
+    n_ensemble : int = 7,
     hidden_layer_sizes : Sequence[int] = [256, 256, 256, 256],
     ):
     dynamics_module = EnsembleDynamicsModel(

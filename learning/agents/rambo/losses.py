@@ -138,6 +138,7 @@ def make_losses(
       termination_fn: Any,
       key: PRNGKey,
   ):
+
     policy_key, dynamics_key = jax.random.split(key)
     dist_params = policy_network.apply(
         normalizer_params, policy_params, transitions.observation
@@ -145,21 +146,20 @@ def make_losses(
     action = parametric_action_distribution.sample(
         dist_params, policy_key
     )
-    normalizer_params
-    #supervised loss
 
+    #supervised loss + validation loss
     (means, logvar), normal_fn, denormal_fn = dynamics_network.apply(normalizer_params, dynamics_params, transitions.observation, transitions.action)
-    target = jnp.concatenate([normal_fn(transitions.next_observation - transitions.observation, normalizer_params), transitions.reward.reshape(-1, 1)], axis=-1)
-    mse_loss = (((means - target) ** 2) * jnp.exp(-logvar)).mean(axis=(1,2))
-    # elite_idxs = jnp.argsort(mse_loss)[: n_elites]
+    assert len(means.shape) == len(logvar.shape) == 3
+    target = jnp.concatenate([normal_fn(transitions.next_observation - transitions.observation, normalizer_params), transitions.reward.reshape(-1, 1)], axis=-1)    
+    mle_loss = (((means - target) ** 2) * jnp.exp(-logvar)).mean(axis=(1,2))
     var_loss = logvar.sum(0).mean()
     max_logvar = dynamics_params["params"]["max_logvar"]
     min_logvar = dynamics_params["params"]["min_logvar"]
     logvar_diff = (max_logvar - min_logvar).sum()
-    supervised_loss = mse_loss.mean() + var_loss + 0.001 * logvar_diff
+    supervised_loss = mle_loss.mean() + var_loss + 0.001 * logvar_diff
 
     #adversary loss 
-    means = jnp.concatenate([means[...,:-1] + normal_fn(transitions.observation, normalizer_params) , means[...,-1:]], axis=-1)
+    means = jnp.concatenate([means[..., :-1] + normal_fn(transitions.observation, normalizer_params) , means[..., -1:]], axis=-1)
     dist = NormalDistribution(loc=means, scale=jnp.exp(0.5*logvar))
     samples = dist.sample(dynamics_key)
     n_ensemble = len(means)
@@ -189,6 +189,11 @@ def make_losses(
     advantage = (advantage - advantage.mean()) / jnp.maximum(advantage.std(), 1e-6)#normalizing advantages
     advantage = jax.lax.stop_gradient(advantage)
     adv_loss = (dynamics_log_prob * advantage).mean()
-    return supervised_loss + adv_weight * adv_loss
+    
+    loss_info = {
+      "supervised_loss" : supervised_loss,
+      "adv_loss" : adv_loss,
+    }
+    return supervised_loss + adv_weight * adv_loss, loss_info
 
   return dynamics_loss, alpha_loss, critic_loss, actor_loss

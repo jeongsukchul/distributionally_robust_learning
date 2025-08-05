@@ -105,7 +105,6 @@ class PlanarWalker(mjx_env.MjxEnv):
         "reward/move": jp.zeros(()),
     }
     info = {"rng": rng}
-
     reward, done = jp.zeros(2)  # pylint: disable=redefined-outer-name
     obs = self._get_obs(data, info)
     return mjx_env.State(data, obs, reward, done, metrics, info)

@@ -20,33 +20,42 @@ def obs_unnormalization(termination_fn, obs_mean, obs_std):
             
         return termination_fn(obs, act, next_obs)
     return thunk
+
 def termination_fn_halfcheetah(obs, act, next_obs):
     if len(obs.shape) == len(next_obs.shape) == len(act.shape) == 2:
 
-        not_done = jnp.logical_and(jnp.all(next_obs > -100, axis=-1), jnp.all(next_obs < 100, axis=-1))
-        done = ~not_done
+        # not_done = jnp.logical_and(jnp.all(next_obs > -100, axis=-1), jnp.all(next_obs < 100, axis=-1))
+        # done = ~not_done
+        done = jnp.zeros(next_obs.shape[0])
         return done
     elif len(obs.shape) == len(next_obs.shape) == len(act.shape) == 1:
-        not_done = jnp.logical_and(jnp.all(next_obs > -100), jnp.all(next_obs < 100))
-        done = ~not_done
+        # not_done = jnp.logical_and(jnp.all(next_obs > -100), jnp.all(next_obs < 100))
+        # done = ~not_done
+        done = 0.
         return done
     else:
         print("error!")
 
 def termination_fn_hopper(obs, act, next_obs):
-    assert len(obs.shape) == len(next_obs.shape) == len(act.shape) == 1
-
-    height = next_obs[0]
-    angle = next_obs[1]
-    not_done = (
-        jnp.isfinite(next_obs).all()
-        * jnp.abs(next_obs[1:] < 100).all()
-        * (height > 0.7)
-        * (jnp.abs(angle) < 0.2)
-    )
-
-    done = ~not_done
-    return done
+    if len(obs.shape) == len(next_obs.shape) == len(act.shape) == 2:
+        done = jnp.isnan(next_obs).any(axis=-1).astype(float)
+        
+        return done
+    elif len(obs.shape) == len(next_obs.shape) == len(act.shape) == 1:
+        done = jnp.isnan(next_obs).any().astype(float)
+        return done
+    else:
+        print("error!")
+def termination_fn_walker(obs, act, next_obs):
+    if len(obs.shape) == len(next_obs.shape) == len(act.shape) == 2:
+        done = jnp.isnan(next_obs).any(axis=-1).astype(float)
+        
+        return done
+    elif len(obs.shape) == len(next_obs.shape) == len(act.shape) == 1:
+        done = jnp.isnan(next_obs).any().astype(float)
+        return done
+    else:
+        print("error!")
 
 
 def termination_fn_halfcheetahveljump(obs, act, next_obs):
@@ -200,6 +209,8 @@ def get_termination_fn(task):
         return termination_fn_halfcheetah
     elif "hopper" in task:
         return termination_fn_hopper
+    elif "walker" in task:
+        return termination_fn_walker
     elif "antangle" in task:
         return termination_fn_antangle
     elif "ant" in task:

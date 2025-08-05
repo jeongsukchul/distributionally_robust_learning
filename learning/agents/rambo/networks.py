@@ -70,23 +70,26 @@ def make_rollout_fn(rambo_network: RAMBONetworks, termination_fn, replay_buffer,
       fake_buffer_state,
       rollout_length,
       rollout_batch_size,
+      elite_idxs,
       ):
       # Discard params of non-elite models
       def sample_transition(rng, obs):
-        rng_action, rng_dynamics, rng_noise = jax.random.split(rng, 3)
+        rng_action, rng_dynamics, rng_noise, rng_index = jax.random.split(rng, 4)
         actions, policy_extras = policy(obs, rng_action)
         (ensemble_mean, ensemble_logvar), normal_fn, denormal_fn = rambo_network.dynamics_network.apply(
             normalizer_params, dynamics_params, obs, actions
         )
         ensemble_std = jnp.exp(0.5 * ensemble_logvar)
-        sample_idx = jax.random.randint(rng_dynamics, (), 0, len(ensemble_mean))
-        sample_mean, sample_std = ensemble_mean[sample_idx], ensemble_std[sample_idx]
+        
+        elite = jax.random.choice(rng_index, jnp.array(elite_idxs))
+
+        sample_mean, sample_std = \
+          ensemble_mean[elite], ensemble_std[elite]
         noise = jax.random.normal(key=rng_noise, shape=sample_mean.shape)
         samples = sample_mean + noise * sample_std
-        delta_obs, reward = samples[..., :-1], samples[..., -1:]
+        delta_obs, reward = samples[:-1], samples[-1]
         next_obs = denormal_fn(normal_fn(obs, normalizer_params)+ delta_obs, normalizer_params)
         done = termination_fn(obs, actions, next_obs)
-
         return Transition(
             observation = obs,
             action = actions,

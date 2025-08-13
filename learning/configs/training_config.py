@@ -143,7 +143,7 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
       discounting=0.99,
       learning_rate=1e-3,
       num_envs=128,
-      batch_size=512,
+      batch_size=256,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192,
@@ -164,7 +164,7 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
-    rl_config.num_timesteps = 10_000_000
+    rl_config.num_timesteps = 20_000_000
 
   return rl_config
 
@@ -201,7 +201,7 @@ def brax_rambo_config(env_name: str) -> config_dict.ConfigDict:
   if env_name == "PendulumSwingUp":
     rl_config.action_repeat = 4
   if env_name =="HopperHop":
-    rl_config.num_timesteps = 10_000_000
+    rl_config.num_timesteps = 20_000_000
   if (
       env_name.startswith("Acrobot")
       or env_name.startswith("Swimmer")
@@ -210,7 +210,7 @@ def brax_rambo_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
-    rl_config.num_timesteps = 10_000_000
+    rl_config.num_timesteps = 20_000_000
 
   return rl_config
 
@@ -229,12 +229,17 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
       discounting=0.99,  
       learning_rate=1e-3,
       num_envs=128,
-      batch_size=512,
+      batch_size=256,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192,
-      n_nominals = 10,
-      delta = 0.1,
+      n_nominals = 10,# added
+      delta = 0.01,    #added
+      lambda_update_steps = 100,  #added: number of lambda optimization steps
+      single_lambda = False, #added
+      distance_type = "wass", #added
+      lmbda_lr = 3e-4, #added
+      init_lmbda = 0., #added
       termination_fn = get_termination_fn(env_name.lower()),     #added
       network_factory=config_dict.create(
           q_network_layer_norm=True,
@@ -253,9 +258,11 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
-    rl_config.num_timesteps = 10_000_000
+    rl_config.num_timesteps = 20_000_000
 
   return rl_config
+
+
 def brax_tdmpc_config(env_name: str) -> config_dict.ConfigDict:
   """Returns tuned Brax SAC config for the given environment."""
   env_config = dm_control_suite.get_default_config(env_name)
@@ -272,7 +279,7 @@ def brax_tdmpc_config(env_name: str) -> config_dict.ConfigDict:
       discount_denom = 5,
       discount_min = 0.95,
       discount_max = 0.995,
-      buffer_size = 1_000_000,
+      buffer_size = 5_000_000,
       episode_length=env_config.episode_length,
       normalize_observations=True,
       action_repeat=1,

@@ -32,9 +32,9 @@ from module.buffer import DynamicBatchQueue
 from brax.training import types
 from brax.training.acme import running_statistics
 from brax.training.acme import specs
-from agents.wdsac import checkpoint 
-from agents.wdsac import losses as wdsac_losses
-from agents.wdsac import networks as wdsac_networks
+from agents.flowsac import checkpoint 
+from agents.flowsac import losses as flowsac_losses
+from agents.flowsac import networks as flowsac_networks
 from brax.training.types import Params
 from brax.training.types import PRNGKey
 from brax.training.acme.types import NestedArray
@@ -47,7 +47,7 @@ import optax
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
-from agents.wdsac.dr_wrapper import wrap_for_dr_training
+from agents.flowsac.dr_wrapper import wrap_for_dr_training
 Metrics = types.Metrics
 Transition = types.Transition
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
@@ -59,6 +59,7 @@ class DRTransition(NamedTuple):
   reward: NestedArray
   discount: NestedArray
   next_observation: NestedArray
+  next_adversarial_observation: NestedArray  # Adversarial next observation
   extras: NestedArray = ()  # pytype: disable=annotation-type-mismatch  # jax-ndarray
 
 ReplayBufferState = Any
@@ -81,6 +82,8 @@ class TrainingState:
   alpha_params: Params
   lmbda_optimizer_state: optax.OptState
   lmbda_params: Params
+  flow_optimizer_state: optax.OptState
+  flow_params: Params
   normalizer_params: running_statistics.RunningStatisticsState
 
 
@@ -92,21 +95,22 @@ def _init_training_state(
     key: PRNGKey,
     obs_size: int,
     # local_devices_to_use: int ,
-    wdsac_network: wdsac_networks.WDSACNetworks,
+    flowsac_network: flowsac_networks.FLOWSACNetworks,
     alpha_optimizer: optax.GradientTransformation,
     policy_optimizer: optax.GradientTransformation,
     lmbda_optimizer: optax.GradientTransformation,
     q_optimizer: optax.GradientTransformation,
+    flow_optimizer: optax.GradientTransformation,
     single_lambda : bool,
     batch_size : int, 
     init_lmbda : float,
 ) -> TrainingState:
   """Inits the training state and replicates it over devices."""
-  key_policy, key_q, key_lmbda = jax.random.split(key,3)
+  key_policy, key_q, key_lmbda, key_flow = jax.random.split(key,4)
   log_alpha = jnp.asarray(0.0, dtype=jnp.float32)
   alpha_optimizer_state = alpha_optimizer.init(log_alpha)
 
-  # lmbda_params = wdsac_network.lmbda_network.init(key_lmbda)
+  # lmbda_params = flowsac_network.lmbda_network.init(key_lmbda)
   if single_lambda:
     lmbda_params =jnp.asarray(init_lmbda, dtype=jnp.float32)
   else:
@@ -114,10 +118,14 @@ def _init_training_state(
 
   lmbda_optimizer_state = lmbda_optimizer.init(lmbda_params) 
 
-  policy_params = wdsac_network.policy_network.init(key_policy)
+  policy_params = flowsac_network.policy_network.init(key_policy)
   policy_optimizer_state = policy_optimizer.init(policy_params)
-  q_params = wdsac_network.q_network.init(key_q)
+  q_params = flowsac_network.q_network.init(key_q)
   q_optimizer_state = q_optimizer.init(q_params)
+  
+  # Initialize flow network parameters
+  flow_params = flowsac_network.flow_network.init(key_flow)
+  flow_optimizer_state = flow_optimizer.init(flow_params)
 
   normalizer_params = running_statistics.init_state(
       specs.Array((obs_size,), jnp.dtype('float32'))
@@ -135,6 +143,8 @@ def _init_training_state(
       alpha_params=log_alpha,
       lmbda_optimizer_state=lmbda_optimizer_state,
       lmbda_params=lmbda_params,
+      flow_optimizer_state=flow_optimizer_state,
+      flow_params=flow_params,
       normalizer_params=normalizer_params,
   )
 #   return jax.device_put_replicated(
@@ -165,17 +175,15 @@ def train(
     min_replay_size: int = 0,
     max_replay_size: Optional[int] = None,
     grad_updates_per_step: int = 1,
-    n_nominals : int = 10,                  #added
     delta : float = 0.1,                    #added
     lambda_update_steps: int = 100,         #added: number of lambda optimization steps
     single_lambda : bool = False,          #added
-    distance_type : str = "wass",          #added
     lmbda_lr : float = 3e-4,                #added
     init_lmbda : float = 0.,                #added
     deterministic_eval: bool = False, 
     network_factory: types.NetworkFactory[
-        wdsac_networks.WDSACNetworks
-    ] = wdsac_networks.make_wdsac_networks,
+        flowsac_networks.FLOWSACNetworks
+    ] = flowsac_networks.make_flowsac_networks,
     progress_fn: Callable[[int, Metrics], None] = lambda *args: None,
     eval_env: Optional[envs.Env] = None,
     randomization_fn: Optional[
@@ -185,7 +193,7 @@ def train(
     restore_checkpoint_path: Optional[str] = None,
     
 ):
-  """wdsac training."""
+  """flowsac training."""
 #   process_id = jax.process_index()
 #   local_devices_to_use = jax.local_device_count()
 #   if max_devices_per_host is not None:
@@ -236,10 +244,8 @@ def train(
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
     v_randomization_fn=functools.partial(randomization_fn, rng= jax.random.split(key, num_envs)) 
-    env = wrap_for_dr_training(
+    env = wrap_env_fn(
         env,
-        n_nominals=n_nominals,
-        n_envs=num_envs,
         episode_length=episode_length,
         action_repeat=action_repeat,
         randomization_fn=v_randomization_fn,
@@ -252,29 +258,46 @@ def train(
   normalize_fn = lambda x, y: x
   if normalize_observations:
     normalize_fn = running_statistics.normalize
-  wdsac_network = network_factory(
+  flowsac_network = network_factory(
       observation_size=obs_size,
       action_size=action_size,
       preprocess_observations_fn=normalize_fn,
   )
 
-  make_policy = wdsac_networks.make_inference_fn(wdsac_network)
+  make_policy = flowsac_networks.make_inference_fn(flowsac_network)
+  
+  # Get dynamics configuration from the environment
+  if hasattr(env, 'dr_range'):
+    dynamics_config = env.dr_range
+  else:
+    # Fallback configuration if environment doesn't have dr_range
+    dynamics_config = {
+        'n_dof_friction': 12,
+        'n_body_mass': 9,
+        'floor_friction_range': (0.1, 2.0),
+        'dof_friction_range': (0.01, 0.5),
+        'com_offset_range': (-0.1, 0.1),
+        'body_mass_range': (0.5, 2.0)
+    }
+  
+  make_dist = flowsac_networks.make_flow_distribution(flowsac_network, dynamics_config)
 
   alpha_optimizer = optax.adam(learning_rate=3e-4)
   lmbda_optimizer = optax.adam(learning_rate=lmbda_lr)
   policy_optimizer = optax.adam(learning_rate=learning_rate)
   q_optimizer = optax.adam(learning_rate=learning_rate)
+  flow_optimizer = optax.adam(learning_rate=learning_rate)  # Flow network optimizer
 
   dummy_obs = jnp.zeros((obs_size,))
   dummy_action = jnp.zeros((action_size,))
-  dummy_next_obs = jnp.zeros((n_nominals, obs_size))
   dummy_transition = DRTransition(  # pytype: disable=wrong-arg-types  # jax-ndarray
       observation=dummy_obs,
       action=dummy_action,
-      reward=jnp.zeros((n_nominals)),
-      discount=jnp.zeros((n_nominals)),
-      next_observation=dummy_next_obs,
-      extras={'state_extras': {'truncation': jnp.zeros((n_nominals))}, 'policy_extras': {}},
+      reward=0.,
+      discount=0.,
+      next_observation=dummy_obs,
+      next_adversarial_observation=dummy_obs,  # Add dummy adversarial observation
+      extras={'state_extras': {'truncation': 0.}, 'policy_extras': {}},
   )
   batch_size = int(batch_size  * grad_updates_per_step ) #// device_count)
   replay_buffer = DynamicBatchQueue(
@@ -282,23 +305,15 @@ def train(
       dummy_data_sample=dummy_transition,
       sample_batch_size=batch_size,
   )
-  lmbda_loss, kl_lmbda_loss, tv_lmbda_loss, alpha_loss, critic_loss, actor_loss = wdsac_losses.make_losses(
-      wdsac_network=wdsac_network,
+  lmbda_loss, alpha_loss, critic_loss, actor_loss, flow_network_loss = flowsac_losses.make_losses(
+      flowsac_network=flowsac_network,
       reward_scaling=reward_scaling,
       discounting=discounting,
       action_size=action_size,
   )
 
-  if distance_type == "kl":
-    lmbda_update = gradients.gradient_update_fn(
-      kl_lmbda_loss, lmbda_optimizer, pmap_axis_name=None, has_aux= True
-    )
-  elif distance_type == "tv":
-    lmbda_update = gradients.gradient_update_fn(
-      tv_lmbda_loss, lmbda_optimizer, pmap_axis_name=None, has_aux= True
-    )
-  else:
-    lmbda_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
+
+  lmbda_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
         lmbda_loss, lmbda_optimizer , pmap_axis_name=None, has_aux=True#, pmap_axis_name=_PMAP_AXIS_NAME
     )
   alpha_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
@@ -309,6 +324,9 @@ def train(
   )
   actor_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
       actor_loss, policy_optimizer, pmap_axis_name=None #, pmap_axis_name=_PMAP_AXIS_NAME
+  )
+  flow_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
+      flow_network_loss, flow_optimizer, pmap_axis_name=None, has_aux=True #, pmap_axis_name=_PMAP_AXIS_NAME
   )
 
   def sgd_step(
@@ -329,18 +347,6 @@ def train(
         optimizer_state=training_state.alpha_optimizer_state,
     )
     
-    # (lmbda_loss, (next_v, min_indices)), lmbda_params, lmbda_optimizer_state = lmbda_update(
-    #     training_state.lmbda_params,
-    #     training_state.policy_params,
-    #     training_state.normalizer_params,
-    #     training_state.target_q_params,
-    #     alpha,
-    #     transitions,
-    #     n_nominals,
-    #     key_lmbda,
-    #     delta,
-    #     optimizer_state=training_state.lmbda_optimizer_state)
-    # Perform multiple lambda updates (100 steps) as optimization parameter
     def lambda_optimization_step(carry, unused):
           lmbda_params, lmbda_optimizer_state, prev_loss = carry
           (lmbda_loss, (next_v, min_indices, loss_info)), new_lmbda_params, new_lmbda_optimizer_state = lmbda_update(
@@ -350,7 +356,6 @@ def train(
               training_state.target_q_params,
               alpha,
               transitions,
-              n_nominals,
               key_lmbda,
               delta,
               prev_loss,  # Pass previous loss
@@ -385,6 +390,18 @@ def train(
         key_actor,
         optimizer_state=training_state.policy_optimizer_state,
     )
+    
+    # Update flow network to generate adversarial dynamics parameters
+    flow_loss, flow_params, flow_optimizer_state = flow_update(
+        training_state.flow_params,
+        training_state.policy_params,
+        training_state.normalizer_params,
+        training_state.target_q_params,
+        alpha,
+        transitions,
+        key_actor,  # Reuse key_actor for flow update
+        optimizer_state=training_state.flow_optimizer_state,
+    )
 
     new_target_q_params = jax.tree_util.tree_map(
         lambda x, y: x * (1 - tau) + y * tau,
@@ -397,6 +414,7 @@ def train(
         'lmbda_loss_reduction': loss_info,  # Add loss reduction info
         'critic_loss': critic_loss,
         'actor_loss': actor_loss,
+        'flow_loss': flow_loss,  # Add flow network loss
         'alpha_loss': alpha_loss,
         'alpha': jnp.exp(alpha_params),
         'lmbda' : lmbda_params
@@ -410,6 +428,8 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
+        flow_optimizer_state=flow_optimizer_state,
+        flow_params=flow_params,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         alpha_optimizer_state=alpha_optimizer_state,
@@ -417,32 +437,33 @@ def train(
         normalizer_params=training_state.normalizer_params,
     )
     return (new_training_state, key), metrics
-  def random_step(
+  def step_with_adv(
     env: envs.Env,
     env_state: envs.State,
     policy: types.Policy,
+    dist,
     key: PRNGKey,
     extra_fields: Sequence[str] = (),
   ):
-    env_key, action_key1, action_key2, rollout_key = jax.random.split(key,4)
-    actions, policy_extras = policy(env_state.obs, action_key1)
+    env_key, action_key, rollout_key = jax.random.split(key,4)
+    actions, policy_extras = policy(env_state.obs, action_key)
     nstate = env.step(env_state, actions, env_key)
-    nstate = jax.tree_util.tree_map(lambda x : x.reshape((num_envs, n_nominals) + x.shape[1:])  , nstate)
+    adv_nstate = env.step(env_state, actions, env_key, dist)
     state_extras = {x: nstate.info[x] for x in extra_fields}
-    idx = jax.random.choice(rollout_key, a = jnp.arange(n_nominals), shape=(num_envs,))
-    rollout_next_state = jax.tree_util.tree_map(lambda x : x[jnp.arange(num_envs), idx], nstate)
 
-    return rollout_next_state, DRTransition(  # pytype: disable=wrong-arg-types  # jax-ndarray
-        observation=env_state.obs,
-        action=actions,
-        reward=nstate.reward,
-        discount=1 - nstate.done,
-        next_observation= nstate.obs,
-        extras={'policy_extras': policy_extras, 'state_extras': state_extras},
-  )
+         return nstate, DRTransition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+         observation=env_state.obs,
+         action=actions,
+         reward=nstate.reward,
+         discount=1 - nstate.done,
+         next_observation=nstate.obs,
+         next_adversarial_observation=adv_nstate.obs,  # Add adversarial next observation
+         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
+   )
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
+      flow_params: Params,
       env_state: envs.State,
       buffer_state: ReplayBufferState,
       key: PRNGKey,
@@ -452,8 +473,9 @@ def train(
       ReplayBufferState,
   ]:
     policy = make_policy((normalizer_params, policy_params))
-    env_state, transitions = random_step(
-        env, env_state, policy, key, extra_fields=('truncation',)
+    dist = make_dist((flow_params))
+    env_state, transitions = step_with_adv(
+        env, env_state, policy, dist, key, extra_fields=('truncation',)
     )
 
     normalizer_params = running_statistics.update(
@@ -484,6 +506,7 @@ def train(
     normalizer_params, env_state, buffer_state, simul_info = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
+        training_state.flow_params,
         env_state,
         buffer_state,
         experience_key,
@@ -525,6 +548,7 @@ def train(
       new_normalizer_params, env_state, buffer_state, simul_info = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
+          training_state.flow_params,
           env_state,
           buffer_state,
           key,
@@ -603,11 +627,12 @@ def train(
       key=global_key,
       obs_size=obs_size,
     #   local_devices_to_use=local_devices_to_use,
-      wdsac_network=wdsac_network,
+      flowsac_network=flowsac_network,
       alpha_optimizer=alpha_optimizer,
       policy_optimizer=policy_optimizer,
       lmbda_optimizer=lmbda_optimizer,
       q_optimizer=q_optimizer,
+      flow_optimizer=flow_optimizer,
       single_lambda=single_lambda,
       batch_size=batch_size // grad_updates_per_step,
       init_lmbda= init_lmbda,
@@ -629,7 +654,7 @@ def train(
 #       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
 #   )
 #   env_state = jax.pmap(env.reset)(env_keys)
-  env_state =env.reset(env_keys)
+  env_state =env.reset(env_key)#s)
   # Replay buffer init
 #   buffer_state = jax.pmap(replay_buffer.init)(
 #       jax.random.split(rb_key, local_devices_to_use)

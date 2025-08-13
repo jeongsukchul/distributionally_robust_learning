@@ -64,9 +64,9 @@ def parse_cfg(cfg: OmegaConf) -> OmegaConf:
         )
     except Exception as e:
         # print(colored(f"Failed to set work_dir: {e}", "red"))
-        if cfg.dynamics_shift:
+        if cfg.shift_dynamics:
             cfg.work_dir = (
-                Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy / cfg.dynamics_shift_stype
+                Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy / cfg.shift_dynamics_stype
             )
         else:
             cfg.work_dir = Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy 

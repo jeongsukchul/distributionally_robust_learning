@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""WDSAC networks."""
+"""FLOWSAC networks."""
 
 from typing import Literal, Sequence, Tuple, Callable, Any
 
@@ -27,17 +27,19 @@ from flax import linen
 import jax 
 import jax.numpy as jnp
 import dataclasses
+
 @flax.struct.dataclass
-class WDSACNetworks:
+class FLOWSACNetworks:
   # lmbda_network: networks.FeedForwardNetwork
   policy_network: networks.FeedForwardNetwork
   q_network: networks.FeedForwardNetwork
+  flow_network: networks.FeedForwardNetwork  # Normalizing flow for adversarial dynamics
   parametric_action_distribution: distribution.ParametricDistribution
 
 ActivationFn = Callable[[jnp.ndarray], jnp.ndarray]
 
-def make_inference_fn(wdsac_networks: WDSACNetworks):
-  """Creates params and inference function for the WDSAC agent."""
+def make_inference_fn(flowsac_networks: FLOWSACNetworks):
+  """Creates params and inference function for the FLOWSAC agent."""
 
   def make_policy(
       params: types.PolicyParams, deterministic: bool = False
@@ -46,11 +48,11 @@ def make_inference_fn(wdsac_networks: WDSACNetworks):
     def policy(
         observations: types.Observation, key_sample: PRNGKey
     ) -> Tuple[types.Action, types.Extra]:
-      logits = wdsac_networks.policy_network.apply(*params, observations)
+      logits = flowsac_networks.policy_network.apply(*params, observations)
       if deterministic:
-        return wdsac_networks.parametric_action_distribution.mode(logits), {}
+        return flowsac_networks.parametric_action_distribution.mode(logits), {}
       return (
-          wdsac_networks.parametric_action_distribution.sample(
+          flowsac_networks.parametric_action_distribution.sample(
               logits, key_sample
           ),
           {},
@@ -59,34 +61,38 @@ def make_inference_fn(wdsac_networks: WDSACNetworks):
     return policy
 
   return make_policy
-# def make_lmbda_networks(
-#     obs_size: types.ObservationSize,
-#     action_size: int,
-#     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-#     hidden_layer_sizes: Sequence[int] = (32, 32),
-#     activation: ActivationFn = linen.relu,
-#     batch_size : int, 
-# ):
-#   class LmbdaModule(linen.Module):
-#     @linen.compact
-#     def __call__(self, obs: jnp.ndarray, actions: jnp.ndarray):
-#       hidden = jnp.concatenate([obs,actions], axis=-1)
-#       return MLP(
-#         layer_sizes=list(hidden_layer_sizes) + [1],
-#         activation=activation,
-#         kernel_init=jax.nn.initializers.lecun_uniform(),
-#         )(hidden)
-#   lmbda_module = LmbdaModule()
-#   def apply(processor_params, lmbda_params, obs, actions):
-#     obs = preprocess_observations_fn(obs, processor_params)
-#     return jnp.squeeze(lmbda_module.apply(lmbda_params, obs, actions), axis=-1)
+
+from agents.flowsac import distribution as flow_distribution
+
+def make_flow_distribution(flowsac_networks: FLOWSACNetworks, dynamics_config: dict):
+  """Creates a function that generates adversarial dynamics distributions using JAX normalizing flows."""
   
-#   dummy_obs = jnp.zeros((1,obs_size))
-#   dummy_action = jnp.zeros((1, action_size))
-#   return networks.FeedForwardNetwork(
-#       init=lambda key: lmbda_module.init(key, dummy_obs, dummy_action), apply=apply
-#   )
-def make_wdsac_networks(
+  # Create the flow distribution
+  flow_dist = flow_distribution.make_flow_distribution(
+      flowsac_networks.flow_network,
+      dynamics_config=dynamics_config
+  )
+  
+  def make_dist(params: types.PolicyParams) -> Callable:
+    """Creates a distribution function for adversarial dynamics parameters."""
+    
+    def dist_fn(rng: PRNGKey) -> jnp.ndarray:
+      """Generate adversarial dynamics parameters using JAX normalizing flow."""
+      batch_size = rng.shape[0] if rng.ndim > 0 else 1
+      
+      # Update the flow distribution with current parameters
+      flow_dist.flow_params = params
+      
+      # Sample from the flow distribution
+      adversarial_params = flow_dist.sample(rng, batch_size)
+      
+      return adversarial_params
+    
+    return dist_fn
+  
+  return make_dist
+
+def make_flowsac_networks(
     observation_size: int,
     action_size: int,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
@@ -95,8 +101,8 @@ def make_wdsac_networks(
     policy_network_layer_norm: bool = False,
     q_network_layer_norm: bool = False,
     distribution_type: Literal['normal', 'tanh_normal'] = 'tanh_normal',
-) -> WDSACNetworks:
-  """Make WDSAC networks."""
+) -> FLOWSACNetworks:
+  """Make FLOWSAC networks."""
   parametric_action_distribution: distribution.ParametricDistribution
   if distribution_type == 'normal':
     parametric_action_distribution = distribution.NormalDistribution(
@@ -128,6 +134,18 @@ def make_wdsac_networks(
       activation=activation,
       layer_norm=policy_network_layer_norm,
   )
+  # Create the flow network for adversarial dynamics using JAX normalizing flows
+  # The actual parameter size will be determined when the environment is available
+  # We'll use a reasonable default size that can be updated later
+  default_dynamics_param_size = 25  # This will be updated with env.dr_range
+  
+  # Create JAX-based normalizing flow network
+  flow_network = flow_distribution.create_flow_network(
+      features=default_dynamics_param_size,
+      num_flows=4,
+      hidden_features=128,
+      flow_type="affine"
+  )
   q_network = networks.make_q_network(
       observation_size,
       action_size,
@@ -136,9 +154,10 @@ def make_wdsac_networks(
       activation=activation,
       layer_norm=q_network_layer_norm,
   )
-  return WDSACNetworks(
+  return FLOWSACNetworks(
       # lmbda_network = lmbda_network,
       policy_network=policy_network,
       q_network=q_network,
+      flow_network=flow_network,
       parametric_action_distribution=parametric_action_distribution,
   )

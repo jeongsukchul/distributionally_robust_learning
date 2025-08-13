@@ -14,6 +14,7 @@
 # ==============================================================================
 """Cheetah environment."""
 
+import functools
 from typing import Any, Dict, Optional, Union
 
 import jax
@@ -145,11 +146,51 @@ class Run(mjx_env.MjxEnv):
   def mjx_model(self) -> mjx.Model:
     return self._mjx_model
   
+  @property
+  def dr_range(self) -> dict:
+    """Return the dynamics randomization ranges for this environment.
+    
+    This property provides the configuration needed for the normalizing flow network
+    to generate adversarial dynamics parameters. The ranges define:
+    
+    - n_dof_friction: Number of DOF friction parameters (model.nv - 6)
+    - n_body_mass: Number of body mass parameters (model.nbody - 1, excluding world)
+    - floor_friction_range: (min, max) for floor friction coefficient
+    - dof_friction_range: (min, max) for DOF friction loss
+    - com_offset_range: (min, max) for center of mass offset in x,y,z
+    - body_mass_range: (min, max) for body mass multipliers
+    
+    Usage:
+        env = Cheetah()
+        config = env.dr_range
+        # Pass config to flow network initialization
+    """
+    return {
+        'n_dof_friction': self.mjx_model.nv - 6,  # Number of DOF friction parameters
+        'n_body_mass': self.mjx_model.nbody - 1,  # Number of body mass parameters (excluding world)
+        'floor_friction_range': (0.1, 2.0),       # Floor friction range
+        'dof_friction_range': (0.01, 0.5),        # DOF friction range
+        'com_offset_range': (-0.1, 0.1),          # COM offset range
+        'body_mass_range': (0.5, 2.0)             # Body mass multiplier range
+    }
+  
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1
 
-def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, deterministic_cfg : dict):
+def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, deterministic_cfg : dict, dist=None):
 
+  if dist is None and stochastic_cfg is not None:
+    dist = [
+      functools.partial(jax.random.uniform, \
+        minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max']),
+      functools.partial(jax.random.uniform, shape=(model.nv-6),\
+        minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']),
+      functools.partial(jax.random.uniform, shape=(3,),\
+        minval=stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max']),
+
+    ]+[functools.partial(jax.random.uniform, \
+        minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max']) for i in range(1, model.nbody)]
+  
   @jax.vmap
   def shift_dynamics(rng):
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(deterministic_cfg['floor_friction'])
@@ -172,28 +213,26 @@ def domain_randomize(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict, det
     # floor friction
     rng, key = jax.random.split(rng)
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
-      jax.random.uniform(key, minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max'])
+      dist[0](key=key)
     )
 
-  # static friction
+    # static friction
     rng, key = jax.random.split(rng)
-    frictionloss = model.dof_frictionloss[6:] * jax.random.uniform(
-        key, shape=(model.nv-6,), minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']
-    )
+    frictionloss = model.dof_frictionloss[6:] * dist[1](key=key)
     dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
   
-  # com pos offset
+    # com pos offset
     rng, key = jax.random.split(rng)
-    dpos = jax.random.uniform(key, (3,), minval=-stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max'])
+    dpos = dist[2](key=key)
     body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
         model.body_ipos[TORSO_BODY_ID] + dpos
     )
   
-  # link mass 
+    # link mass 
     body_mass = jp.ones((model.nbody,))
     for i in range(1, model.nbody):
       rng, key = jax.random.split(rng)
-      dmass = jax.random.uniform(key, minval=stochastic_cfg[f'body{i}_mass_min'], maxval=stochastic_cfg[f'body{i}_mass_max'])
+      dmass = dist[i+2](key)
       body_mass = body_mass.at[i].set(model.body_mass[i] * dmass)
 
     return (
@@ -255,21 +294,21 @@ def domain_randomize_eval(model: mjx.Model, rng: jax.Array, stochastic_cfg: dict
       jax.random.uniform(key, minval=stochastic_cfg['floor_friction_min'], maxval=stochastic_cfg['floor_friction_max'])
     )
 
-  # static friction
+    # static friction
     rng, key = jax.random.split(rng)
     frictionloss = model.dof_frictionloss[6:] * jax.random.uniform(
         key, shape=(model.nv-6,), minval=stochastic_cfg['dof_friction_min'], maxval=stochastic_cfg['dof_friction_max']
     )
     dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
   
-  # com pos offset
+    # com pos offset
     rng, key = jax.random.split(rng)
     dpos = jax.random.uniform(key, (3,), minval=-stochastic_cfg['com_offset_min'], maxval=stochastic_cfg['com_offset_max'])
     body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
         model.body_ipos[TORSO_BODY_ID] + dpos
     )
   
-  # link mass 
+    # link mass 
     body_mass = jp.ones((model.nbody,))
     for i in range(1, model.nbody):
       rng, key = jax.random.split(rng)

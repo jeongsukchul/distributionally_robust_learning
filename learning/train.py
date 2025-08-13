@@ -1,8 +1,8 @@
 import os
 
+from learning.agents.wdsac.dr_wrapper import wrap_for_dr_training
 from omegaconf import OmegaConf
 os.environ['MUJOCO_GL'] = 'glfw'
-import numpy as np
 
 import mediapy as media
 import matplotlib.pyplot as plt
@@ -59,8 +59,9 @@ from helper import make_dir
 import warnings
 import pickle
 import shutil
-from mujoco_playground._src.wrapper import Wrapper
+from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 from mujoco_playground._src import mjx_env
+from utils import save_configs_to_wandb_and_local
 
 
 
@@ -115,24 +116,11 @@ class BraxDomainRandomizationWrapper(Wrapper):
     self._mjx_model, self._in_axes = randomization_fn(self.env.mjx_model)
     self.env.unwrapped._mjx_model = self._mjx_model
 
-  # def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
-  #   env = self.env
-  #   env.unwrapped._mjx_model = mjx_model
-  #   return env
-
   def reset(self, rng: jax.Array) -> mjx_env.State:
-    # def reset(mjx_model, rng):
-    #   env = self._env_fn(mjx_model=mjx_model)
-    #   return env.reset(rng)
-
     state = self.env.reset(rng)
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array) -> mjx_env.State:
-    # def step(mjx_model, s, a):
-    #   env = self._env_fn(mjx_model=mjx_model)
-    #   return env.step(s, a)
-
     res = self.env.step(state, action)
     return res
 
@@ -152,10 +140,6 @@ def progress_fn(num_steps, metrics, use_wandb=True):
     print("-------------------------------------------------------------------")
 
 
-    # if cfg.save_video:
-    #         logger.video.save(num_steps, key='results/video')
-
-
 def train_ppo(cfg:dict, randomization_fn, env, eval_env):
 
     print("training with ppo")
@@ -163,8 +147,9 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
         ppo_params = dm_control_suite_params.brax_ppo_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
         ppo_params = locomotion_params.brax_ppo_config(cfg.task)
-    if cfg.dynamics_shift:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    print("shift_dynamics:", cfg.shift_dynamics)
+    if cfg.shift_dynamics:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.hard_dr={cfg.custom_wrapper}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
     if cfg.use_wandb:
@@ -194,11 +179,17 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
         policy_params_fn=functools.partial(policy_params_fn, ckpt_path=cfg.work_dir / "models" ),
         randomization_fn=randomization_fn,
     )
-
+    if cfg.custom_wrapper and cfg.shift_dynamics:
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=ppo_params.num_envs)
+    else:
+        wrap_fn = wrap_for_brax_training
+    wrap_eval_fn = wrap_for_brax_training
+    
     make_inference_fn, params, metrics = train_fn(
         environment=env,
         eval_env = eval_env,
-        wrap_env_fn=wrapper.wrap_for_brax_training,
+        wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn= wrap_eval_fn
     )
     return make_inference_fn, params, metrics
 
@@ -208,8 +199,8 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
     elif cfg.task in mujoco_playground._src.locomotion._envs:
         sac_params = locomotion_params.brax_sac_config(cfg.task)
     sac_training_params = dict(sac_params)
-    if cfg.dynamics_shift:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    if cfg.shift_dynamics:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.hard_dr={cfg.custom_wrapper}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
     if cfg.use_wandb:
@@ -236,11 +227,16 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
         progress_fn=progress,
         randomization_fn=randomization_fn,
     )
-
+    if cfg.custom_wrapper and cfg.shift_dynamics:
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=ppo_params.num_envs)
+    else:
+        wrap_fn = wrap_for_brax_training
+    wrap_eval_fn = wrap_for_brax_training
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
         eval_env = eval_env,
-        wrap_env_fn=wrapper.wrap_for_brax_training,
+        wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
 
@@ -294,9 +290,14 @@ def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
         wdsac_params = brax_wdsac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
         wdsac_params = locomotion_params.brax_sac_config(cfg.task)
-    wdsac_training_params = dict(wdsac_params)
-    if cfg.dynamics_shift:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.dynamics_shift_type}"
+    for param in wdsac_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            wdsac_params[param] = getattr(cfg, param)
+    if cfg.shift_dynamics:
+        wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.{cfg.shift_dynamics_type}.delta={wdsac_params.delta}\
+            .nominals={wdsac_params.n_nominals}.single_lambda={wdsac_params.single_lambda}.\
+                distance_type={wdsac_params.distance_type}.length={wdsac_params.lambda_update_steps}\
+                    .lmbda_lr={wdsac_params.lmbda_lr}.init_lmbda={wdsac_params.init_lmbda}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
     if cfg.use_wandb:
@@ -309,6 +310,7 @@ def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
         )
         wandb.config.update({"env_name": cfg.task})
     network_factory = wdsac_networks.make_wdsac_networks
+    wdsac_training_params = dict(wdsac_params)
     if "network_factory" in wdsac_params:
         del wdsac_training_params["network_factory"]
         network_factory = functools.partial(
@@ -341,51 +343,44 @@ def train(cfg: dict):
 
     rng = jax.random.PRNGKey(cfg.seed)
     
-    # if cfg.dynamics_shift:
+    # if cfg.shift_dynamics:
     path = epath.Path(".").resolve()
-    if cfg.dynamics_shift_type == "stochastic":
+    cfg_dir = make_dir(cfg.work_dir / "cfg")
+    shutil.copy('config.yaml', os.path.join(cfg_dir, 'config.yaml'))
+
+    if cfg.shift_dynamics_type == "stochastic":
         dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
         stochastic_cfg = OmegaConf.load(dynamics_path)
         randomizer = registry.get_domain_randomizer(cfg.task)
-        rng, dynamics_rng = jax.random.split(rng)
         randomizer = functools.partial(randomizer, deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
 
-    elif cfg.dynamics_shift_type == "deterministic":
+    elif cfg.shift_dynamics_type == "deterministic":
         dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
         deterministic_cfg = OmegaConf.load(dynamics_path)
         randomizer = registry.get_domain_randomizer(cfg.task)
-        rng, dynamics_rng = jax.random.split(rng)
         randomizer = functools.partial(randomizer, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
     else:
-        raise ValueError(f"Unknown dynamics shift type: {cfg.dynamics_shift_type}")
-    if cfg.dynamics_shift:
+        raise ValueError(f"Unknown dynamics shift type: {cfg.shift_dynamics_type}")
+    if cfg.shift_dynamics:
         randomization_fn = randomizer
     else:
         randomization_fn = None 
-
+    print("shift_dynamics", cfg.shift_dynamics)
+    print("randomization_fn:", randomization_fn)
     env_cfg = registry.get_default_config(cfg.task)
     env = registry.load(cfg.task, config=env_cfg)
-    if cfg.eval_randomization:
-        eval_env = BraxDomainRandomizationWrapper(
-            env,
-            randomization_fn=randomizer,
-        )
-    else:
-        eval_env = registry.load(cfg.task)
 
     if cfg.policy == "sac":
-        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, eval_env)
+        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, None)
     elif cfg.policy == "ppo":
-        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env, eval_env)
+        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env, None)
     elif cfg.policy == "rambo":
-        make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, eval_env)
+        make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, None)
     elif cfg.policy == "wdsac":
-        make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env, eval_env)
-
-    # elif cfg.policy == "td-mpc":
-    #     train_tdmpc(cfg)
+        make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env, None)
     else:
         print("no policy!")
+
 
     save_dir = make_dir(cfg.work_dir / "models")
     print(f"Saving parameters to {save_dir}")
@@ -395,6 +390,23 @@ def train(cfg: dict):
     with open(latest_path, "wb") as f:
         pickle.dump(params, f)
 
+    # Save config.yaml and shift_dynamics config to wandb and local directory
+    save_configs_to_wandb_and_local(cfg, cfg.work_dir)
+    if cfg.eval_randomization:
+        eval_rng, rng = jax.random.split(rng)
+        randomizer_eval = registry.get_domain_randomizer_eval(cfg.task)
+        if cfg.shift_dynamics_type == "stochastic":
+            randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng,deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
+        elif cfg.shift_dynamics_type == "deterministic":
+            randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng,deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
+        else:
+            raise ValueError(f"Unknown dynamics shift type: {cfg.shift_dynamics_type}")
+        eval_env = BraxDomainRandomizationWrapper(
+            registry.load(cfg.task),
+            randomization_fn=randomizer_eval,
+        )
+    else:
+        eval_env = registry.load(cfg.task)
     if cfg.save_video and cfg.use_wandb:
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
         jit_reset = jax.jit(eval_env.reset)
@@ -410,7 +422,7 @@ def train(cfg: dict):
             rollout.append(state)
             total_reward += state.reward
             
-        frames = eval_env.render(rollout)  
+        frames = eval_env.render(rollout, camera=CAMERAS[cfg.task],)
         frames = np.stack(frames).transpose(0, 3, 1, 2)
         fps=1.0 / env.dt
         wandb.log({'eval_video': wandb.Video(frames, fps=fps, format='mp4')})

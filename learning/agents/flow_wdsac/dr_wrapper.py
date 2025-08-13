@@ -40,6 +40,7 @@ def wrap_for_dr_training(
   return env
 class RandomVmapWrapper(Wrapper):
   """Wrapper for domain randomization."""
+
   def __init__(
       self,
       env: mjx_env.MjxEnv,
@@ -61,9 +62,9 @@ class RandomVmapWrapper(Wrapper):
     state = jax.vmap(self.env.reset)(rng)
     return state
 
-  def step(self, state: mjx_env.State, action: jax.Array, key:jax.random.PRNGKey) -> State:
+  def step(self, state: mjx_env.State, action: jax.Array, dist, key:jax.random.PRNGKey) -> State:
     keys = jax.random.split(key, self.n_nominals* self.n_envs)
-    mjx_model_v, in_axes = self.rand_fn(rng=keys)
+    mjx_model_v, in_axes = self.rand_fn(rng=keys, dist=dist)
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)

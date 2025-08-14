@@ -32,6 +32,8 @@ from agents.rambo import networks as rambo_networks
 from agents.rambo import train as rambo
 from agents.wdsac import train as wdsac
 from agents.wdsac import networks as wdsac_networks
+from agents.flowsac import train as flowsac
+from agents.flowsac import networks as flowsac_networks
 from etils import epath
 from flax import struct
 from flax.training import orbax_utils
@@ -48,7 +50,7 @@ from orbax import checkpoint as ocp
 import wandb
 from mujoco_playground.config import dm_control_suite_params
 from mujoco_playground.config import locomotion_params
-from configs.training_config import brax_rambo_config, brax_wdsac_config
+from configs.training_config import brax_rambo_config, brax_wdsac_config, brax_flowsac_config
 import mujoco_playground
 from mujoco_playground import wrapper
 import hydra
@@ -228,7 +230,7 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
         randomization_fn=randomization_fn,
     )
     if cfg.custom_wrapper and cfg.shift_dynamics:
-        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=ppo_params.num_envs)
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=sac_params.num_envs)
     else:
         wrap_fn = wrap_for_brax_training
     wrap_eval_fn = wrap_for_brax_training
@@ -333,6 +335,53 @@ def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
     )
     return make_inference_fn, params, metrics
 
+def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        flowsac_params = brax_flowsac_config(cfg.task)
+    elif cfg.task in mujoco_playground._src.locomotion._envs:
+        flowsac_params = locomotion_params.brax_sac_config(cfg.task)
+    for param in flowsac_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            flowsac_params[param] = getattr(cfg, param)
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.{cfg.shift_dynamics_type}.delta={flowsac_params.delta}\
+            .single_lambda={flowsac_params.single_lambda}\
+            .length={flowsac_params.lambda_update_steps}.lmbda_lr={flowsac_params.lmbda_lr}.init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    network_factory = flowsac_networks.make_flowsac_networks
+    flowsac_training_params = dict(flowsac_params)
+    if "network_factory" in flowsac_params:
+        del flowsac_training_params["network_factory"]
+        network_factory = functools.partial(
+            flowsac_networks.make_flowsac_networks,
+            **flowsac_params.network_factory
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        flowsac.train, **dict(flowsac_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+    )
+    if cfg.custom_wrapper and cfg.shift_dynamics:
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=flowsac_params.num_envs)
+    else:
+        wrap_fn = wrap_for_brax_training
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrap_fn,
+    )
+    return make_inference_fn, params, metrics
+
 @hydra.main(config_name="config", config_path=".", version_base=None)
 def train(cfg: dict):
     
@@ -347,18 +396,13 @@ def train(cfg: dict):
     path = epath.Path(".").resolve()
     cfg_dir = make_dir(cfg.work_dir / "cfg")
     shutil.copy('config.yaml', os.path.join(cfg_dir, 'config.yaml'))
+    env_cfg = registry.get_default_config(cfg.task)
+    env = registry.load(cfg.task, config=env_cfg)
 
     if cfg.shift_dynamics_type == "stochastic":
-        dynamics_path = os.path.join(path, "dynamics_shift", "stochastic", f"{cfg.task}.yaml")
-        stochastic_cfg = OmegaConf.load(dynamics_path)
         randomizer = registry.get_domain_randomizer(cfg.task)
-        randomizer = functools.partial(randomizer, deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
+        randomizer = functools.partial(randomizer, params=env.dr_range)
 
-    elif cfg.shift_dynamics_type == "deterministic":
-        dynamics_path = os.path.join(path, "dynamics_shift", "deterministic", f"{cfg.task}.yaml")
-        deterministic_cfg = OmegaConf.load(dynamics_path)
-        randomizer = registry.get_domain_randomizer(cfg.task)
-        randomizer = functools.partial(randomizer, deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
     else:
         raise ValueError(f"Unknown dynamics shift type: {cfg.shift_dynamics_type}")
     if cfg.shift_dynamics:
@@ -367,8 +411,6 @@ def train(cfg: dict):
         randomization_fn = None 
     print("shift_dynamics", cfg.shift_dynamics)
     print("randomization_fn:", randomization_fn)
-    env_cfg = registry.get_default_config(cfg.task)
-    env = registry.load(cfg.task, config=env_cfg)
 
     if cfg.policy == "sac":
         make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, None)
@@ -378,6 +420,8 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, None)
     elif cfg.policy == "wdsac":
         make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env, None)
+    elif cfg.policy == "flowsac":
+        make_inference_fn, params, metrics = train_flowsac(cfg, randomization_fn, env, None)
     else:
         print("no policy!")
 
@@ -396,9 +440,9 @@ def train(cfg: dict):
         eval_rng, rng = jax.random.split(rng)
         randomizer_eval = registry.get_domain_randomizer_eval(cfg.task)
         if cfg.shift_dynamics_type == "stochastic":
-            randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng,deterministic_cfg=None, stochastic_cfg=stochastic_cfg)
-        elif cfg.shift_dynamics_type == "deterministic":
-            randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng,deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
+            randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng, params=env.dr_range)
+        # elif cfg.shift_dynamics_type == "deterministic":
+        #     randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng,deterministic_cfg=deterministic_cfg, stochastic_cfg=None)
         else:
             raise ValueError(f"Unknown dynamics shift type: {cfg.shift_dynamics_type}")
         eval_env = BraxDomainRandomizationWrapper(

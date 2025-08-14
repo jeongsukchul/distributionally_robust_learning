@@ -93,7 +93,10 @@ lint.ignore = [
 exclude = [
     "mujoco_menagerie/",
 ]
-
+[tool.uv]
+override-dependencies = [
+    "numpy>=2.0.0",  # Override numpy constraint
+]
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true

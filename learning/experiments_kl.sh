@@ -1,7 +1,7 @@
 gpu_id=$1 
 wandb_project="wdsac-kl"
 CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" wandb_project=$wandb_project
-for delta in 0 0.001 0.05 0.1 0.5 1
+for delta in 0.001 0.05 0.1 0.5 1
 do
     for n_nominals in 10 15 25 50
         do

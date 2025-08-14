@@ -47,21 +47,19 @@ import optax
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
-from agents.flowsac.dr_wrapper import wrap_for_dr_training
+from agents.flowsac.adv_wrapper import wrap_for_adv_training
 Metrics = types.Metrics
 Transition = types.Transition
-InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
-class DRTransition(NamedTuple):
-  """Container for a transition."""
-
+class TransitionwithState(NamedTuple):
+  state: State
   observation: NestedArray
   action: NestedArray
   reward: NestedArray
   discount: NestedArray
   next_observation: NestedArray
-  next_adversarial_observation: NestedArray  # Adversarial next observation
   extras: NestedArray = ()  # pytype: disable=annotation-type-mismatch  # jax-ndarray
 
+InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 ReplayBufferState = Any
 
 
@@ -155,7 +153,6 @@ def _init_training_state(
 
 def train(
     environment: envs.Env,
-    termination_fn : Any,            #added
     num_timesteps,
     episode_length: int,
     wrap_env: bool = True,
@@ -175,6 +172,7 @@ def train(
     min_replay_size: int = 0,
     max_replay_size: Optional[int] = None,
     grad_updates_per_step: int = 1,
+    flow_lr : float = 1e-4,  # Learning rate for flow network
     delta : float = 0.1,                    #added
     lambda_update_steps: int = 100,         #added: number of lambda optimization steps
     single_lambda : bool = False,          #added
@@ -243,60 +241,65 @@ def train(
     
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
-    v_randomization_fn=functools.partial(randomization_fn, rng= jax.random.split(key, num_envs)) 
-    env = wrap_env_fn(
+    v_randomization_fn=functools.partial(randomization_fn, rng=jax.random.split(key, num_envs)) 
+    env = wrap_for_training(
         env,
         episode_length=episode_length,
         action_repeat=action_repeat,
         randomization_fn=v_randomization_fn,
-    )  # pytype: disable=wrong-keyword-args
+    )
+    adv_env = wrap_for_adv_training(
+        environment,
+        episode_length=episode_length,
+        action_repeat=action_repeat,
+        randomization_fn=randomization_fn,
+    )
+      # pytype: disable=wrong-keyword-args
+  #   adv_env =wrap_for_adv_training(
+  #       environment,
+  #       episode_length=episode_length,
+  #       action_repeat=action_repeat,
+  #       randomization_fn=randomization_fn,
+  # )
   obs_size = env.observation_size
   if isinstance(obs_size, Dict):
     raise NotImplementedError('Dictionary observations not implemented in SAC')
   action_size = env.action_size
-
-  normalize_fn = lambda x, y: x
+  if hasattr(env, 'dr_range'):
+    dr_range_low, dr_range_high = env.dr_range
+  else:
+    # Fallback configuration if environment doesn't have dr_range
+    ValueError("Environment does not have dr_range attribute. Please provide a valid environment with dr_range.")
+  
   if normalize_observations:
     normalize_fn = running_statistics.normalize
   flowsac_network = network_factory(
       observation_size=obs_size,
       action_size=action_size,
       preprocess_observations_fn=normalize_fn,
+      dynamics_param_size=len(dr_range_low)
   )
 
   make_policy = flowsac_networks.make_inference_fn(flowsac_network)
-  
+  adv_step = adv_env.step
   # Get dynamics configuration from the environment
-  if hasattr(env, 'dr_range'):
-    dynamics_config = env.dr_range
-  else:
-    # Fallback configuration if environment doesn't have dr_range
-    dynamics_config = {
-        'n_dof_friction': 12,
-        'n_body_mass': 9,
-        'floor_friction_range': (0.1, 2.0),
-        'dof_friction_range': (0.01, 0.5),
-        'com_offset_range': (-0.1, 0.1),
-        'body_mass_range': (0.5, 2.0)
-    }
-  
-  make_dist = flowsac_networks.make_flow_distribution(flowsac_network, dynamics_config)
 
   alpha_optimizer = optax.adam(learning_rate=3e-4)
   lmbda_optimizer = optax.adam(learning_rate=lmbda_lr)
   policy_optimizer = optax.adam(learning_rate=learning_rate)
   q_optimizer = optax.adam(learning_rate=learning_rate)
-  flow_optimizer = optax.adam(learning_rate=learning_rate)  # Flow network optimizer
-
+  flow_optimizer = optax.adam(learning_rate=flow_lr)  # Flow network optimizer
+  rng, dummy_key = jax.random.split(rng)
   dummy_obs = jnp.zeros((obs_size,))
   dummy_action = jnp.zeros((action_size,))
-  dummy_transition = DRTransition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+  dummy_state = environment.reset(dummy_key)
+  dummy_transition = TransitionwithState(  # pytype: disable=wrong-arg-types  # jax-ndarray
+      state = dummy_state,
       observation=dummy_obs,
       action=dummy_action,
       reward=0.,
       discount=0.,
       next_observation=dummy_obs,
-      next_adversarial_observation=dummy_obs,  # Add dummy adversarial observation
       extras={'state_extras': {'truncation': 0.}, 'policy_extras': {}},
   )
   batch_size = int(batch_size  * grad_updates_per_step ) #// device_count)
@@ -330,7 +333,7 @@ def train(
   )
 
   def sgd_step(
-      carry: Tuple[TrainingState, PRNGKey], transitions: DRTransition
+      carry: Tuple[TrainingState, PRNGKey], transitions: TransitionwithState
   ) -> Tuple[Tuple[TrainingState, PRNGKey], Metrics]:
     training_state, key = carry
 
@@ -399,6 +402,7 @@ def train(
         training_state.target_q_params,
         alpha,
         transitions,
+        adv_step,
         key_actor,  # Reuse key_actor for flow update
         optimizer_state=training_state.flow_optimizer_state,
     )
@@ -437,33 +441,10 @@ def train(
         normalizer_params=training_state.normalizer_params,
     )
     return (new_training_state, key), metrics
-  def step_with_adv(
-    env: envs.Env,
-    env_state: envs.State,
-    policy: types.Policy,
-    dist,
-    key: PRNGKey,
-    extra_fields: Sequence[str] = (),
-  ):
-    env_key, action_key, rollout_key = jax.random.split(key,4)
-    actions, policy_extras = policy(env_state.obs, action_key)
-    nstate = env.step(env_state, actions, env_key)
-    adv_nstate = env.step(env_state, actions, env_key, dist)
-    state_extras = {x: nstate.info[x] for x in extra_fields}
 
-         return nstate, DRTransition(  # pytype: disable=wrong-arg-types  # jax-ndarray
-         observation=env_state.obs,
-         action=actions,
-         reward=nstate.reward,
-         discount=1 - nstate.done,
-         next_observation=nstate.obs,
-         next_adversarial_observation=adv_nstate.obs,  # Add adversarial next observation
-         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
-   )
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
-      flow_params: Params,
       env_state: envs.State,
       buffer_state: ReplayBufferState,
       key: PRNGKey,
@@ -473,9 +454,9 @@ def train(
       ReplayBufferState,
   ]:
     policy = make_policy((normalizer_params, policy_params))
-    dist = make_dist((flow_params))
-    env_state, transitions = step_with_adv(
-        env, env_state, policy, dist, key, extra_fields=('truncation',)
+    adv_step = adv_env.step
+    next_state, transitions = acting.actor_step(
+        env, env_state, policy, key, extra_fields=('truncation',)
     )
 
     normalizer_params = running_statistics.update(
@@ -483,6 +464,15 @@ def train(
         transitions.observation,
         #pmap_axis_name=_PMAP_AXIS_NAME,
     )
+    transitions = TransitionwithState(
+      state=env_state,
+      observation=transitions.observation,
+      action=transitions.action,
+      reward=transitions.reward,
+      discount=transitions.discount,
+      next_observation=transitions.next_observation,
+    )
+    print("env state", env_state)
     simul_info ={
           "simul/reward_mean" : transitions.reward.mean(),
           "simul/reward_std" : transitions.reward.std(),
@@ -490,7 +480,7 @@ def train(
           "simul/reward_min" : transitions.reward.min(),
         }
     buffer_state = replay_buffer.insert(buffer_state, transitions)
-    return normalizer_params, env_state, buffer_state, simul_info
+    return normalizer_params, next_state, buffer_state, simul_info
   def training_step(
       training_state: TrainingState,
       env_state: envs.State,
@@ -506,7 +496,6 @@ def train(
     normalizer_params, env_state, buffer_state, simul_info = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
-        training_state.flow_params,
         env_state,
         buffer_state,
         experience_key,
@@ -654,7 +643,7 @@ def train(
 #       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
 #   )
 #   env_state = jax.pmap(env.reset)(env_keys)
-  env_state =env.reset(env_key)#s)
+  env_state =env.reset(env_keys)
   # Replay buffer init
 #   buffer_state = jax.pmap(replay_buffer.init)(
 #       jax.random.split(rb_key, local_devices_to_use)

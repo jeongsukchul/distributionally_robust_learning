@@ -42,6 +42,7 @@ def make_losses(
   target_entropy = -0.5 * action_size
   policy_network = flowsac_network.policy_network
   q_network = flowsac_network.q_network
+  flow_network = flowsac_network.flow_network
 #   lmbda_network = flowsac_network.lmbda_network
   parametric_action_distribution = flowsac_network.parametric_action_distribution
 
@@ -127,21 +128,32 @@ def make_losses(
     return jnp.mean(actor_loss)
 
 
-  def flow_network_loss(
+  def flow_loss(
       flow_params: Params,
       policy_params: Params,
       normalizer_params: Any,
       target_q_params: Params,
       alpha: jnp.ndarray,
       transitions: Transition,
+      adv_step : Any,
+      dr_range,
       key: jax.random.PRNGKey,
       lmbda: float = 1.0,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
-    
+    batch_size = transitions.observation.shape[0]
+    dr_low, dr_high = dr_range
+    sample_key, key = jax.random.split(key)
+    dynamics_params = flow_network.apply(
+        flow_params, low=dr_low, high=dr_high, mode='sample', rng=sample_key, n_samples=batch_size
+    )
+    print("dynamics_params shape:", dynamics_params.shape)
+    adv_obs = adv_step(
+        transitions.state, transitions.action, dynamics_params
+    )
     # Get next action and log prob from policy for adversarial observation
     next_dist_params = policy_network.apply(
-        normalizer_params, policy_params, transitions.next_adversarial_observation
+        normalizer_params, policy_params, adv_obs
     )
     next_action = parametric_action_distribution.sample_no_postprocessing(
         next_dist_params, key
@@ -151,14 +163,14 @@ def make_losses(
     )
     
     # Get Q-value for adversarial next state-action pair
-    next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_adversarial_observation, next_action).min(-1)
+    next_q_adv = q_network.apply(normalizer_params, target_q_params, adv_obs, next_action).min(-1)
     
     # Calculate adversarial next V value
     next_v_adv = next_q_adv - alpha * next_log_prob
     
     # The adversarial objective: minimize next_v_adv + lambda * penalty
     # where penalty is the squared difference between adversarial and nominal observations
-    penalty = jnp.square(transitions.next_adversarial_observation - transitions.next_observation).sum(-1)
+    penalty = jnp.square(adv_obs - transitions.next_observation).sum(-1)
     
     # Total adversarial loss: we want to minimize next_v_adv + lambda * penalty
     # This encourages the flow network to generate dynamics that make the next state worse
@@ -167,4 +179,4 @@ def make_losses(
     
     return flow_loss,  next_v_adv+lmbda*penalty
 
-  return lmbda_loss, alpha_loss, critic_loss, actor_loss, flow_network_loss
+  return lmbda_loss, alpha_loss, critic_loss, actor_loss, flow_loss

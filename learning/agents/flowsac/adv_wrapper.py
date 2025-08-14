@@ -7,10 +7,8 @@ from brax.envs.base import Wrapper, Env, State
 from brax.base import System
 import functools
 
-def wrap_for_dr_training(
+def wrap_for_adv_training(
     env: mjx_env.MjxEnv,
-    n_nominals : int,
-    n_envs : int,
     episode_length: int = 1000,
     action_repeat: int = 1,
     randomization_fn: Optional[
@@ -34,25 +32,21 @@ def wrap_for_dr_training(
     environment did not already have batch dimensions, it is additional Vmap
     wrapped.
   """
-  env = RandomVmapWrapper(env, randomization_fn, n_nominals, n_envs)
+  env = AdVmapWrapper(env, randomization_fn)
   env = EpisodeWrapper(env, episode_length, action_repeat)
   env = BraxAutoResetWrapper(env)
   return env
-class RandomVmapWrapper(Wrapper):
+class AdVmapWrapper(Wrapper):
   """Wrapper for domain randomization."""
 
   def __init__(
       self,
       env: mjx_env.MjxEnv,
       randomization_fn: Callable[[System], Tuple[System, System]],
-      n_nominals : int,
-      n_envs : int,
   ):
     super().__init__(env)
-    self.rand_fn = functools.partial(randomization_fn,model=self.mjx_model)
-    self.n_nominals= n_nominals
-    self.n_envs = n_envs
-  def _env_fn(self,  mjx_model: mjx.Model) -> mjx_env.MjxEnv:
+    self.rand_fn = functools.partial(randomization_fn, model=self.mjx_model, deterministic=True)
+  def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
     env = self.env
     env.unwrapped._mjx_model = mjx_model
     return env
@@ -62,9 +56,9 @@ class RandomVmapWrapper(Wrapper):
     state = jax.vmap(self.env.reset)(rng)
     return state
 
-  def step(self, state: mjx_env.State, action: jax.Array, dist, key:jax.random.PRNGKey) -> State:
-    keys = jax.random.split(key, self.n_nominals* self.n_envs)
-    mjx_model_v, in_axes = self.rand_fn(rng=keys, dist=dist)
+  def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> State:
+    #params shape is [n_envs, parames]
+    mjx_model_v, in_axes = self.rand_fn(params=params)
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)
@@ -96,15 +90,13 @@ class EpisodeWrapper(Wrapper):
     state.info['episode_metrics'] = episode_metrics
     return state
 
-  def step(self, state: State, action: jax.Array, rng: jax.random.PRNGKey) -> State:
-    dr_state= jax.tree_util.tree_map(lambda x : jnp.repeat(x, self.n_nominals, axis=0), state)
-    dr_action = jnp.repeat(action, self.n_nominals, axis=0)
+  def step(self, state: State, action: jax.Array, params: jax.Array) -> State:
     def f(state, _):
-      nstate = self.env.step(state, dr_action, rng)
+      nstate = self.env.step(state, action, params)
       return nstate, nstate.reward
 
     
-    state, rewards = jax.lax.scan(f, dr_state, (), self.action_repeat)
+    state, rewards = jax.lax.scan(f, state, (), self.action_repeat)
     rewards = jnp.sum(rewards,axis=0)
     state = state.replace(reward=rewards)
     steps = state.info['steps'] + self.action_repeat
@@ -138,13 +130,13 @@ class BraxAutoResetWrapper(Wrapper):
     state.info['first_obs'] = state.obs
     return state
 
-  def step(self, state: mjx_env.State, action: jax.Array, rng: jax.random.PRNGKey=jax.random.PRNGKey(0)) -> mjx_env.State:
+  def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> mjx_env.State:
     if 'steps' in state.info:
       steps = state.info['steps']
       steps = jnp.where(state.done, jnp.zeros_like(steps), steps)
       state.info.update(steps=steps)
     state = state.replace(done=jnp.zeros_like(state.done))
-    state = self.env.step(state, action, rng)
+    state = self.env.step(state, action, params)
 
     def where_done(x, y):
       done = state.done

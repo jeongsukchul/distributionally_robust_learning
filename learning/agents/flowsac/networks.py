@@ -27,7 +27,7 @@ from flax import linen
 import jax 
 import jax.numpy as jnp
 import dataclasses
-
+from module.distribution import make_flow_network, FlowRQSConfig
 @flax.struct.dataclass
 class FLOWSACNetworks:
   # lmbda_network: networks.FeedForwardNetwork
@@ -61,40 +61,25 @@ def make_inference_fn(flowsac_networks: FLOWSACNetworks):
     return policy
 
   return make_policy
+def mkae_flow_fn(flowsac_networks: FLOWSACNetworks):
+  """Creates params and inference function for the FLOWSAC agent."""
 
-from agents.flowsac import distribution as flow_distribution
+  def make_flow(
+      params: types.Params, deterministic: bool = False
+  ) -> types.Policy:
 
-def make_flow_distribution(flowsac_networks: FLOWSACNetworks, dynamics_config: dict):
-  """Creates a function that generates adversarial dynamics distributions using JAX normalizing flows."""
-  
-  # Create the flow distribution
-  flow_dist = flow_distribution.make_flow_distribution(
-      flowsac_networks.flow_network,
-      dynamics_config=dynamics_config
-  )
-  
-  def make_dist(params: types.PolicyParams) -> Callable:
-    """Creates a distribution function for adversarial dynamics parameters."""
-    
-    def dist_fn(rng: PRNGKey) -> jnp.ndarray:
-      """Generate adversarial dynamics parameters using JAX normalizing flow."""
-      batch_size = rng.shape[0] if rng.ndim > 0 else 1
-      
-      # Update the flow distribution with current parameters
-      flow_dist.flow_params = params
-      
-      # Sample from the flow distribution
-      adversarial_params = flow_dist.sample(rng, batch_size)
-      
-      return adversarial_params
-    
-    return dist_fn
-  
-  return make_dist
+    def flow(
+        n_envs:int, key_sample: PRNGKey
+    ) -> Tuple[types.Action, types.Extra]:
+      logits = flowsac_networks.flow_network.apply(*params)
 
+    return flow
+
+  return make_flow
 def make_flowsac_networks(
     observation_size: int,
     action_size: int,
+    dynamics_param_size : int,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
     hidden_layer_sizes: Sequence[int] = (256, 256),
     activation: networks.ActivationFn = linen.relu,
@@ -126,6 +111,10 @@ def make_flowsac_networks(
   #   activation=activation,
   #   layer_norm=policy_network_layer_norm,
   # )
+  flow_cfg = FlowRQSConfig(
+      n_dim = dynamics_param_size,
+  )
+  flow_network = make_flow_network(flow_cfg)
   policy_network = networks.make_policy_network(
       parametric_action_distribution.param_size,
       observation_size,
@@ -137,15 +126,7 @@ def make_flowsac_networks(
   # Create the flow network for adversarial dynamics using JAX normalizing flows
   # The actual parameter size will be determined when the environment is available
   # We'll use a reasonable default size that can be updated later
-  default_dynamics_param_size = 25  # This will be updated with env.dr_range
-  
-  # Create JAX-based normalizing flow network
-  flow_network = flow_distribution.create_flow_network(
-      features=default_dynamics_param_size,
-      num_flows=4,
-      hidden_features=128,
-      flow_type="affine"
-  )
+
   q_network = networks.make_q_network(
       observation_size,
       action_size,

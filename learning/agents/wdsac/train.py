@@ -145,7 +145,6 @@ def _init_training_state(
 
 def train(
     environment: envs.Env,
-    termination_fn : Any,            #added
     num_timesteps,
     episode_length: int,
     wrap_env: bool = True,

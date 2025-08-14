@@ -191,7 +191,6 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
         environment=env,
         eval_env = eval_env,
         wrap_env_fn=wrap_fn,
-        wrap_eval_env_fn= wrap_eval_fn
     )
     return make_inference_fn, params, metrics
 
@@ -238,7 +237,6 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
         environment=env,
         eval_env = eval_env,
         wrap_env_fn=wrap_fn,
-        wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
 

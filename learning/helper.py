@@ -66,7 +66,7 @@ def parse_cfg(cfg: OmegaConf) -> OmegaConf:
         # print(colored(f"Failed to set work_dir: {e}", "red"))
         if cfg.shift_dynamics:
             cfg.work_dir = (
-                Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy / cfg.shift_dynamics_stype
+                Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy / cfg.shift_dynamics_type
             )
         else:
             cfg.work_dir = Path.cwd() / "logs" / cfg.task / str(cfg.seed) / cfg.policy 

@@ -1,11 +1,12 @@
 gpu_id=$1 
 wandb_project="dr-effect"
 task="CheetahRun"
+use_wandb=false
 seed=$2 
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project shift_dynamics=false task=$task eval_randomization=true
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project custom_wrapper=true task=$task eval_randomization=false
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project custom_wrapper=false task=$task eval_randomization=false
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project shift_dynamics=false task=$task eval_randomization=true
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project custom_wrapper=true task=$task eval_randomization=false
-CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project custom_wrapper=false task=$task eval_randomization=false
+# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project shift_dynamics=false task=$task eval_randomization=true use_wandb=$use_wandb
+# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project custom_wrapper=true task=$task eval_randomization=false use_wandb=$use_wandb
+# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="ppo" seed=$seed wandb_project=$wandb_project custom_wrapper=false task=$task eval_randomization=false use_wandb=$use_wandb
+# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project shift_dynamics=false task=$task eval_randomization=true use_wandb=$use_wandb
+# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project custom_wrapper=true task=$task eval_randomization=false use_wandb=$use_wandb
+CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" seed=$seed wandb_project=$wandb_project custom_wrapper=false task=$task eval_randomization=false use_wandb=$use_wandb
 # 

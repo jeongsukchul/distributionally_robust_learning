@@ -106,10 +106,21 @@ class Run(mjx_env.MjxEnv):
 
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     del info  # Unused.
-    return jp.concatenate([
+    state = jp.concatenate([
         data.qpos[1:],
         data.qvel,
     ])
+    privileged_state = jp.concatenate([
+      state,
+      self.mjx_model.geom_friction[FLOOR_GEOM_ID, 0:1],
+      self.mjx_model.dof_frictionloss[6:],
+      self.mjx_model.body_ipos[TORSO_BODY_ID],
+      self.mjx_model.body_mass[1:],
+    ])
+    return {
+        "state": state,
+        "privileged_state": privileged_state,
+    }
 
   def _get_reward(
       self,

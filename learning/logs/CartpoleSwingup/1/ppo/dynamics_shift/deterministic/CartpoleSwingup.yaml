@@ -1,7 +1,0 @@
-floor_friction : 1
-dof_friction : 0.95
-com_offset_x : 1.0
-com_offset_y : 0.0
-com_offset_z : 0.0
-body1_mass: 0.8
-body2_mass: 0.8

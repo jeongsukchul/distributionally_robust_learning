@@ -117,6 +117,7 @@ class Run(mjx_env.MjxEnv):
       self.mjx_model.body_ipos[TORSO_BODY_ID],
       self.mjx_model.body_mass[1:],
     ])
+    # return state
     return {
         "state": state,
         "privileged_state": privileged_state,
@@ -161,15 +162,15 @@ class Run(mjx_env.MjxEnv):
   def dr_range(self) -> dict:
 
     low = jp.array(
-        [0.5] +                             #floor_friction_min 
-        [0.9] * (self.mjx_model.nv - 6) +   # dof_friction_min
-        [-0.1] * 3 +                          #com_offset_min
-        [0.8] * (self.mjx_model.nbody - 1)) #body_mass_min
+        [0.3] +                             #floor_friction_min 
+        [0.6] * (self.mjx_model.nv - 6) +   # dof_friction_min
+        [-0.3] * 3 +                          #com_offset_min
+        [0.5] * (self.mjx_model.nbody - 1)) #body_mass_min
     high = jp.array(
-        [1.2] +                             #floor_friction_max
-        [1.1] * (self.mjx_model.nv - 6) +   #dof_friction_max
-        [0.1] * 3 +                          #com_offset_max
-        [1.2] * (self.mjx_model.nbody - 1)) #body_mass_max
+        [2.0] +                             #floor_friction_max
+        [1.5] * (self.mjx_model.nv - 6) +   #dof_friction_max
+        [0.3] * 3 +                          #com_offset_max
+        [1.5] * (self.mjx_model.nbody - 1)) #body_mass_max
     return low, high
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1

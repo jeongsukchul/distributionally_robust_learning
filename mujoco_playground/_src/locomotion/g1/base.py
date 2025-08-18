@@ -21,7 +21,7 @@ import jax
 from ml_collections import config_dict
 import mujoco
 from mujoco import mjx
-
+import jax.numpy as jnp
 from mujoco_playground._src import mjx_env
 from mujoco_playground._src.locomotion.g1 import g1_constants as consts
 
@@ -118,3 +118,23 @@ class G1Env(mjx_env.MjxEnv):
   @property
   def mjx_model(self) -> mjx.Model:
     return self._mjx_model
+  @property
+  def dr_range(self) -> jax.Array:
+    low = jnp.array(
+        [0.4] +          # pair_friction low
+        [0.9] * 29 +# dof_frictionloss low
+        [1.0] * 29 +# dof_armature low
+        [0.9] * self.mjx_model.nbody +# body_mass low (assuming 18 bodies)
+        [-1.0] +         # torso mass delta low
+        [-0.05] * 29  # qpos0 jitter low
+    )
+    high = jnp.array(
+        [1.0] +          # pair_friction hig
+        [1.1] * 29 +# dof_frictionloss high
+        [1.05] * 29 +# dof_armature high
+        [1.1] * self.mjx_model.nbody +# body_mass high
+        [1.0] +         # torso mass delta high
+        [0.05] * 29  # qpos0 jitter high
+    )
+    """Return the domain randomization range."""
+    return low, high

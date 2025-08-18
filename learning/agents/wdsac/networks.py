@@ -95,6 +95,8 @@ def make_wdsac_networks(
     policy_network_layer_norm: bool = False,
     q_network_layer_norm: bool = False,
     distribution_type: Literal['normal', 'tanh_normal'] = 'tanh_normal',
+    policy_obs_key: str = 'state',
+    value_obs_key: str = 'privileged_state',
 ) -> WDSACNetworks:
   """Make WDSAC networks."""
   parametric_action_distribution: distribution.ParametricDistribution
@@ -127,6 +129,7 @@ def make_wdsac_networks(
       hidden_layer_sizes=hidden_layer_sizes,
       activation=activation,
       layer_norm=policy_network_layer_norm,
+      obs_key = policy_obs_key,
   )
   q_network = networks.make_q_network(
       observation_size,
@@ -135,6 +138,7 @@ def make_wdsac_networks(
       hidden_layer_sizes=hidden_layer_sizes,
       activation=activation,
       layer_norm=q_network_layer_norm,
+      obs_key=value_obs_key,
   )
   return WDSACNetworks(
       # lmbda_network = lmbda_network,

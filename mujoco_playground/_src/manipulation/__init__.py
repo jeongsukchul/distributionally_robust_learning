@@ -60,6 +60,10 @@ _randomizer = {
     "LeapCubeRotateZAxis": leap_rotate_z.domain_randomize,
     "LeapCubeReorient": leap_cube_reorient.domain_randomize,
 }
+_randomizer_eval = {
+    "LeapCubeRotateZAxis": leap_rotate_z.domain_randomize,
+    "LeapCubeReorient": leap_cube_reorient.domain_randomize,
+}
 
 
 def __getattr__(name):
@@ -129,3 +133,14 @@ def get_domain_randomizer(
     )
     return None
   return _randomizer[env_name]
+def get_domain_randomizer_eval(
+    env_name: str,
+) -> Optional[Callable[[mjx.Model, jax.Array], Tuple[mjx.Model, mjx.Model]]]:
+  """Get the default domain randomizer for an environment."""
+  if env_name not in _randomizer:
+    print(
+        f"Env '{env_name}' does not have a domain randomizer in the"
+        " manipulation registry."
+    )
+    return None
+  return _randomizer_eval[env_name]

@@ -50,7 +50,8 @@ from orbax import checkpoint as ocp
 import wandb
 from mujoco_playground.config import dm_control_suite_params
 from mujoco_playground.config import locomotion_params
-from configs.training_config import brax_rambo_config, brax_wdsac_config, brax_flowsac_config
+from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_flowsac_config
+from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config
 import mujoco_playground
 from mujoco_playground import wrapper
 import hydra
@@ -104,6 +105,8 @@ CAMERAS = {
     "WalkerRun": "side",
     "WalkerWalk": "side",
     "WalkerStand": "side",
+    "Go1Handstand": "side",
+    "G1JoystickRoughTerrain": "cam0",
 }
 camera_name = CAMERAS[env_name]
 
@@ -142,18 +145,18 @@ def progress_fn(num_steps, metrics, use_wandb=True):
     print("-------------------------------------------------------------------")
 
 
-def train_ppo(cfg:dict, randomization_fn, env, eval_env):
+def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env):
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
-        ppo_params = dm_control_suite_params.brax_ppo_config(cfg.task)
+        ppo_params = brax_ppo_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
-        ppo_params = locomotion_params.brax_ppo_config(cfg.task)
+        ppo_params = locomotion_ppo_config(cfg.task)
     print("shift_dynamics:", cfg.shift_dynamics)
     if cfg.shift_dynamics:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.hard_dr={cfg.custom_wrapper}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}"
     else:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -167,6 +170,8 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
     network_factory = ppo_networks.make_ppo_networks
     if "network_factory" in ppo_params:
         del ppo_training_params["network_factory"]
+        if not cfg.asymmetric_critic:
+            ppo_params.network_factory.value_obs_key = "state"
         network_factory = functools.partial(
             ppo_networks.make_ppo_networks,
             **ppo_params.network_factory
@@ -180,6 +185,7 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
         progress_fn=progress,
         policy_params_fn=functools.partial(policy_params_fn, ckpt_path=cfg.work_dir / "models" ),
         randomization_fn=randomization_fn,
+        eval_randomization_fn=eval_randomization_fn,
     )
     if cfg.custom_wrapper and cfg.shift_dynamics:
         wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=ppo_params.num_envs)
@@ -191,19 +197,20 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env):
         environment=env,
         eval_env = eval_env,
         wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
 
-def train_sac(cfg:dict, randomization_fn, env, eval_env):
+def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env):
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
-        sac_params = dm_control_suite_params.brax_sac_config(cfg.task)
+        sac_params = brax_sac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
-        sac_params = locomotion_params.brax_sac_config(cfg.task)
+        sac_params = locomotion_sac_config(cfg.task)
     sac_training_params = dict(sac_params)
     if cfg.shift_dynamics:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.hard_dr={cfg.custom_wrapper}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.{cfg.shift_dynamics_type}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}"
     else:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -216,6 +223,8 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
     network_factory = sac_networks.make_sac_networks
     if "network_factory" in sac_params:
         del sac_training_params["network_factory"]
+        if not cfg.asymmetric_critic:
+            sac_params.network_factory.value_obs_key = "state"
         network_factory = functools.partial(
             sac_networks.make_sac_networks,
             **sac_params.network_factory
@@ -227,6 +236,7 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
+        eval_randomization_fn=eval_randomization_fn
     )
     if cfg.custom_wrapper and cfg.shift_dynamics:
         wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=sac_params.num_envs)
@@ -237,6 +247,7 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env):
         environment=env,
         eval_env = eval_env,
         wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
 
@@ -264,6 +275,7 @@ def train_rambo(cfg:dict, randomization_fn, env, eval_env):
     rambo_training_params = dict(rambo_params)
     network_factory = rambo_networks.make_rambo_networks
     if "network_factory" in rambo_params:
+
         del rambo_training_params["network_factory"]
         network_factory = functools.partial(
             rambo_networks.make_rambo_networks,
@@ -295,7 +307,7 @@ def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
             wdsac_params[param] = getattr(cfg, param)
     if cfg.shift_dynamics:
         wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.{cfg.shift_dynamics_type}.delta={wdsac_params.delta}\
-            .nominals={wdsac_params.n_nominals}.single_lambda={wdsac_params.single_lambda}.\
+            .nominals={wdsac_params.n_nominals}.single_lambda={wdsac_params.single_lambda}.asym={cfg.asymmetric_critic}\
                 distance_type={wdsac_params.distance_type}.length={wdsac_params.lambda_update_steps}\
                     .lmbda_lr={wdsac_params.lmbda_lr}.init_lmbda={wdsac_params.init_lmbda}"
     else:
@@ -312,6 +324,8 @@ def train_wdsac(cfg:dict, randomization_fn, env, eval_env):
     network_factory = wdsac_networks.make_wdsac_networks
     wdsac_training_params = dict(wdsac_params)
     if "network_factory" in wdsac_params:
+        if not cfg.asymmetric_critic:
+            wdsac_params.network_factory.value_obs_key = "state"
         del wdsac_training_params["network_factory"]
         network_factory = functools.partial(
             wdsac_networks.make_wdsac_networks,
@@ -407,13 +421,16 @@ def train(cfg: dict):
         randomization_fn = randomizer
     else:
         randomization_fn = None 
+    eval_randomization_fn = None
+    if cfg.eval_randomization:
+        eval_randomization_fn = randomizer
     print("shift_dynamics", cfg.shift_dynamics)
     print("randomization_fn:", randomization_fn)
-
+    print("eval_randomization_fn", eval_randomization_fn)
     if cfg.policy == "sac":
-        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env, None)
+        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, eval_randomization_fn, env, None)
     elif cfg.policy == "ppo":
-        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env, None)
+        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, eval_randomization_fn, env, None)
     elif cfg.policy == "rambo":
         make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env, None)
     elif cfg.policy == "wdsac":
@@ -434,6 +451,7 @@ def train(cfg: dict):
 
     # Save config.yaml and shift_dynamics config to wandb and local directory
     save_configs_to_wandb_and_local(cfg, cfg.work_dir)
+    print("eval_randomization", cfg.eval_randomization)
     if cfg.eval_randomization:
         eval_rng, rng = jax.random.split(rng)
         randomizer_eval = registry.get_domain_randomizer_eval(cfg.task)

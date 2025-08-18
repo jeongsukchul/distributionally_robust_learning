@@ -1,100 +1,187 @@
-# Copyright 2025 DeepMind Technologies Limited
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Utilities for randomization."""
+import functools
 import jax
 from mujoco import mjx
+import jax.numpy as jp
 
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 16
 
+def domain_randomize(model: mjx.Model, params, rng: jax.Array, deterministic: bool = False):
+    
+    if not deterministic:
+        dr_low, dr_high = params
+        print('dr_low:', dr_low, 'dr_high:', dr_high)
+        print('len', len(dr_low))
+        dist = [functools.partial(jax.random.uniform, minval=dr_low[i], maxval=dr_high[i]) for i in range(len(dr_low))]
+    else:
+        ValueError("Deterministic mode not supported for domain randomization.")
 
-def domain_randomize(model: mjx.Model, rng: jax.Array):
-  @jax.vmap
-  def rand_dynamics(rng):
-    # Floor / foot friction: =U(0.4, 1.0).
-    rng, key = jax.random.split(rng)
-    friction = jax.random.uniform(key, minval=0.4, maxval=1.0)
-    pair_friction = model.pair_friction.at[0:2, 0:2].set(friction)
+    @jax.vmap
+    def rand_dynamics(rng):
+        idx = 0
+        # Floor friction
+        rng, key = jax.random.split(rng)
+        frictionloss = dist[idx](key=key)
+        pair_friction = model.pair_friction.at[0:2, 0:2].set(frictionloss)
+        idx += 1
 
-    # Scale static friction: *U(0.9, 1.1).
-    rng, key = jax.random.split(rng)
-    frictionloss = model.dof_frictionloss[6:] * jax.random.uniform(
-        key, shape=(29,), minval=0.5, maxval=2.0
-    )
-    dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
+        # Static friction loss
+        for i in range(29):
+            rng, key = jax.random.split(rng)
+            frictionloss = model.dof_frictionloss[6+i] * dist[idx](key)
+            idx += 1
+        dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
 
-    # Scale armature: *U(1.0, 1.05).
-    rng, key = jax.random.split(rng)
-    armature = model.dof_armature[6:] * jax.random.uniform(
-        key, shape=(29,), minval=1.0, maxval=1.05
-    )
-    dof_armature = model.dof_armature.at[6:].set(armature)
+        # Armature
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, 29)
+        dof_armature_params = jp.array([dist[idx+i](keys[i]) for i in range(29)])
+        idx += 29
+        armature = model.dof_armature[6:] * dof_armature_params
+        dof_armature = model.dof_armature.at[6:].set(armature)
 
-    # Scale all link masses: *U(0.9, 1.1).
-    rng, key = jax.random.split(rng)
-    dmass = jax.random.uniform(
-        key, shape=(model.nbody,), minval=0.9, maxval=1.1
-    )
-    body_mass = model.body_mass.at[:].set(model.body_mass * dmass)
+        # Link masses
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, model.nbody)
+        dmass = jp.array([dist[idx+i](keys[i]) for i in range(model.nbody)])
+        idx += model.nbody
+        body_mass = model.body_mass.at[:].set(model.body_mass * dmass)
 
-    # Add mass to torso: +U(-1.0, 1.0).
-    rng, key = jax.random.split(rng)
-    dmass = jax.random.uniform(key, minval=-1.0, maxval=1.0)
-    body_mass = body_mass.at[TORSO_BODY_ID].set(
-        body_mass[TORSO_BODY_ID] + dmass
-    )
+        # Torso mass
+        rng, key = jax.random.split(rng)
+        dmass = dist[idx](key)
+        idx += 1
+        body_mass = body_mass.at[TORSO_BODY_ID].set(body_mass[TORSO_BODY_ID] + dmass)
 
-    # Jitter qpos0: +U(-0.05, 0.05).
-    rng, key = jax.random.split(rng)
-    qpos0 = model.qpos0
-    qpos0 = qpos0.at[7:].set(
-        qpos0[7:]
-        + jax.random.uniform(key, shape=(29,), minval=-0.05, maxval=0.05)
-    )
+        # Jitter qpos0
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, 29)
+        dqpos = [dist[idx+i](keys[i]) for i in range(29)]
+        idx += 29
+        qpos0 = model.qpos0.at[7:].set(model.qpos0[7:] + jp.array(dqpos))
 
-    return (
+        assert idx == len(dist), "Index mismatch, check the distribution list."
+
+        return (
+            pair_friction,
+            body_mass,
+            qpos0,
+            dof_frictionloss,
+            dof_armature,
+        )
+
+    (
         pair_friction,
-        dof_frictionloss,
-        dof_armature,
         body_mass,
         qpos0,
-    )
+        dof_frictionloss,
+        dof_armature,
+    ) = rand_dynamics(rng)
 
-  (
-      pair_friction,
-      frictionloss,
-      armature,
-      body_mass,
-      qpos0,
-  ) = rand_dynamics(rng)
+    in_axes = jax.tree_util.tree_map(lambda x: None, model)
+    in_axes = in_axes.tree_replace({
+        "pair_friction": 0,
+        "body_mass": 0,
+        "qpos0": 0,
+        "dof_frictionloss": 0,
+        "dof_armature": 0,
+    })
 
-  in_axes = jax.tree_util.tree_map(lambda x: None, model)
-  in_axes = in_axes.tree_replace({
-      "pair_friction": 0,
-      "dof_frictionloss": 0,
-      "dof_armature": 0,
-      "body_mass": 0,
-      "qpos0": 0,
-  })
+    model = model.tree_replace({
+        "pair_friction": pair_friction,
+        "body_mass": body_mass,
+        "qpos0": qpos0,
+        "dof_frictionloss": dof_frictionloss,
+        "dof_armature": dof_armature,
+    })
 
-  model = model.tree_replace({
-      "pair_friction": pair_friction,
-      "dof_frictionloss": frictionloss,
-      "dof_armature": armature,
-      "body_mass": body_mass,
-      "qpos0": qpos0,
-  })
+    return model, in_axes
 
-  return model, in_axes
+def domain_randomize_eval(model: mjx.Model, params, rng: jax.Array, deterministic: bool = True):
+   
+    if not deterministic:
+        dr_low, dr_high = params
+        dist = [functools.partial(jax.random.uniform, minval=dr_low[i], maxval=dr_high[i]) for i in range(len(dr_low))]
+    else:
+        dist = [lambda key: 1.0] * len(params[0])  # deterministic: no randomization
+
+    def rand_dynamics(rng):
+        idx = 0
+
+        # Floor friction
+        rng, key = jax.random.split(rng)
+        friction = dist[idx](key=key)
+        pair_friction = model.pair_friction.at[0:2, 0:2].set(friction)
+        idx += 1
+
+        # Static friction loss
+        for i in range(29):
+            rng, key = jax.random.split(rng)
+            frictionloss = model.dof_frictionloss[6+i] * dist[idx](key)
+            idx += 1
+        dof_frictionloss = model.dof_frictionloss.at[6:].set(frictionloss)
+
+        # Armature
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, 29)
+        dof_armature_params = jp.array([dist[idx+i](keys[i]) for i in range(29)])
+        idx += 29
+        armature = model.dof_armature[6:] * dof_armature_params
+        dof_armature = model.dof_armature.at[6:].set(armature)
+
+        # Link masses
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, model.nbody)
+        dmass = jp.array([dist[idx+i](keys[i]) for i in range(model.nbody)])
+        idx += model.nbody
+        body_mass = model.body_mass.at[:].set(model.body_mass * dmass)
+
+        # Torso mass
+        rng, key = jax.random.split(rng)
+        dmass = dist[idx](key)
+        idx += 1
+        body_mass = body_mass.at[TORSO_BODY_ID].set(body_mass[TORSO_BODY_ID] + dmass)
+
+        # Jitter qpos0
+        rng, key = jax.random.split(rng)
+        keys = jax.random.split(key, 29)
+        dqpos = [dist[idx+i](keys[i]) for i in range(29)]
+        idx += 29
+        qpos0 = model.qpos0.at[7:].set(model.qpos0[7:] + jp.array(dqpos))
+
+        assert idx == len(dist), "Index mismatch, check the distribution list."
+
+        return (
+            pair_friction,
+            body_mass,
+            qpos0,
+            dof_frictionloss,
+            dof_armature,
+        )
+
+    (
+        pair_friction,
+        body_mass,
+        qpos0,
+        dof_frictionloss,
+        dof_armature,
+    ) = rand_dynamics(rng)
+
+    in_axes = jax.tree_util.tree_map(lambda x: None, model)
+    in_axes = in_axes.tree_replace({
+        "pair_friction": 0,
+        "body_mass": 0,
+        "qpos0": 0,
+        "dof_frictionloss": 0,
+        "dof_armature": 0,
+    })
+
+    model = model.tree_replace({
+        "pair_friction": pair_friction,
+        "body_mass": body_mass,
+        "qpos0": qpos0,
+        "dof_frictionloss": dof_frictionloss,
+        "dof_armature": dof_armature,
+    })
+
+    return model, in_axes

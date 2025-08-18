@@ -87,7 +87,7 @@ def make_losses(
       next_v : jnp.ndarray,
   ) -> jnp.ndarray:
     
-    batch_size = transitions.observation.shape[0]
+    batch_size = transitions.action.shape[0]
     q_old_action = q_network.apply(
         normalizer_params, q_params, transitions.observation, transitions.action
     )
@@ -141,7 +141,7 @@ def make_losses(
       lmbda: float = 1.0,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
-    batch_size = transitions.observation.shape[0]
+    batch_size = transitions.action.shape[0]
     dr_low, dr_high = dr_range
     sample_key, key = jax.random.split(key)
     dynamics_params = flow_network.apply(

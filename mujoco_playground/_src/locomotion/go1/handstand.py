@@ -374,6 +374,28 @@ class Handstand(go1_base.Go1Env):
   def _cost_dof_acc(self, qacc: jax.Array) -> jax.Array:
     return jp.sum(jp.square(qacc))
 
+  @property
+  def dr_range(self)-> dict:
+    """Returns the range of domain randomization parameters."""
+    low = jp.array(
+        [0.4] +   # Floor friction.
+        [0.9] * (self.mjx_model.nv-6) + # Scale static friction.
+        [1.0] * 12 + # Scale armature.
+        [-0.05] *3  + # Jitter center of mass position.
+        [0.9] * self.mjx_model.nbody + # Scale all link masses.
+        [-1.0]  +# Add mass to torso.
+        [-0.05] * 12  # Jitter qpos0.
+    )
+    high = jp.array(
+        [1.0] +   # Floor friction.
+        [1.1] * (self.mjx_model.nv-6) + # Scale static friction.
+        [1.05] * 12  +# Scale armature.
+        [0.05] *3   +# Jitter center of mass position.
+        [1.1] * self.mjx_model.nbody +  # Scale all link masses.
+        [1.0]  + # Add mass to torso.
+        [0.05] * 12   # Jitter qpos0.
+    )
+    return low, high
 
 class Footstand(Handstand):
   """Footstand task for Go1."""

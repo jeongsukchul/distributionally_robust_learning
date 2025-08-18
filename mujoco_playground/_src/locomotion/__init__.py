@@ -131,6 +131,23 @@ _randomizer = {
     "T1JoystickFlatTerrain": t1_randomize.domain_randomize,
     "T1JoystickRoughTerrain": t1_randomize.domain_randomize,
 }
+_randomizer_eval = {
+    "BerkeleyHumanoidJoystickFlatTerrain": (
+        berkeley_humanoid_randomize.domain_randomize
+    ),
+    "BerkeleyHumanoidJoystickRoughTerrain": (
+        berkeley_humanoid_randomize.domain_randomize
+    ),
+    "G1JoystickFlatTerrain": g1_randomize.domain_randomize_eval,
+    "G1JoystickRoughTerrain": g1_randomize.domain_randomize_eval,
+    "Go1JoystickFlatTerrain": go1_randomize.domain_randomize,
+    "Go1JoystickRoughTerrain": go1_randomize.domain_randomize,
+    "Go1Getup": go1_randomize.domain_randomize_eval,
+    "Go1Handstand": go1_randomize.domain_randomize_eval,
+    "Go1Footstand": go1_randomize.domain_randomize_eval,
+    "T1JoystickFlatTerrain": t1_randomize.domain_randomize,
+    "T1JoystickRoughTerrain": t1_randomize.domain_randomize,
+}
 
 
 def __getattr__(name):
@@ -200,3 +217,14 @@ def get_domain_randomizer(
     )
     return None
   return _randomizer[env_name]
+def get_domain_randomizer_eval(
+    env_name: str,
+) -> Optional[Callable[[mjx.Model, jax.Array], Tuple[mjx.Model, mjx.Model]]]:
+  """Get the default domain randomizer for an environment."""
+  if env_name not in _randomizer:
+    print(
+        f"Env '{env_name}' does not have a domain randomizer in the"
+        " manipulation registry."
+    )
+    return None
+  return _randomizer_eval[env_name]

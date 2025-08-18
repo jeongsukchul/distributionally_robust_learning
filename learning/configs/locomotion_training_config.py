@@ -16,13 +16,12 @@
 
 from ml_collections import config_dict
 
-from mujoco_playground._src import dm_control_suite
+from mujoco_playground._src import dm_control_suite, locomotion
 from module.termination_fn import get_termination_fn
 
-
-def brax_ppo_config(env_name: str) -> config_dict.ConfigDict:
+def locomotion_ppo_config(env_name: str) -> config_dict.ConfigDict:
   """Returns tuned Brax PPO config for the given environment."""
-  env_config = dm_control_suite.get_default_config(env_name)
+  env_config = locomotion.get_default_config(env_name)
 
   rl_config = config_dict.create(
       num_timesteps=60_000_000,
@@ -33,110 +32,264 @@ def brax_ppo_config(env_name: str) -> config_dict.ConfigDict:
       action_repeat=1,
       unroll_length=30,
       num_minibatches=32,
-      num_updates_per_batch=16,
-      discounting=0.995,
-      learning_rate=1e-3,
-      entropy_cost=1e-2,
-      num_envs=2048,
-      batch_size=1024,
-  )
-
-  if env_name.startswith("AcrobotSwingup"):
-    rl_config.num_timesteps = 100_000_000
-  if env_name == "BallInCup":
-    rl_config.discounting = 0.95
-  elif env_name.startswith("Swimmer"):
-    rl_config.num_timesteps = 100_000_000
-  elif env_name == "WalkerRun":
-    rl_config.num_timesteps = 100_000_000
-  elif env_name == "FingerSpin":
-    rl_config.discounting = 0.95
-  elif env_name == "PendulumSwingUp":
-    rl_config.action_repeat = 4
-    rl_config.num_updates_per_batch = 4
-  if env_name == "CheetahRun":
-    rl_config.network_factory = config_dict.create(
-        policy_obs_key="state",
-        value_obs_key="privileged_state",
-    )
-  return rl_config
-
-
-def brax_vision_ppo_config(env_name: str) -> config_dict.ConfigDict:
-  """Returns tuned Brax Vision PPO config for the given environment."""
-  env_config = dm_control_suite.get_default_config(env_name)
-
-  rl_config = config_dict.create(
-      madrona_backend=True,
-      wrap_env=False,
-      num_timesteps=1_000_000,
-      num_evals=5,
-      reward_scaling=0.1,
-      episode_length=env_config.episode_length,
-      normalize_observations=True,
-      action_repeat=1,
-      unroll_length=10,
-      num_minibatches=8,
-      num_updates_per_batch=8,
+      num_updates_per_batch=4,
       discounting=0.97,
-      learning_rate=5e-4,
-      entropy_cost=5e-3,
-      num_envs=1024,
-      num_eval_envs=1024,
+      learning_rate=3e-4,
+      entropy_cost=1e-2,
+      num_envs=8192,
       batch_size=256,
       max_grad_norm=1.0,
-  )
-
-  if env_name != "CartpoleBalance":
-    raise NotImplementedError(f"Vision PPO params not tested for {env_name}")
-
-  return rl_config
-
-
-def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
-  """Returns tuned Brax SAC config for the given environment."""
-  
-  env_config = dm_control_suite.get_default_config(env_name)
-
-  rl_config = config_dict.create(
-      num_timesteps=5_000_000,
-      num_evals=10,
-      reward_scaling=1.0,
-      episode_length=env_config.episode_length,
-      normalize_observations=True,
-      action_repeat=1,
-      discounting=0.99,
-      learning_rate=1e-3,
-      num_envs=128,
-      batch_size=512,
-      grad_updates_per_step=8,
-      max_replay_size=1048576 * 4,
-      min_replay_size=8192,
       network_factory=config_dict.create(
-          q_network_layer_norm=True,
+          policy_hidden_layer_sizes=(128, 128, 128, 128),
+          value_hidden_layer_sizes=(256, 256, 256, 256, 256),
+          policy_obs_key="state",
+          value_obs_key="state",
       ),
   )
 
-  if env_name == "PendulumSwingUp":
-    rl_config.action_repeat = 4
-  if env_name =="HopperHop":
-    rl_config.num_timesteps = 10_000_000
-  if (
-      env_name.startswith("Acrobot")
-      or env_name.startswith("Swimmer")
-      or env_name.startswith("Finger")
-      or env_name.startswith("Hopper")
-      or env_name
-      in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
-  ):
-    rl_config.num_timesteps = 20_000_000
-  if env_name == "CheetahRun":
+  if env_name in ("Go1JoystickFlatTerrain", "Go1JoystickRoughTerrain"):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 10
+    rl_config.num_resets_per_eval = 1
     rl_config.network_factory = config_dict.create(
-      q_network_layer_norm=True,
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("Go1Handstand", "Go1Footstand"):
+    rl_config.num_timesteps = 100_000_000
+    rl_config.num_evals = 5
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name == "Go1Backflip":
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 10
+    rl_config.discounting = 0.95
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name == "Go1Getup":
+    rl_config.num_timesteps = 50_000_000
+    rl_config.num_evals = 5
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("G1JoystickFlatTerrain", "G1JoystickRoughTerrain"):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in (
+      "BerkeleyHumanoidJoystickFlatTerrain",
+      "BerkeleyHumanoidJoystickRoughTerrain",
+  ):
+    rl_config.num_timesteps = 150_000_000
+    rl_config.num_evals = 15
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in (
+      "T1JoystickFlatTerrain",
+      "T1JoystickRoughTerrain",
+  ):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+        policy_hidden_layer_sizes=(512, 256, 128),
+        value_hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("ApolloJoystickFlatTerrain",):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+      policy_hidden_layer_sizes=(512, 256, 128),
+      value_hidden_layer_sizes=(512, 256, 128),
       policy_obs_key="state",
       value_obs_key="privileged_state",
     )
+
+  elif env_name in (
+      "BarkourJoystick",
+      "H1InplaceGaitTracking",
+      "H1JoystickGaitTracking",
+      "Op3Joystick",
+      "SpotFlatTerrainJoystick",
+      "SpotGetup",
+      "SpotJoystickGaitTracking",
+  ):
+    pass  # use default config
+  else:
+    raise ValueError(f"Unsupported env: {env_name}")
+
   return rl_config
+
+def locomotion_sac_config(env_name: str) -> config_dict.ConfigDict:
+  """Returns tuned Brax SAC config for the given environment."""
+  
+  env_config = locomotion.get_default_config(env_name)
+
+  rl_config = config_dict.create(
+      num_timesteps=20_000_000,
+      num_evals=10,
+      reward_scaling=10.0,
+      episode_length=env_config.episode_length,
+      normalize_observations=True,
+      action_repeat=1,
+      discounting=0.97,
+      learning_rate=1e-3,
+      num_envs=256,
+      batch_size=128,
+      grad_updates_per_step=8,
+      max_replay_size=1048576 * 4,
+      min_replay_size=8192, #8192,
+      network_factory=config_dict.create(
+          q_network_layer_norm=True,
+          hidden_layer_sizes=(256, 256, 256, 256, 256),
+          policy_obs_key="state",
+          value_obs_key="state",
+      ),
+  )
+
+
+  if env_name in ("Go1JoystickFlatTerrain", "Go1JoystickRoughTerrain"):
+    rl_config.num_timesteps = 20_000_000
+    rl_config.num_evals = 10
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("Go1Handstand", "Go1Footstand"):
+    rl_config.num_timesteps = 20_000_000
+    rl_config.num_evals = 5
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name == "Go1Backflip":
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 10
+    rl_config.discounting = 0.95
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name == "Go1Getup":
+    rl_config.num_timesteps = 50_000_000
+    rl_config.num_evals = 5
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("G1JoystickFlatTerrain", "G1JoystickRoughTerrain"):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in (
+      "BerkeleyHumanoidJoystickFlatTerrain",
+      "BerkeleyHumanoidJoystickRoughTerrain",
+  ):
+    rl_config.num_timesteps = 150_000_000
+    rl_config.num_evals = 15
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in (
+      "T1JoystickFlatTerrain",
+      "T1JoystickRoughTerrain",
+  ):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+        hidden_layer_sizes=(512, 256, 128),
+        policy_obs_key="state",
+        value_obs_key="privileged_state",
+    )
+
+  elif env_name in ("ApolloJoystickFlatTerrain",):
+    rl_config.num_timesteps = 200_000_000
+    rl_config.num_evals = 20
+    rl_config.clipping_epsilon = 0.2
+    rl_config.num_resets_per_eval = 1
+    rl_config.entropy_cost = 0.005
+    rl_config.network_factory = config_dict.create(
+      hidden_layer_sizes=(512, 256, 128),
+      policy_obs_key="state",
+      value_obs_key="privileged_state",
+    )
+
+  elif env_name in (
+      "BarkourJoystick",
+      "H1InplaceGaitTracking",
+      "H1JoystickGaitTracking",
+      "Op3Joystick",
+      "SpotFlatTerrainJoystick",
+      "SpotGetup",
+      "SpotJoystickGaitTracking",
+  ):
+    pass  # use default config
+  else:
+    raise ValueError(f"Unsupported env: {env_name}")
+
+  return rl_config
+
 
 
 def brax_rambo_config(env_name: str) -> config_dict.ConfigDict:

@@ -15,7 +15,7 @@ eval_freq: 50000
 
 #policy
 policy : wdsac
-
+asymmetric_critic: false
 
 #dynamics shift
 shift_dynamics: true
@@ -47,8 +47,13 @@ episode_lengths: ???
 seed_steps: ???
 bin_size: ???
 
+#default parameters
+# learning_rate: 3e-4
+# discounting: 0.99
+# action_repeat: 1
+# normalize_observations: true
+# reward_scale: 1.0
 #rambo
-
 real_ratio : ???
 rollout_length : ???
 adv_weight : ???

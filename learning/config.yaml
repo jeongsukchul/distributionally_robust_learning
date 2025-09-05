@@ -69,3 +69,7 @@ lmbda_lr : ???
 init_lmbda : ???
 distance_type : wass
 custom_wrapper: true
+
+#flow
+flow_lr : ???
+dr_flow : false

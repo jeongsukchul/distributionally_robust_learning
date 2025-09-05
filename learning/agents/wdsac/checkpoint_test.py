@@ -29,7 +29,7 @@ from jax import numpy as jp
 
 class CheckpointTest(absltest.TestCase):
 
-  def setUp(self):
+  def setup(self):
     super().setUp()
     flags.FLAGS.mark_as_parsed()
 

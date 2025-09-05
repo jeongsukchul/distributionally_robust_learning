@@ -198,23 +198,23 @@ def make_losses(
         normalizer_params, q_params, transitions.observation, transitions.action
     )
     discounted_next_v = transitions.discount * next_vs
-    print("discounted_next_v", discounted_next_v)
     
     reward = transitions.reward#[jnp.arange(batch_size), min_indices]
     target_q = jax.lax.stop_gradient(
         reward* reward_scaling
         + discounting * discounted_next_v
     )     
-    print("q_old_action", q_old_action)
-    print("target_q", target_q)
-    q_error = jnp.expand_dims(q_old_action, -1) - target_q
-    print("q_error", q_error)
-    # q_error = jnp.expand_dims(q_old_action - jnp.expand_dims(target_q, -1)
-
     # Better bootstrapping for truncated episodes.
     truncation = transitions.extras['state_extras']['truncation']
-    # truncation = truncation[jnp.arange(batch_size), min_indices]
-    q_error *= jnp.expand_dims(1 - truncation, -1)
+    target_q *= 1-truncation
+    mask = 1- truncation
+    counts = mask.sum(axis=-1, keepdims=True).clip(min=1) 
+    print("counts", counts)
+    q_error = q_old_action - target_q.sum(axis=-1, keepdims=True)/counts
+    q_error *= mask.sum(axis=-1, keepdims=True).clip(max=1)
+    print("q error",q_error)
+    # q_error = jnp.expand_dims(q_old_action - jnp.expand_dims(target_q, -1)
+
     q_loss = 0.5 * jnp.mean(jnp.square(q_error))
     return q_loss
 

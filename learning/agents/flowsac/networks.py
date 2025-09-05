@@ -28,6 +28,7 @@ import jax
 import jax.numpy as jnp
 import dataclasses
 from module.distribution import make_flow_network, FlowRQSConfig
+from module.simple_flow import make_realnvp_flow_networks
 @flax.struct.dataclass
 class FLOWSACNetworks:
   # lmbda_network: networks.FeedForwardNetwork
@@ -61,21 +62,7 @@ def make_inference_fn(flowsac_networks: FLOWSACNetworks):
     return policy
 
   return make_policy
-def mkae_flow_fn(flowsac_networks: FLOWSACNetworks):
-  """Creates params and inference function for the FLOWSAC agent."""
 
-  def make_flow(
-      params: types.Params, deterministic: bool = False
-  ) -> types.Policy:
-
-    def flow(
-        n_envs:int, key_sample: PRNGKey
-    ) -> Tuple[types.Action, types.Extra]:
-      logits = flowsac_networks.flow_network.apply(*params)
-
-    return flow
-
-  return make_flow
 def make_flowsac_networks(
     observation_size: int,
     action_size: int,
@@ -86,6 +73,8 @@ def make_flowsac_networks(
     policy_network_layer_norm: bool = False,
     q_network_layer_norm: bool = False,
     distribution_type: Literal['normal', 'tanh_normal'] = 'tanh_normal',
+    policy_obs_key: str = 'state',
+    value_obs_key: str = 'privileged_state',
 ) -> FLOWSACNetworks:
   """Make FLOWSAC networks."""
   parametric_action_distribution: distribution.ParametricDistribution
@@ -111,10 +100,11 @@ def make_flowsac_networks(
   #   activation=activation,
   #   layer_norm=policy_network_layer_norm,
   # )
-  flow_cfg = FlowRQSConfig(
-      n_dim = dynamics_param_size,
-  )
-  flow_network = make_flow_network(flow_cfg)
+  # flow_cfg = Fl`owRQSConfig(
+  #     n_dim = dynamics_param_size,
+  # )`
+  flow_network = make_realnvp_flow_networks(
+    in_channels=dynamics_param_size)
   policy_network = networks.make_policy_network(
       parametric_action_distribution.param_size,
       observation_size,
@@ -122,6 +112,7 @@ def make_flowsac_networks(
       hidden_layer_sizes=hidden_layer_sizes,
       activation=activation,
       layer_norm=policy_network_layer_norm,
+      obs_key = policy_obs_key,
   )
   # Create the flow network for adversarial dynamics using JAX normalizing flows
   # The actual parameter size will be determined when the environment is available
@@ -134,9 +125,9 @@ def make_flowsac_networks(
       hidden_layer_sizes=hidden_layer_sizes,
       activation=activation,
       layer_norm=q_network_layer_norm,
+      obs_key=value_obs_key,
   )
   return FLOWSACNetworks(
-      # lmbda_network = lmbda_network,
       policy_network=policy_network,
       q_network=q_network,
       flow_network=flow_network,

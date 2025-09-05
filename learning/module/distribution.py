@@ -7,6 +7,11 @@ import jax.numpy as jnp
 import distrax
 from flax import linen as nn
 from brax.training.networks import FeedForwardNetwork
+
+import numpy as np
+import matplotlib.pyplot as plt
+import wandb
+import math
 # ----- config -----
 @dataclasses.dataclass
 class FlowRQSConfig:
@@ -38,249 +43,226 @@ def _denormalize(xn, low, high, scale):
   rng = (high - low)
   return rng * (xn / scale) + mid
 
-# ----- masked dense -----
 class MaskedDense(nn.Module):
-  features: int
-  mask: jnp.ndarray  # shape [features, in_features]
-  use_bias: bool = True
-  kernel_init: nn.initializers.Initializer = nn.initializers.lecun_uniform()
+    features: int
+    mask: jnp.ndarray  # [in, out] or [out, in] depending on convention
 
-  @nn.compact
-  def __call__(self, x):
-    k = self.param("kernel", self.kernel_init, (self.features, x.shape[-1]))
-    y = jnp.dot(x, (k * self.mask).T)
-    if self.use_bias:
-      b = self.param("bias", nn.initializers.zeros, (self.features,))
-      y = y + b
-    return y
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        # x: [B, in]
+        in_dim = x.shape[-1]
+        out_dim = self.features
+        # weight: [in, out]
+        w = self.param("kernel", nn.initializers.lecun_uniform(), (in_dim, out_dim))
+        b = self.param("bias", nn.initializers.zeros, (out_dim,))
+        # IMPORTANT: mask must be a constant array with same shape as w
+        y = x @ (w * self.mask) + b
+        return y
 
 # ----- MADE that outputs per-dim RQS params [w_K, h_K, s_{K+1}] -----
 class MADE_RQS(nn.Module):
-  n_dim: int
-  n_bins: int
-  hidden_dims: Tuple[int, ...]
-  activation: str = "gelu"
+    n_dim: int
+    n_bins: int
+    hidden_dims: Tuple[int, ...]
+    activation: str = "gelu"
 
-  def setup(self):
-    D = self.n_dim
-    act = _act(self.activation)
+    def setup(self):
+        D = self.n_dim
+        self.act = _act(self.activation)
 
-    # degrees
-    deg_in = jnp.arange(1, D + 1)
-    hidden_degs = [ (jnp.arange(H) % (D - 1)) + 1 for H in self.hidden_dims ]
-    last_deg = hidden_degs[-1] if hidden_degs else deg_in
+        # degrees (static)
+        deg_in = jnp.arange(1, D + 1)
+        hidden_degs = [(jnp.arange(H) % (D - 1)) + 1 for H in self.hidden_dims]
+        last_deg = hidden_degs[-1] if hidden_degs else deg_in
 
-    # masks
-    in_masks = [ (hd[:, None] >= deg_in[None, :]).astype(jnp.float32) for hd in hidden_degs[:1] ]
-    for l in range(1, len(hidden_degs)):
-      in_masks.append( (hidden_degs[l][:, None] >= hidden_degs[l-1][None, :]).astype(jnp.float32) )
-    out_mask = (jnp.arange(1, D + 1)[:, None] > last_deg[None, :]).astype(jnp.float32)  # [D, H_last]
+        # ----- masks for hidden layers, shape [in_dim, out_dim] -----
+        in_masks = []
+        if hidden_degs:
+            m0 = (hidden_degs[0][:, None] >= deg_in[None, :]).astype(jnp.float32).T  # [D, H1]
+            in_masks.append(m0)
+            for l in range(1, len(hidden_degs)):
+                m = (hidden_degs[l][:, None] >= hidden_degs[l-1][None, :]).astype(jnp.float32).T  # [Hl-1, Hl]
+                in_masks.append(m)
 
-    # layers
-    layers = []
-    if len(self.hidden_dims) > 0:
-      # input -> first hidden
-      layers.append(MaskedDense(self.hidden_dims[0], mask=in_masks[0]))
-      # hidden -> hidden
-      for l in range(1, len(self.hidden_dims)):
-        layers.append(MaskedDense(self.hidden_dims[l], mask=in_masks[l]))
-    self.layers = layers
-    self.act = act
-    self.out_mask = out_mask  # used in __call__
+        # store as plain attributes (no variable collections)
+        self.in_masks = tuple(in_masks)  # tuple of jnp arrays
+        self.out_mask = (jnp.arange(1, D + 1)[:, None] > last_deg[None, :]).astype(jnp.float32)  # [D, H_last]
 
-    # final linear (masked) will be applied by building a big masked weight on the fly
+        # Build hidden layers with baked-in constant masks
+        layers = []
+        if self.hidden_dims:
+            layers.append(MaskedDense(self.hidden_dims[0], mask=self.in_masks[0]))
+            for l in range(1, len(self.hidden_dims)):
+                layers.append(MaskedDense(self.hidden_dims[l], mask=self.in_masks[l]))
+        self.layers = tuple(layers)
 
-  @nn.compact
-  def __call__(self, y_prefix: jnp.ndarray) -> jnp.ndarray:
-    """y_prefix: [B, D] -> [B, D, 3K+1]"""
-    x = y_prefix
-    for layer in self.layers:
-      x = self.act(layer(x))
+    @nn.compact
+    def __call__(self, y_prefix: jnp.ndarray) -> jnp.ndarray:
+        x = y_prefix
+        for layer in self.layers:
+            x = self.act(layer(x))
 
-    # last hidden -> output: [B, D * per_dim], with per-dim mask duplication
-    D = self.n_dim
-    K = self.n_bins
-    per_dim = 3 * K + 1
-    H_last = x.shape[-1]
+        D = self.n_dim
+        K = self.n_bins
+        per_dim = 3 * K + 1
+        H_last = x.shape[-1]
 
-    # Parameterize an unmasked kernel, then mask per output block:
-    W = self.param("W_out", nn.initializers.lecun_uniform(), (D * per_dim, H_last))
-    b = self.param("b_out", nn.initializers.zeros, (D * per_dim,))
-    per_mask = jnp.repeat(self.out_mask, repeats=per_dim, axis=0)  # [D*per_dim, H_last]
-    out = x @ (W.T * per_mask.T) + b
-    return out.reshape(x.shape[0], D, per_dim)
+        W = self.param("W_out", nn.initializers.lecun_uniform(), (D * per_dim, H_last))
+        b = self.param("b_out", nn.initializers.zeros, (D * per_dim,))
 
-# ----- single AR RQS transform (forward/inverse passes) -----
+        # use static out_mask attribute
+        per_mask = jnp.repeat(self.out_mask, repeats=per_dim, axis=0).astype(x.dtype)  # [D*per_dim, H_last]
+        proj = x @ (W.T * per_mask.T) + b  # [B, D*per_dim]
+        return proj.reshape(x.shape[0], D, per_dim)
+
 class AR_RQS_Transform(nn.Module):
   cfg: FlowRQSConfig
 
-  @nn.compact
+  def setup(self):
+    """Define submodules here. This is run once when the module is initialized."""
+    self.made = MADE_RQS(
+        self.cfg.n_dim, self.cfg.n_bins, self.cfg.hidden_dims, self.cfg.activation
+    )
+
   def __call__(self, x: jnp.ndarray, forward: bool, training_step: int = 0) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """If forward: x->y, else inverse: y->x. Returns (out, logdet)."""
-    made = MADE_RQS(self.cfg.n_dim, self.cfg.n_bins, self.cfg.hidden_dims, self.cfg.activation)
     B, D = x.shape
-    out = jnp.zeros_like(x)
-    ldj = jnp.zeros((B,))
 
     def rqs_from_params(params_1d, training_step: int = 0):
       K = self.cfg.n_bins
       w_raw = params_1d[..., :K]
       h_raw = params_1d[..., K:2*K]
       s_raw = params_1d[..., 2*K:3*K+1]
-      
-      # Check if this is initialization (all zeros) to create uniform distribution
-      is_init = jnp.allclose(params_1d, 0.0)
-      
-      if is_init:
-        # For uniform distribution: equal bin widths, equal bin heights, constant slopes
-        range_size = self.cfg.scale
-        bin_width = range_size / K
-        bin_height = range_size / K
-        slope = 1.0
-        
-        # Create uniform parameters
-        bin_w = jnp.full((K,), bin_width)
-        bin_h = jnp.full((K,), bin_height)
-        slopes = jnp.full((K+1,), slope)
-      else:
-        # Normal parameter processing
-        bin_w = nn.softmax(w_raw, axis=-1) * (1.0 - K * self.cfg.min_bin_width) + self.cfg.min_bin_width
-        bin_h = nn.softmax(h_raw, axis=-1) * (1.0 - K * self.cfg.min_bin_height) + self.cfg.min_bin_height
-        slopes = nn.softplus(s_raw) + self.cfg.min_knot_slope
-        
-        # Apply curriculum learning for gradual transformation
-        if self.cfg.use_curriculum:
-          # Calculate curriculum progress (0.0 to 1.0)
-          curriculum_progress = jnp.clip(
-              (training_step - self.cfg.curriculum_start_step) / self.cfg.curriculum_steps, 
-              0.0, 1.0
+
+      # Use curriculum learning to anneal from a simple identity-like transform
+      # to the full complex spline transform. This helps stabilize early training.
+      range_size = self.cfg.scale
+      uniform_bin_w = jnp.full_like(w_raw, range_size / K)
+      uniform_bin_h = jnp.full_like(h_raw, range_size / K)
+      uniform_slopes = jnp.ones_like(s_raw)
+
+      learned_bin_w = nn.softmax(w_raw, axis=-1) * range_size * (1.0 - K * self.cfg.min_bin_width) + self.cfg.min_bin_width
+      learned_bin_h = nn.softmax(h_raw, axis=-1) * range_size * (1.0 - K * self.cfg.min_bin_height) + self.cfg.min_bin_height
+      learned_slopes = nn.softplus(s_raw) + self.cfg.min_knot_slope
+
+      alpha = jnp.asarray(1.0)
+      if self.cfg.use_curriculum:
+          alpha = jnp.clip(
+              (jnp.asarray(training_step, dtype=jnp.float32) - self.cfg.curriculum_start_step) / self.cfg.curriculum_steps, 0.0, 1.0
           )
-          
-          # Create uniform parameters for interpolation
-          range_size = self.cfg.scale
-          uniform_bin_width = range_size / K
-          uniform_bin_height = range_size / K
-          uniform_slope = 1.0
-          
-          uniform_bin_w = jnp.full_like(bin_w, uniform_bin_width)
-          uniform_bin_h = jnp.full_like(bin_h, uniform_bin_height)
-          uniform_slopes = jnp.full_like(slopes, uniform_slope)
-          
-          # Interpolate between uniform and learned parameters
-          alpha = curriculum_progress
-          bin_w = (1 - alpha) * uniform_bin_w + alpha * bin_w
-          bin_h = (1 - alpha) * uniform_bin_h + alpha * bin_h
-          slopes = (1 - alpha) * uniform_slopes + alpha * slopes
       
-      rmin = -self.cfg.scale / 2.0
-      rmax = +self.cfg.scale / 2.0
+      bin_w = (1.0 - alpha) * uniform_bin_w + alpha * learned_bin_w
+      bin_h = (1.0 - alpha) * uniform_bin_h + alpha * learned_bin_h
+      slopes = (1.0 - alpha) * uniform_slopes + alpha * learned_slopes
       
-      # Concatenate all parameters into a single array as expected by RationalQuadraticSpline
+      # The total width/height must sum to the range size for the transform to be valid.
+      # We normalize here to enforce this constraint strictly.
+      bin_w = bin_w / jnp.sum(bin_w, axis=-1, keepdims=True) * range_size
+      bin_h = bin_h / jnp.sum(bin_h, axis=-1, keepdims=True) * range_size
+
       params = jnp.concatenate([bin_w, bin_h, slopes], axis=-1)
       return distrax.RationalQuadraticSpline(
           params=params,
-          range_min=rmin, 
-          range_max=rmax,
-          min_bin_size=min(self.cfg.min_bin_width, self.cfg.min_bin_height),
-          min_knot_slope=self.cfg.min_knot_slope
+          range_min=-self.cfg.scale / 2.0,
+          range_max=+self.cfg.scale / 2.0
       )
 
-    def body(i, carry):
-      out, ldj = carry
-      params = made(out if forward else out)  # prefix is 'out' either way
-      spline = rqs_from_params(params[:, i, :], training_step)
-      if forward:
-        yi, ld = spline.forward_and_log_det(x[:, i])
-      else:
-        xi, ld = spline.inverse_and_log_det(x[:, i])
-        yi = xi
-      out = out.at[:, i].set(yi)
-      ldj = ldj + ld
-      return (out, ldj)
+    if forward:
+        # --- FORWARD PASS (x -> z) ---
+        # This direction is parallel. We can compute all parameters and apply
+        # the transformation for all dimensions at once using vmap.
+        all_params = self.made(x) # Shape: [B, D, 3K+1]
 
-    out, ldj = jax.lax.fori_loop(0, D, body, (out, ldj))
-    return out, ldj
+        # Define the function to apply to a single dimension
+        def apply_spline_1d(params_1d, x_1d):
+            # params_1d: [B, 3K+1], x_1d: [B]
+            spline = rqs_from_params(params_1d, training_step)
+            return spline.forward_and_log_det(x_1d)
+
+        # Vmap this function over the dimension axis (axis=1)
+        z, ldj_per_dim = jax.vmap(
+            apply_spline_1d, in_axes=1, out_axes=1
+        )(all_params, x)
+
+        # Sum log-determinants across dimensions
+        ldj = jnp.sum(ldj_per_dim, axis=1)
+        return z, ldj
+
+    else: # Inverse pass
+        # --- INVERSE PASS (z -> x) ---
+        # This direction is sequential. We must compute x_i based on x_0..x_{i-1}.
+        # We use a scan loop over the dimensions.
+        z = x  # The input to this function is `z` in the inverse case
+        x_init = jnp.zeros_like(z)
+        ldj_init = jnp.zeros(B)
+
+        def body(carry, i):
+            x_so_far, ldj = carry
+            # Get parameters, which depend on the x values computed so far
+            params_all_dims = self.made(x_so_far)
+            params_i = params_all_dims[:, i, :]
+            
+            spline = rqs_from_params(params_i, training_step)
+            
+            # Use the input z_i to compute the output x_i
+            z_i = z[:, i]
+            x_i, ld = spline.inverse_and_log_det(z_i)
+            
+            # Update the output tensor and the log determinant
+            x_new = x_so_far.at[:, i].set(x_i)
+            ldj_new = ldj + ld
+            return (x_new, ldj_new), None
+
+        (x_final, ldj), _ = jax.lax.scan(body, (x_init, ldj_init), xs=jnp.arange(D))
+        return x_final, ldj
 
 # ----- full stack of transforms + base -----
 class FlowRQS(nn.Module):
   cfg: FlowRQSConfig
 
   def setup(self):
-    self.transforms = [AR_RQS_Transform(self.cfg) for _ in range(self.cfg.n_transforms)]
+    self.transforms = tuple(AR_RQS_Transform(self.cfg) for _ in range(self.cfg.n_transforms))
+
 
   @nn.compact
   def __call__(self, x: jnp.ndarray, low: jnp.ndarray, high: jnp.ndarray, training_step: int = 0) -> jnp.ndarray:
-    """Returns log_prob(x)."""
     xn = _normalize(x, low, high, self.cfg.scale)
-
-    # forward through chain (last-defined applies first)
     z = xn
     ldj = jnp.zeros(x.shape[0])
-    for tf in reversed(self.transforms):
+    for tf in self.transforms:
       z, ld = tf(z, forward=True, training_step=training_step)
       ldj = ldj + ld
-
     base = distrax.MultivariateNormalDiag(loc=jnp.zeros(self.cfg.n_dim), scale_diag=jnp.ones(self.cfg.n_dim))
-    return base.log_prob(z) + ldj
+    logp_z = base.log_prob(z)
+    ldj_norm = jnp.sum(jnp.log(self.cfg.scale / (high - low)))
+    return logp_z + ldj + ldj_norm
 
-  def sample(self, n_samples: int, low: jnp.ndarray, high: jnp.ndarray, rng: jax.random.PRNGKey, training_step: int = 0) -> jnp.ndarray:
-    """Box-bounded sampling with rejection in original space."""
-    base = distrax.MultivariateNormalDiag(loc=jnp.zeros(self.cfg.n_dim), scale_diag=jnp.ones(self.cfg.n_dim))
+  def sample(self, n_samples, low, high, rng, training_step: int = 0):
+    base = distrax.MultivariateNormalDiag(
+      loc=jnp.zeros(self.cfg.n_dim), scale_diag=jnp.ones(self.cfg.n_dim)
+    )
 
     def inverse_stack(y):
       x = y
       ldj = jnp.zeros(y.shape[0])
-      for tf in self.transforms:          # inverse order of forward chain
+      # Inverse should be applied in REVERSE order
+      for tf in reversed(self.transforms):
         x, ld = tf(x, forward=False, training_step=training_step)
         ldj = ldj + ld
       return x, ldj
 
-    def body(carry):
-      rng, acc_x, acc_mask = carry
-      rng, sub = jax.random.split(rng)
-      needed = jnp.maximum(0, n_samples - acc_mask.sum()).astype(jnp.int32)
-      num = jnp.maximum(needed, 1)
+    z = base.sample(seed=rng, sample_shape=(int(n_samples),))
+    xn, _ = inverse_stack(z)
+    x = _denormalize(xn, low, high, self.cfg.scale)
+    return jnp.clip(x, low, high)
 
-      z = base.sample(seed=sub, sample_shape=(num,))
-      xn, _ = inverse_stack(z)
-      x = _denormalize(xn, low, high, self.cfg.scale)
-      ok = jnp.logical_and(x >= low, x <= high).all(axis=-1)
-
-      pad = jnp.maximum(0, n_samples - x.shape[0])
-      x = jnp.pad(x, ((0, pad), (0, 0)))
-      ok = jnp.pad(ok, ((0, pad),))
-
-      slots = jnp.where(~acc_mask, size=n_samples, fill_value=0)[0]
-      picks = jnp.where(ok,        size=n_samples, fill_value=0)[0]
-      take = jnp.minimum(slots.shape[0], picks.shape[0])
-
-      acc_x = acc_x.at[slots[:take]].set(x[picks[:take]])
-      acc_mask = acc_mask.at[slots[:take]].set(True)
-      return (rng, acc_x, acc_mask)
-
-    init_x = jnp.zeros((n_samples, self.cfg.n_dim))
-    init_mask = jnp.zeros((n_samples,), dtype=bool)
-    carry = (rng, init_x, init_mask)
-    for _ in range(10):                   # same spirit as your torch code
-      carry = body(carry)
-    _, samples, _ = carry
-    return samples
-
-# ---------- FeedForwardNetwork factory (init/apply) ----------
 def make_flow_network(cfg: FlowRQSConfig) -> FeedForwardNetwork:
-  """
-  Returns a FeedForwardNetwork:
-    init(key) -> params
-    apply(processor_params, params, mode, low, high, x=None, rng=None, n_samples=None)
-  """
   module = FlowRQS(cfg)
 
-  # Dummy shapes for init
   dummy_x   = jnp.zeros((1, cfg.n_dim))
-  dummy_low = jnp.zeros((cfg.n_dim,))
-  dummy_high= jnp.ones((cfg.n_dim,))
 
   def init_fn(key):
+    dummy_low = jnp.zeros((cfg.n_dim,), dtype=jnp.float32)
+    dummy_high = jnp.ones((cfg.n_dim,), dtype=jnp.float32)
     variables = module.init(key, dummy_x, low=dummy_low, high=dummy_high)
     return variables["params"]
 
@@ -303,3 +285,156 @@ def make_flow_network(cfg: FlowRQSConfig) -> FeedForwardNetwork:
       raise ValueError(f"Unknown mode: {mode}")
 
   return FeedForwardNetwork(init=init_fn, apply=apply_fn)
+
+#---------------for plotting --------------------
+
+# If you're logging to W&B, keep this; otherwise you can drop wandb bits.
+
+# -------- deterministic 1D PDF slices without an explicit prior --------
+import math
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+def _ensure_f32(x):
+    return jnp.asarray(x, dtype=jnp.float32)
+
+def _unreplicate_params(params):
+    return jax.tree.map(
+        lambda a: (a[0] if hasattr(a, "shape") and a.ndim > 0 and a.shape[0] == jax.local_device_count() else a),
+        params
+    )
+
+def _flow_logpdf_batch(flow_network, params, low, high, x_batch, training_step: int):
+    """
+    x_batch: (B, D)
+    Returns: (B,) log-pdf via your FlowRQS.apply(mode='log_prob')
+    """
+    return flow_network.apply(
+        params,
+        mode="log_prob",
+        x=x_batch,
+        low=low,
+        high=high,
+        training_step=training_step
+    )
+
+def flow_pdf_1d_linspace(flow_network,
+                         params,
+                         low,              # (D,)
+                         high,             # (D,)
+                         cond_vec,         # (D,)
+                         dim: int,
+                         num: int = 400,
+                         training_step: int = 0):
+    """
+    Returns xs (num,), pdf (num,) for a 1D slice along `dim`,
+    where only x_dim sweeps linearly from low[dim] to high[dim],
+    and other dims are fixed at cond_vec.
+    """
+    low  = _ensure_f32(low)
+    high = _ensure_f32(high)
+    cond = _ensure_f32(cond_vec)
+    D = int(low.shape[0])
+
+    xs = jnp.linspace(low[dim], high[dim], num, dtype=jnp.float32)
+    # Build a batch where all dims are fixed to cond, except `dim`
+    x_batch = jnp.broadcast_to(cond, (num, D)).at[:, dim].set(xs)
+
+    logpdf = _flow_logpdf_batch(flow_network, params, low, high, x_batch, training_step)
+    pdf = jnp.exp(logpdf)
+    return xs, pdf
+
+def render_flow_all_dims_1d_linspace(flow_network,
+                                     flow_params,
+                                     low,
+                                     high,
+                                     training_step: int = 0,
+                                     cond_mode: str = "mid",  # "mid" or "zeros"
+                                     num: int = 400,
+                                     cols: int = 4,
+                                     tag_prefix: str = "flow_pdf",
+                                     wandb_step=None,
+                                     use_wandb: bool = False):
+    """
+    Plots deterministic 1D PDF slices for *every* dimension, using a linspace grid per dim.
+    """
+    params_host = _unreplicate_params(flow_params)
+
+    low  = _ensure_f32(low)
+    high = _ensure_f32(high)
+    D = int(low.shape[0])
+
+    if cond_mode == "mid":
+        cond = (low + high) / 2.0
+    elif cond_mode == "zeros":
+        cond = jnp.zeros((D,), dtype=jnp.float32)
+    else:
+        raise ValueError("cond_mode must be 'mid' or 'zeros'.")
+
+    rows = math.ceil(D / cols)
+    fig = plt.figure(figsize=(3.2 * cols, 2.4 * rows), constrained_layout=True)
+    gs = fig.add_gridspec(rows, cols)
+
+    for d in range(D):
+        r, c = divmod(d, cols)
+        ax = fig.add_subplot(gs[r, c])
+
+        xs, pdf = flow_pdf_1d_linspace(
+            flow_network, params_host, low, high, cond, dim=d, num=num, training_step=training_step
+        )
+        ax.plot(xs, pdf)
+        ax.set_title(f"dim {d}")
+        ax.set_xlabel("x")
+        ax.set_ylabel("pdf")
+
+    # Hide any empty cells
+    for k in range(D, rows * cols):
+        r, c = divmod(k, cols)
+        ax = fig.add_subplot(gs[r, c])
+        ax.axis("off")
+
+    fig.suptitle(f"Flow PDF (1D linspace slices across all dims) @ step {int(training_step)}")
+
+    if use_wandb:
+        import wandb
+        wandb.log({f"{tag_prefix}/{wandb_step}/all_dims_1d_pdf": wandb.Image(fig)}, step=wandb_step)
+
+    return fig
+
+
+def check_mass(flow_network, params, low, high, training_step=0, n_samples=100000):
+  """
+  Estimates the total probability mass using Monte Carlo integration.
+  This is suitable for high-dimensional spaces where grid-based methods fail.
+  """
+  low = jnp.asarray(low, dtype=jnp.float32)
+  high = jnp.asarray(high, dtype=jnp.float32)
+  D = low.shape[0]
+
+  # 1. Create a PRNG key
+  key = jax.random.PRNGKey(0)
+
+  # 2. Draw random samples from a uniform distribution over the domain [low, high]
+  #    This serves as our sampling distribution for the integration.
+  print("n samples ", n_samples)
+  print(" D " ,D)
+  samples = jax.random.uniform(key, shape=(n_samples, D), minval=low, maxval=high)
+  print('samples', samples.shape)
+  # 3. Evaluate the log-probability of these samples under your flow model
+  log_p = flow_network.apply(
+      params,
+      mode="log_prob",
+      x=samples,
+      low=low,
+      high=high,
+      training_step=training_step
+  )
+  p = jnp.exp(log_p)
+
+  # 4. Calculate the volume of the integration domain
+  volume = jnp.prod(high - low)
+
+  # 5. Estimate the integral: E[p(x)] * Volume
+  mass = jnp.mean(p) * volume
+  return float(mass)

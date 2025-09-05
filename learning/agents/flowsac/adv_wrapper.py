@@ -57,7 +57,7 @@ class AdVmapWrapper(Wrapper):
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> State:
-    #params shape is [n_envs, parames]
+    #params shape is [n_envs, params,]
     mjx_model_v, in_axes = self.rand_fn(params=params)
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)

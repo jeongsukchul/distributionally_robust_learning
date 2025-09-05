@@ -129,7 +129,7 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
-    rl_config.num_timesteps = 20_000_000
+    rl_config.num_timesteps = 30_000_000
   if env_name == "CheetahRun":
     rl_config.network_factory = config_dict.create(
       q_network_layer_norm=True,
@@ -218,6 +218,8 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
       init_lmbda = 0., #added
       network_factory=config_dict.create(
           q_network_layer_norm=True,
+          policy_obs_key="state",
+        value_obs_key="privileged_state",
       ),
   )
 
@@ -257,20 +259,20 @@ def brax_flowsac_config(env_name: str) -> config_dict.ConfigDict:
       action_repeat=1,
       discounting=0.99,  
       learning_rate=1e-3,
-      num_envs=32,
-      batch_size=256,
+      num_envs=128,
+      batch_size=512,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192,
       delta = 0.01,    #added
       lambda_update_steps = 10,  #added: number of lambda optimization steps
-      single_lambda = False, #added
-      # distance_type = "wass", #added
       lmbda_lr = 3e-4, #added
       flow_lr = 3e-4,  #added
       init_lmbda = 0., #added
       network_factory=config_dict.create(
           q_network_layer_norm=True,
+          policy_obs_key="state",
+          value_obs_key="privileged_state",
       ),
   )
 
@@ -286,7 +288,7 @@ def brax_flowsac_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
-    rl_config.num_timesteps = 20_000_000
+    rl_config.num_timesteps = 30_000_000
   if env_name == "CheetahRun":
     rl_config.network_factory = config_dict.create(
         q_network_layer_norm=True,

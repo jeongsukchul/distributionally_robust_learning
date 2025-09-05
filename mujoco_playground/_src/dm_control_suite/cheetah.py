@@ -113,7 +113,7 @@ class Run(mjx_env.MjxEnv):
     privileged_state = jp.concatenate([
       state,
       self.mjx_model.geom_friction[FLOOR_GEOM_ID, 0:1],
-      self.mjx_model.dof_frictionloss[6:],
+      self.mjx_model.dof_frictionloss[3:],
       self.mjx_model.body_ipos[TORSO_BODY_ID],
       self.mjx_model.body_mass[1:],
     ])
@@ -163,14 +163,14 @@ class Run(mjx_env.MjxEnv):
 
     low = jp.array(
         [0.3] +                             #floor_friction_min 
-        [0.6] * (self.mjx_model.nv - 6) +   # dof_friction_min
+        [0.6] * (self.mjx_model.nv - 3) +   # dof_friction_min
         [-0.3] * 3 +                          #com_offset_min
-        [0.5] * (self.mjx_model.nbody - 1)) #body_mass_min
+        [0.1] * (self.mjx_model.nbody - 1)) #body_mass_min
     high = jp.array(
         [2.0] +                             #floor_friction_max
-        [1.5] * (self.mjx_model.nv - 6) +   #dof_friction_max
+        [1.5] * (self.mjx_model.nv - 3) +   #dof_friction_max
         [0.3] * 3 +                          #com_offset_max
-        [1.5] * (self.mjx_model.nbody - 1)) #body_mass_max
+        [15.0] * (self.mjx_model.nbody - 1)) #body_mass_max
     return low, high
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1
@@ -186,9 +186,9 @@ def domain_randomize(model: mjx.Model, params, rng:jax.Array=None, deterministic
     idx = 0
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
     idx += 1
-    dof_frictionloss = model.dof_frictionloss.at[6:].set(params[idx:idx+ model.nv-6])
-    idx += model.nv-6
-    offset = jp.array(params[idx], params[idx+1], params[idx+2])
+    dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
+    idx += model.nv-3
+    offset = jp.array([params[idx], params[idx+1], params[idx+2]])
     idx += 3
     body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
         model.body_ipos[TORSO_BODY_ID] + offset
@@ -214,11 +214,11 @@ def domain_randomize(model: mjx.Model, params, rng:jax.Array=None, deterministic
     )
     idx+=1
     # static friction
-    dof_frictionloss = jp.zeros((model.nv-6,))
-    for i in range(model.nv-6):
+    dof_frictionloss = jp.zeros((model.nv-3,))
+    for i in range(model.nv-3):
       rng, key = jax.random.split(rng)
-      frictionloss = model.dof_frictionloss[6+i] * dist[idx](key=key)
-      dof_frictionloss = model.dof_frictionloss.at[6+i].set(frictionloss)
+      frictionloss = model.dof_frictionloss[3+i] * dist[idx](key=key)
+      dof_frictionloss = model.dof_frictionloss.at[3+i].set(frictionloss)
       idx+=1
     # com pos offset
     dpos = jp.zeros((3,))
@@ -279,8 +279,8 @@ def domain_randomize_eval(model: mjx.Model, params, rng:jax.Array=None, determin
     idx = 0
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
     idx += 1
-    dof_frictionloss = model.dof_frictionloss.at[6:].set(params[idx:idx+ model.nv-6])
-    idx += model.nv-6
+    dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
+    idx += model.nv-3
     offset = jp.array(params[idx], params[idx+1], params[idx+2])
     idx += 3
     body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
@@ -306,11 +306,11 @@ def domain_randomize_eval(model: mjx.Model, params, rng:jax.Array=None, determin
     )
     idx+=1
     # static friction
-    dof_frictionloss = jp.zeros((model.nv-6,))
-    for i in range(model.nv-6):
+    dof_frictionloss = jp.zeros((model.nv-3,))
+    for i in range(model.nv-3):
       rng, key = jax.random.split(rng)
-      frictionloss = model.dof_frictionloss[6+i] * dist[idx](key=key)
-      dof_frictionloss = model.dof_frictionloss.at[6+i].set(frictionloss)
+      frictionloss = model.dof_frictionloss[3+i] * dist[idx](key=key)
+      dof_frictionloss = model.dof_frictionloss.at[3+i].set(frictionloss)
       idx+=1
     # com pos offset
     dpos = jp.zeros((3,))

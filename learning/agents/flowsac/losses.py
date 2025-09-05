@@ -67,42 +67,63 @@ def make_losses(
 
   def lmbda_loss(
       lmbda_params: jnp.ndarray,
-      next_v,
+      value_loss,
+      kl_loss,
       delta : float, 
       prev_loss: jnp.ndarray,  # Add prev_loss parameter
   ):
     lmbda = jnp.maximum(lmbda_params, 0.0)
     # with n_nominals next_observations
-    next_v = -lmbda * delta**2 + next_v
-    loss = -next_v.mean()
+    loss =  value_loss + lmbda* (kl_loss - delta)
+    loss = -loss.mean()
     # Compute loss reduction info
     loss_info = loss - prev_loss
 
-    return loss, (next_v, loss_info)
+    return loss, loss_info
 
   def critic_loss(
       q_params: Params,
+      target_q_params : Params,
+      policy_params : Params,
       normalizer_params: Any,
       transitions: Transition,
-      next_v : jnp.ndarray,
+      alpha : jnp.ndarray,
+    #   next_v : jnp.ndarray,
+      key,
   ) -> jnp.ndarray:
     
-    batch_size = transitions.action.shape[0]
     q_old_action = q_network.apply(
         normalizer_params, q_params, transitions.observation, transitions.action
     )
-    discounted_next_v = transitions.discount * next_v
+    next_dist_params = policy_network.apply(
+        normalizer_params, policy_params, transitions.next_observation
+    )
+    next_action = parametric_action_distribution.sample_no_postprocessing(
+        next_dist_params, key
+    )
+    next_log_prob = parametric_action_distribution.log_prob(
+        next_dist_params, next_action
+    )
+    next_action = parametric_action_distribution.postprocess(next_action)
+    next_q = q_network.apply(
+        normalizer_params,
+        target_q_params,
+        transitions.next_observation,
+        next_action,
+    )
+    next_v = jnp.min(next_q, axis=-1) - alpha * next_log_prob
     target_q = jax.lax.stop_gradient(
-        transitions.reward* reward_scaling
-        + discounting * transitions.discount * next_v
-    )     
+        transitions.reward * reward_scaling
+        + transitions.discount * discounting * next_v
+    )
     q_error = q_old_action - jnp.expand_dims(target_q, -1)
 
     # Better bootstrapping for truncated episodes.
     truncation = transitions.extras['state_extras']['truncation']
     q_error *= jnp.expand_dims(1 - truncation, -1)
+
     q_loss = 0.5 * jnp.mean(jnp.square(q_error))
-    return q_loss
+    return q_loss, (q_old_action, next_v)
 
   def actor_loss(
       policy_params: Params,
@@ -130,53 +151,227 @@ def make_losses(
 
   def flow_loss(
       flow_params: Params,
+      target_flow_params: Params,
       policy_params: Params,
       normalizer_params: Any,
       target_q_params: Params,
       alpha: jnp.ndarray,
       transitions: Transition,
-      adv_step : Any,
-      dr_range,
+      dr_range_high,
+      dr_range_low,
       key: jax.random.PRNGKey,
-      lmbda: float = 1.0,
+      lmbda_params:Params,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
-    batch_size = transitions.action.shape[0]
-    dr_low, dr_high = dr_range
-    sample_key, key = jax.random.split(key)
-    dynamics_params = flow_network.apply(
-        flow_params, low=dr_low, high=dr_high, mode='sample', rng=sample_key, n_samples=batch_size
+    action_key, current_key, target_key = jax.random.split(key, 3)
+    volume = jnp.prod(dr_range_high-dr_range_low)
+    # If dr_low/dr_high are 1-D (shape: [D]) → scalar
+    data_log_prob = flow_network.apply(
+        flow_params,
+        mode='log_prob',
+        low=dr_range_low,
+        high=dr_range_high,
+        x=transitions.dynamics_params,      # <- pass the data here
     )
-    print("dynamics_params shape:", dynamics_params.shape)
-    adv_obs = adv_step(
-        transitions.state, transitions.action, dynamics_params
+    data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
+    _, current_logp = flow_network.apply(
+        flow_params,
+        mode='sample',
+        low=dr_range_low,
+        high=dr_range_high,
+        n_samples=1000,
+        rng=current_key,
     )
+    # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
+    kl_loss = current_logp.mean()
+    proximal_loss = 0
+    # target_sample, target_logp = flow_network.apply(
+    #     target_flow_params,
+    #     mode='sample',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     n_samples=1000,
+    #     rng=target_key,
+    # )
+    # target_logp = jnp.clip(target_logp, -1e6, 1e6)
+    # current_logp_with_target = flow_network.apply(
+    #     flow_params,
+    #     mode='log_prob',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     x=target_sample
+    # )
+    # current_logp_with_target = jnp.clip(current_logp_with_target, -1e6, 1e6)
+    # proximal_loss = 0*(target_logp - current_logp_with_target).mean()
+
+
     # Get next action and log prob from policy for adversarial observation
     next_dist_params = policy_network.apply(
-        normalizer_params, policy_params, adv_obs
+        normalizer_params, policy_params, transitions.next_observation
     )
     next_action = parametric_action_distribution.sample_no_postprocessing(
-        next_dist_params, key
+        next_dist_params, action_key
     )
     next_log_prob = parametric_action_distribution.log_prob(
         next_dist_params, next_action
     )
     
     # Get Q-value for adversarial next state-action pair
-    next_q_adv = q_network.apply(normalizer_params, target_q_params, adv_obs, next_action).min(-1)
+    next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
     
     # Calculate adversarial next V value
     next_v_adv = next_q_adv - alpha * next_log_prob
-    
-    # The adversarial objective: minimize next_v_adv + lambda * penalty
-    # where penalty is the squared difference between adversarial and nominal observations
-    penalty = jnp.square(adv_obs - transitions.next_observation).sum(-1)
-    
-    # Total adversarial loss: we want to minimize next_v_adv + lambda * penalty
-    # This encourages the flow network to generate dynamics that make the next state worse
-    # while keeping the dynamics parameters reasonable (controlled by lambda)
-    flow_loss = next_v_adv.mean() + lmbda * penalty.mean()
-    
-    return flow_loss,  next_v_adv+lmbda*penalty
+    normalized_next_v_adv = (jax.lax.stop_gradient(1/next_v_adv.mean())) * next_v_adv
+    value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
+    return lmbda_params* value_loss + kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
+  def flow_dr_loss(
+      flow_params: Params,
+      target_flow_params: Params,
+      policy_params: Params,
+      normalizer_params: Any,
+      target_q_params: Params,
+      alpha: jnp.ndarray,
+      transitions: Transition,
+      dr_range_high,
+      dr_range_low,
+      key: jax.random.PRNGKey,
+      lmbda_params:Params,
+  ):
+    """Loss for training the flow network to generate adversarial dynamics parameters."""
+    action_key, current_key, target_key = jax.random.split(key, 3)
+    volume = jnp.prod(dr_range_high-dr_range_low)
+    # If dr_low/dr_high are 1-D (shape: [D]) → scalar
+    data_log_prob = flow_network.apply(
+        flow_params,
+        mode='log_prob',
+        low=dr_range_low,
+        high=dr_range_high,
+        x=transitions.dynamics_params,      # <- pass the data here
+    )
+    data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
+    _, current_logp = flow_network.apply(
+        flow_params,
+        mode='sample',
+        low=dr_range_low,
+        high=dr_range_high,
+        n_samples=1000,
+        rng=current_key,
+    )
+    # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
+    kl_loss = -current_logp.mean()
+    proximal_loss = 0
+    # target_sample, target_logp = flow_network.apply(
+    #     target_flow_params,
+    #     mode='sample',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     n_samples=1000,
+    #     rng=target_key,
+    # )
+    # target_logp = jnp.clip(target_logp, -1e6, 1e6)
+    # current_logp_with_target = flow_network.apply(
+    #     flow_params,
+    #     mode='log_prob',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     x=target_sample
+    # )
+    # current_logp_with_target = jnp.clip(current_logp_with_target, -1e6, 1e6)
+    # proximal_loss = 0*(target_logp - current_logp_with_target).mean()
 
-  return lmbda_loss, alpha_loss, critic_loss, actor_loss, flow_loss
+
+    # Get next action and log prob from policy for adversarial observation
+    next_dist_params = policy_network.apply(
+        normalizer_params, policy_params, transitions.next_observation
+    )
+    next_action = parametric_action_distribution.sample_no_postprocessing(
+        next_dist_params, action_key
+    )
+    next_log_prob = parametric_action_distribution.log_prob(
+        next_dist_params, next_action
+    )
+    
+    # Get Q-value for adversarial next state-action pair
+    next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
+    
+    # Calculate adversarial next V value
+    next_v_adv = next_q_adv - alpha * next_log_prob
+    normalized_next_v_adv = (jax.lax.stop_gradient(1/next_v_adv.mean())) * next_v_adv
+    value_loss = volume*(jnp.exp(data_log_prob) * normalized_next_v_adv).mean()
+    return lmbda_params* value_loss + kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
+#   def flow_dr_loss(
+#       flow_params: Params,
+#       target_flow_params: Params,
+#       policy_params: Params,
+#       normalizer_params: Any,
+#       target_q_params: Params,
+#       alpha: jnp.ndarray,
+#       transitions: Transition,
+#       dr_range_high,
+#       dr_range_low,
+#       key: jax.random.PRNGKey,
+#       lmbda_params:Params,
+#   ):
+#     """Loss for training the flow network to generate adversarial dynamics parameters."""
+#     action_key, current_key, target_key = jax.random.split(key, 3)
+#     # If dr_low/dr_high are 1-D (shape: [D]) → scalar
+#     data_log_prob = flow_network.apply(
+#         flow_params,
+#         mode='log_prob',
+#         low=dr_range_low,
+#         high=dr_range_high,
+#         x=transitions.dynamics_params,      # <- pass the data here
+#     )
+#     data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
+#     _, current_logp = flow_network.apply(
+#         flow_params,
+#         mode='sample',
+#         low=dr_range_low,
+#         high=dr_range_high,
+#         n_samples=1000,
+#         rng=current_key,
+#     )
+#     kl_loss = current_logp.mean()
+#     proximal_loss = 0
+#     # target_sample, target_logp = flow_network.apply(
+#     #     target_flow_params,
+#     #     mode='sample',
+#     #     low=dr_range_low,
+#     #     high=dr_range_high,
+#     #     n_samples=1000,
+#     #     rng=target_key,
+#     # )
+#     # target_logp = jnp.clip(target_logp, -1e6, 1e6)
+#     # current_logp_with_target = flow_network.apply(
+#     #     flow_params,
+#     #     mode='log_prob',
+#     #     low=dr_range_low,
+#     #     high=dr_range_high,
+#     #     x=target_sample
+#     # )
+#     # current_logp_with_target = jnp.clip(current_logp_with_target, -1e6, 1e6)
+#     # proximal_loss = 0*(target_logp - current_logp_with_target).mean()
+
+
+#     # Get next action and log prob from policy for adversarial observation
+#     next_dist_params = policy_network.apply(
+#         normalizer_params, policy_params, transitions.next_observation
+#     )
+#     next_action = parametric_action_distribution.sample_no_postprocessing(
+#         next_dist_params, action_key
+#     )
+#     next_log_prob = parametric_action_distribution.log_prob(
+#         next_dist_params, next_action
+#     )
+    
+#     # Get Q-value for adversarial next state-action pair
+#     next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
+    
+#     # Calculate adversarial next V value
+#     next_v_adv = next_q_adv - alpha * next_log_prob
+#     # value_loss = (data_log_prob * next_v_adv).mean()
+#     normalized_next_v_adv = 1/(jax.lax.stop_gradient(next_v_adv).mean()) * next_v_adv
+#     volume = jnp.prod(dr_range_high - dr_range_low)
+#     value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
+#     return -lmbda_params* value_loss + kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
+  return lmbda_loss, alpha_loss, critic_loss, actor_loss, flow_loss, flow_dr_loss

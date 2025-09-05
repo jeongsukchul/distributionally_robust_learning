@@ -356,8 +356,10 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
         if param in cfg and getattr(cfg, param) is not None:
             flowsac_params[param] = getattr(cfg, param)
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.{cfg.shift_dynamics_type}.delta={flowsac_params.delta}\
-            .single_lambda={flowsac_params.single_lambda}\
-            .length={flowsac_params.lambda_update_steps}.lmbda_lr={flowsac_params.lmbda_lr}.init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}"
+            .length={flowsac_params.lambda_update_steps}.lmbda_lr={flowsac_params.lmbda_lr}\
+                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}"
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}\
+                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}"
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -370,6 +372,8 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
     network_factory = flowsac_networks.make_flowsac_networks
     flowsac_training_params = dict(flowsac_params)
     if "network_factory" in flowsac_params:
+        if not cfg.asymmetric_critic:
+            flowsac_params.network_factory.value_obs_key = "state"
         del flowsac_training_params["network_factory"]
         network_factory = functools.partial(
             flowsac_networks.make_flowsac_networks,
@@ -382,15 +386,14 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
+        use_wandb=cfg.use_wandb,
+        dr_flow = cfg.dr_flow,
     )
-    if cfg.custom_wrapper and cfg.shift_dynamics:
-        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=flowsac_params.num_envs)
-    else:
-        wrap_fn = wrap_for_brax_training
+
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
         eval_env = eval_env,
-        wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn = wrap_for_brax_training,
     )
     return make_inference_fn, params, metrics
 

@@ -1,7 +1,6 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling<=1.18.0"]  
 build-backend = "hatchling.build"
-
 [project]
 name = "playground"
 version = "0.0.5"

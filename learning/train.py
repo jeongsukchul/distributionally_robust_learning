@@ -228,7 +228,7 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         if not cfg.asymmetric_critic:
             sac_params.network_factory.value_obs_key = "state"
         network_factory = functools.partial(
-            sac_networks.make_sac_networks if cfg.simba else sac_networks.make_simba_sac_networks,
+            sac_networks.make_simba_sac_networks if cfg.simba else sac_networks.make_sac_networks,
             **sac_params.network_factory
         )
     

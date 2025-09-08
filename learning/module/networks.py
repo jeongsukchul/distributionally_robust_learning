@@ -274,14 +274,22 @@ def make_simba_policy_network(
     obs_key: str = 'state',
 ) -> FeedForwardNetwork:
   """Creates a policy network."""
-  policy_module = SimBaBlock(
-      # layer_sizes=list(hidden_layer_sizes) + [param_size],
-      hidden_dim=hidden_dim,
-      num_blocks=num_blocks,
-      activation=activation,
-      # kernel_init=kernel_init,
-      layer_norm=layer_norm,
-  )
+  class PolicyModule(linen.Module):
+    """Policy Module."""
+
+    @linen.compact
+    def __call__(self, obs: jnp.ndarray):
+      p1 = SimBaBlock(
+        # layer_sizes=list(hidden_layer_sizes) + [param_size],
+        hidden_dim=hidden_dim,
+        num_blocks=num_blocks,
+        activation=activation,
+        # kernel_init=kernel_init,
+        layer_norm=layer_norm,
+      )
+      return nn.Dense(param_size, kernel_init=orthogonal_init(1.))(p1(obs)) 
+
+  policy_module = PolicyModule()
 
   def apply(processor_params, policy_params, obs):
     if isinstance(obs, Mapping):

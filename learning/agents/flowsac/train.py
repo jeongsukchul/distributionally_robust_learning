@@ -467,6 +467,7 @@ def train(
   ):
     
     actions, policy_extras = policy(env_state.obs, key)
+
     nstate = env.step(env_state, actions, dynamics_params)
     state_extras = {x: nstate.info[x] for x in extra_fields}
     return nstate, TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray

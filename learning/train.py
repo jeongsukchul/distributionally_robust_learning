@@ -24,10 +24,10 @@ from brax.base import State as PipelineState
 from brax.envs.base import Env, PipelineEnv, State
 from brax.io import html, mjcf, model
 from brax.mjx.base import State as MjxState
-from brax.training.agents.ppo import networks as ppo_networks
-from brax.training.agents.ppo import train as ppo
-from brax.training.agents.sac import networks as sac_networks
-from brax.training.agents.sac import train as sac
+from agents.ppo import networks as ppo_networks
+from agents.ppo import train as ppo
+from agents.sac import networks as sac_networks
+from agents.sac import train as sac
 from agents.rambo import networks as rambo_networks
 from agents.rambo import train as rambo
 from agents.wdsac import train as wdsac
@@ -355,10 +355,8 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
     for param in flowsac_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
             flowsac_params[param] = getattr(cfg, param)
-    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.{cfg.shift_dynamics_type}.delta={flowsac_params.delta}\
-            .length={flowsac_params.lambda_update_steps}.lmbda_lr={flowsac_params.lmbda_lr}\
-                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}"
-    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}\
+
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
                 .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}"
     if cfg.use_wandb:
         wandb.init(
@@ -388,6 +386,7 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env):
         randomization_fn=randomization_fn,
         use_wandb=cfg.use_wandb,
         dr_flow = cfg.dr_flow,
+        dr_trane_ratio = cfg.dr_train_ratio,
     )
 
     make_inference_fn, params, metrics = train_fn(        

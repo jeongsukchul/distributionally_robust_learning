@@ -186,7 +186,8 @@ def train(
     lambda_update_steps: int = 100,         #added: number of lambda optimization steps
     lmbda_lr : float = 3e-4,                #added
     init_lmbda : float = 0.,                #added
-    dr_flow : bool= False,                    #added
+    dr_flow : bool= False,                  #added
+    dr_trane_ratio : float= 0.9,          #added
     use_wandb : bool= False, #added
     deterministic_eval: bool = False, 
     network_factory: types.NetworkFactory[
@@ -257,6 +258,10 @@ def train(
   action_size = env.action_size
   if hasattr(env, 'dr_range'):
     dr_range_low, dr_range_high = env.dr_range
+    dr_train_ratio = 0.9
+    dr_range = dr_range_high - dr_range_low
+    dr_range_mid = (dr_range_high + dr_range_low) / 2.0
+    dr_range_low, dr_range_high = dr_range_mid - dr_range/2 * dr_train_ratio, dr_range_mid + dr_range/2 * dr_train_ratio
     volume = jnp.prod(jnp.maximum(dr_range_high - dr_range_low, 0.0))
     print("volume : ", volume)
   else:
@@ -764,7 +769,7 @@ def train(
       n_samples=10000,)
 
     logp = jnp.clip(logp, -1e6, 1e6)
-    return -logp.mean()
+    return logp.mean()
 
     # u = jax.random.uniform(key, (10000, 2))#dr_range_low.shape[0]))
     # x = dr_range_low[:2] + (dr_range_high[:2] - dr_range_low[:2]) * u

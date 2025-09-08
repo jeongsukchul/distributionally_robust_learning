@@ -258,7 +258,7 @@ def make_losses(
         rng=current_key,
     )
     # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
-    kl_loss = -current_logp.mean()
+    kl_loss = current_logp.mean()
     proximal_loss = 0
     # target_sample, target_logp = flow_network.apply(
     #     target_flow_params,
@@ -297,8 +297,8 @@ def make_losses(
     # Calculate adversarial next V value
     next_v_adv = next_q_adv - alpha * next_log_prob
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_v_adv.mean())) * next_v_adv
-    value_loss = volume*(jnp.exp(data_log_prob) * normalized_next_v_adv).mean()
-    return lmbda_params* value_loss + kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
+    value_loss = (jnp.exp(data_log_prob) * normalized_next_v_adv).mean()
+    return lmbda_params* value_loss +  kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
 #   def flow_dr_loss(
 #       flow_params: Params,
 #       target_flow_params: Params,

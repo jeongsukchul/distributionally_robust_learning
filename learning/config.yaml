@@ -73,3 +73,4 @@ custom_wrapper: true
 #flow
 flow_lr : ???
 dr_flow : false
+dr_train_ratio : 0.9

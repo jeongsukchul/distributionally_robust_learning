@@ -303,7 +303,7 @@ class Balance(mjx_env.MjxEnv):
   def dr_range(self) -> dict:
 
     low = jp.array(
-        [1.] +                             #floor_friction_min 
+        [0.9] +                             #floor_friction_min 
         [0.] * self.mjx_model.nv +   # dof_friction_min (2)
         [-0.3] * 2 +                          #com_offset_min
         [0.5] * (self.mjx_model.nbody - 1)) #body_mass_min (2)

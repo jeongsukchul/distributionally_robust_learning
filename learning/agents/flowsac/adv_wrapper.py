@@ -132,7 +132,6 @@ class BraxAutoResetWrapper(Wrapper):
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> mjx_env.State:
-    print("action", action.shape)
     if 'steps' in state.info:
       steps = state.info['steps']
       steps = jnp.where(state.done, jnp.zeros_like(steps), steps)

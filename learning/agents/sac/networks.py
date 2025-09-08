@@ -94,3 +94,50 @@ def make_sac_networks(
       q_network=q_network,
       parametric_action_distribution=parametric_action_distribution,
   )
+
+def make_simba_sac_networks(
+    observation_size: int,
+    action_size: int,
+    preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
+    # hidden_layer_sizes: Sequence[int] = (256, 256),
+    policy_hidden_dim : int = 128,
+    policy_num_blocks : int =1,
+    critic_hidden_dim : int =512,
+    critic_num_blocks : int = 2,
+    activation: networks.ActivationFn = linen.relu,
+    policy_network_layer_norm: bool = False,
+    q_network_layer_norm: bool = False,
+    policy_obs_key: str = 'state',
+    value_obs_key: str = 'state',
+) -> SACNetworks:
+  """Make SAC networks."""
+  parametric_action_distribution = distribution.NormalTanhDistribution(
+      event_size=action_size
+  )
+  policy_network = networks.make_simba_policy_network(
+      parametric_action_distribution.param_size,
+      observation_size,
+      preprocess_observations_fn=preprocess_observations_fn,
+      # hidden_layer_sizes=hidden_layer_sizes,
+      hidden_dim = policy_hidden_dim,
+      num_blocks = policy_num_blocks,
+      activation=activation,
+      layer_norm=policy_network_layer_norm,
+      obs_key = policy_obs_key
+  )
+  q_network = networks.make_simba_q_network(
+      observation_size,
+      action_size,
+      preprocess_observations_fn=preprocess_observations_fn,
+      # hidden_layer_sizes=hidden_layer_sizes,
+      hidden_dim=critic_hidden_dim,
+      num_blocks=critic_num_blocks,
+      activation=activation,
+      layer_norm=q_network_layer_norm,
+      obs_key = value_obs_key,
+  )
+  return SACNetworks(
+      policy_network=policy_network,
+      q_network=q_network,
+      parametric_action_distribution=parametric_action_distribution,
+  )

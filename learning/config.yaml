@@ -18,8 +18,8 @@ policy : wdsac
 asymmetric_critic: false
 
 #dynamics shift
-shift_dynamics: true
-shift_dynamics_type: stochastic  # or deterministic
+randomization: true
+# shift_dynamics_type: stochastic 
 eval_randomization: true
 # logging
 wandb_project: wdsac-exp
@@ -74,3 +74,6 @@ custom_wrapper: true
 flow_lr : ???
 dr_flow : false
 dr_train_ratio : 0.9
+
+#simba
+simba : true

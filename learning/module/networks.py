@@ -25,7 +25,7 @@ from brax.training.spectral_norm import SNDense
 from flax import linen
 import jax
 import jax.numpy as jnp
-
+import flax.linen as nn
 ActivationFn = Callable[[jnp.ndarray], jnp.ndarray]
 Initializer = Callable[..., Any]
 
@@ -105,6 +105,43 @@ class MLP(linen.Module):
           hidden = linen.LayerNorm()(hidden)
     return hidden
 
+
+def orthogonal_init(scale: float = jnp.sqrt(2)):
+    return nn.initializers.orthogonal(scale)
+def he_normal_init():
+    return nn.initializers.he_normal()
+
+class ResidualBlock(nn.Module):
+    hidden_dim: int
+    activation: ActivationFn = linen.relu
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        res = x
+        x = nn.LayerNorm()(x)
+        x = nn.Dense(
+            self.hidden_dim * 4, kernel_init=he_normal_init(),
+        )(x)
+        x = self.activation(x)
+        x = nn.Dense(self.hidden_dim, kernel_init=he_normal_init())(x)
+        return res + x
+class SimBaBlock(nn.Module):
+  """SimBa module."""
+  hidden_dim: int
+  num_blocks: int
+  activation: ActivationFn = linen.relu
+  kernel_init = orthogonal_init(1),
+  layer_norm : bool = True
+  @nn.compact
+  def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+      x = nn.Dense(
+          self.hidden_dim, kernel_init=orthogonal_init(1), 
+      )(x)
+      for _ in range(self.num_blocks):
+        x = ResidualBlock(self.hidden_dim, activation=self.activation)(x)
+      if self.layer_norm:
+        x = nn.LayerNorm()(x)
+
+      return x
 
 class SNMLP(linen.Module):
   """MLP module with Spectral Normalization."""
@@ -224,6 +261,42 @@ def _get_obs_state_size(obs_size: types.ObservationSize, obs_key: str) -> int:
   obs_size = obs_size[obs_key] if isinstance(obs_size, Mapping) else obs_size
   return jax.tree_util.tree_flatten(obs_size)[0][-1]
 
+def make_simba_policy_network(
+    param_size: int,
+    obs_size: types.ObservationSize,
+    preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
+    # hidden_layer_sizes: Sequence[int] = (256, 256),
+    hidden_dim : int = 256,
+    num_blocks : int = 3,
+    activation: ActivationFn = linen.relu,
+    kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
+    layer_norm: bool = False,
+    obs_key: str = 'state',
+) -> FeedForwardNetwork:
+  """Creates a policy network."""
+  policy_module = SimBaBlock(
+      # layer_sizes=list(hidden_layer_sizes) + [param_size],
+      hidden_dim=hidden_dim,
+      num_blocks=num_blocks,
+      activation=activation,
+      # kernel_init=kernel_init,
+      layer_norm=layer_norm,
+  )
+
+  def apply(processor_params, policy_params, obs):
+    if isinstance(obs, Mapping):
+      obs = preprocess_observations_fn(
+          obs[obs_key], normalizer_select(processor_params, obs_key)
+      )
+    else:
+      obs = preprocess_observations_fn(obs, processor_params)
+    return policy_module.apply(policy_params, obs)
+
+  obs_size = _get_obs_state_size(obs_size, obs_key)
+  dummy_obs = jnp.zeros((1, obs_size))
+  return FeedForwardNetwork(
+      init=lambda key: policy_module.init(key, dummy_obs), apply=apply
+  )
 
 def make_policy_network(
     param_size: int,
@@ -288,7 +361,57 @@ def make_value_network(
       init=lambda key: value_module.init(key, dummy_obs), apply=apply
   )
 
+def make_simba_q_network(
+    obs_size: types.ObservationSize,
+    action_size: int,
+    preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
+    # hidden_layer_sizes: Sequence[int] = (256, 256),
+    hidden_dim : int = 256,
+    num_blocks : int = 3,
+    activation: ActivationFn = linen.relu,
+    n_critics: int = 2,
+    layer_norm: bool = False,
+    kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
+    obs_key: str = 'state',
+) -> FeedForwardNetwork:
+  """Creates a value network."""
 
+  class QModule(linen.Module):
+    """Q Module."""
+
+    n_critics: int
+
+    @linen.compact
+    def __call__(self, obs: jnp.ndarray, actions: jnp.ndarray):
+      hidden = jnp.concatenate([obs, actions], axis=-1)
+      res = []
+      for _ in range(self.n_critics):
+        q = SimBaBlock(
+            hidden_dim=hidden_dim,
+            num_blocks=num_blocks,
+            activation=activation,
+            # kernel_init=kerneL_init,
+            layer_norm=layer_norm,
+        )(hidden)
+        res.append(q)
+      return jnp.concatenate(res, axis=-1)
+
+  q_module = QModule(n_critics=n_critics)
+
+  def apply(processor_params, q_params, obs, actions):
+    if isinstance(obs, Mapping):
+      obs = preprocess_observations_fn(
+          obs[obs_key], normalizer_select(processor_params, obs_key)
+      )
+    else:
+      obs = preprocess_observations_fn(obs, processor_params)
+    return q_module.apply(q_params, obs, actions)
+  obs_size = _get_obs_state_size(obs_size, obs_key)
+  dummy_obs = jnp.zeros((1, obs_size))
+  dummy_action = jnp.zeros((1, action_size))
+  return FeedForwardNetwork(
+      init=lambda key: q_module.init(key, dummy_obs, dummy_action), apply=apply
+  )
 def make_q_network(
     obs_size: types.ObservationSize,
     action_size: int,

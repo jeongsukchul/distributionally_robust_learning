@@ -23,19 +23,19 @@ from mujoco_playground._src import mjx_env
 from ml_collections import config_dict
 
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.dm_control_suite import acrobot
-from mujoco_playground._src.dm_control_suite import ball_in_cup
-from mujoco_playground._src.dm_control_suite import cartpole
-from mujoco_playground._src.dm_control_suite import cheetah
-from mujoco_playground._src.dm_control_suite import finger
-from mujoco_playground._src.dm_control_suite import fish
-from mujoco_playground._src.dm_control_suite import hopper
-from mujoco_playground._src.dm_control_suite import humanoid
-from mujoco_playground._src.dm_control_suite import pendulum
-from mujoco_playground._src.dm_control_suite import point_mass
-from mujoco_playground._src.dm_control_suite import reacher
-from mujoco_playground._src.dm_control_suite import swimmer
-from mujoco_playground._src.dm_control_suite import walker
+# from mujoco_playground._src.dm_control_suite import acrobot
+# from mujoco_playground._src.dm_control_suite import ball_in_cup
+from custom_envs.dm_control_suite import cartpole
+from custom_envs.dm_control_suite import cheetah
+# from mujoco_playground._src.dm_control_suite import finger
+# from mujoco_playground._src.dm_control_suite import fish
+from custom_envs.dm_control_suite import hopper
+# from mujoco_playground._src.dm_control_suite import humanoid
+from custom_envs.dm_control_suite import pendulum
+# from mujoco_playground._src.dm_control_suite import point_mass
+# from mujoco_playground._src.dm_control_suite import reacher
+# from mujoco_playground._src.dm_control_suite import swimmer
+from custom_envs.dm_control_suite import walker
 
 _envs = {
     # "AcrobotSwingup": partial(acrobot.Balance, sparse=False),

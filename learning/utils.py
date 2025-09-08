@@ -18,11 +18,6 @@ def save_configs_to_wandb_and_local(cfg, work_dir):
     # Save config.yaml locally and to wandb
     _save_config_yaml(config_yaml_path, cfg_dir, cfg.use_wandb)
     
-    # Save shift_dynamics config locally and to wandb
-    if cfg.shift_dynamics:
-        _save_shift_dynamics_config(cfg, cfg_dir)
-
-
 def _save_config_yaml(config_yaml_path, cfg_dir, use_wandb):
     """Save config.yaml to local directory and wandb."""
     if os.path.exists(config_yaml_path):

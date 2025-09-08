@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 import jax
 import ml_collections
 from mujoco import mjx
-import dm_control_suite
+import custom_envs.dm_control_suite as dm_control_suite
 # from mujoco_playground._src import locomotion
 # from mujoco_playground._src import manipulation
 from mujoco_playground._src import mjx_env

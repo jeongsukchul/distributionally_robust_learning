@@ -130,7 +130,7 @@ def brax_sac_config(env_name: str) -> config_dict.ConfigDict:
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
     rl_config.num_timesteps = 30_000_000
-  if env_name == "CheetahRun":
+  if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup"):
     rl_config.network_factory = config_dict.create(
       q_network_layer_norm=True,
       policy_obs_key="state",
@@ -289,11 +289,11 @@ def brax_flowsac_config(env_name: str) -> config_dict.ConfigDict:
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
     rl_config.num_timesteps = 30_000_000
-  if env_name == "CheetahRun":
+  if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup"):
     rl_config.network_factory = config_dict.create(
-        q_network_layer_norm=True,
-        policy_obs_key="state",
-        value_obs_key="privileged_state",
+      q_network_layer_norm=True,
+      policy_obs_key="state",
+      value_obs_key="privileged_state",
     )
   return rl_config
 

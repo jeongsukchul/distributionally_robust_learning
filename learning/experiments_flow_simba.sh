@@ -1,16 +1,16 @@
 gpu_id=$1 
 wandb_project="flow-simba"
 seed=$2
-use_wandb=true
+use_wandb=false
 dr_flow=false
 dr_train_ratio=0.9
 task="CheetahRun"
-# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" simba=true wandb_project=$wandb_project asymmetric_critic=false task=$task seed=$seed use_wandb=$use_wandb
-# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" simba=true wandb_project=$wandb_project asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
 CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" randomization=false eval_randomization=false\
   simba=true wandb_project=$wandb_project asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
-# CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" randomization=false eval_randomization=false\
-#   simba=false wandb_project=$wandb_project asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
+CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" randomization=false eval_randomization=false\
+  simba=false wandb_project=$wandb_project asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
+CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" simba=true wandb_project=$wandb_project asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
+CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" simba=true wandb_project=$wandb_project asymmetric_critic=false task=$task seed=$seed use_wandb=$use_wandb
   
 for flow_lr in 1e-5 5e-5 #1e-4 5e-4 1e-3 5e-3 1e-2
 do

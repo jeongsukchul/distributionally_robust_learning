@@ -140,8 +140,7 @@ class SimBaBlock(nn.Module):
         if self.layer_norm:
           x = nn.LayerNorm()(x)
       x = nn.Dense(self.layer_sizes[-1], kernel_init=orthogonal_init(1))(x),
-
-      return x
+      return x[0]
 
 class SNMLP(linen.Module):
   """MLP module with Spectral Normalization."""

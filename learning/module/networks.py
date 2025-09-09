@@ -126,8 +126,7 @@ class ResidualBlock(nn.Module):
         return res + x
 class SimBaBlock(nn.Module):
   """SimBa module."""
-  hidden_dim: int
-  num_blocks: int
+  layer_sizes: Sequence[int]
   activation: ActivationFn = linen.relu
   kernel_init = orthogonal_init(1),
   layer_norm : bool = True
@@ -136,8 +135,8 @@ class SimBaBlock(nn.Module):
       x = nn.Dense(
           self.hidden_dim, kernel_init=orthogonal_init(1), 
       )(x)
-      for _ in range(self.num_blocks):
-        x = ResidualBlock(self.hidden_dim, activation=self.activation)(x)
+      for dim in range(self.layer_sizes):
+        x = ResidualBlock(dim, activation=self.activation)(x)
       if self.layer_norm:
         x = nn.LayerNorm()(x)
 
@@ -265,32 +264,18 @@ def make_simba_policy_network(
     param_size: int,
     obs_size: types.ObservationSize,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-    # hidden_layer_sizes: Sequence[int] = (256, 256),
-    hidden_dim : int = 256,
-    num_blocks : int = 3,
+    hidden_layer_sizes: Sequence[int] = (256, 256),
     activation: ActivationFn = linen.relu,
     kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
     layer_norm: bool = False,
     obs_key: str = 'state',
 ) -> FeedForwardNetwork:
   """Creates a policy network."""
-  class PolicyModule(linen.Module):
-    """Policy Module."""
-
-    @linen.compact
-    def __call__(self, obs: jnp.ndarray):
-      p1 = SimBaBlock(
-        # layer_sizes=list(hidden_layer_sizes) + [param_size],
-        hidden_dim=hidden_dim,
-        num_blocks=num_blocks,
+  policy_module = SimBaBlock(
+        layer_sizes=list(hidden_layer_sizes) + [param_size],
         activation=activation,
-        # kernel_init=kernel_init,
         layer_norm=layer_norm,
       )
-      return nn.Dense(param_size, kernel_init=orthogonal_init(1.))(p1(obs)) 
-
-  policy_module = PolicyModule()
-
   def apply(processor_params, policy_params, obs):
     if isinstance(obs, Mapping):
       obs = preprocess_observations_fn(
@@ -310,7 +295,7 @@ def make_policy_network(
     param_size: int,
     obs_size: types.ObservationSize,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-    hidden_layer_sizes: Sequence[int] = (256, 256),
+    hidden_layer_sizes: Sequence[int] = (128, 128),
     activation: ActivationFn = linen.relu,
     kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
     layer_norm: bool = False,
@@ -373,9 +358,7 @@ def make_simba_q_network(
     obs_size: types.ObservationSize,
     action_size: int,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-    # hidden_layer_sizes: Sequence[int] = (256, 256),
-    hidden_dim : int = 256,
-    num_blocks : int = 3,
+    hidden_layer_sizes: Sequence[int] = (512, 512),
     activation: ActivationFn = linen.relu,
     n_critics: int = 2,
     layer_norm: bool = False,
@@ -395,10 +378,8 @@ def make_simba_q_network(
       res = []
       for _ in range(self.n_critics):
         q = SimBaBlock(
-            hidden_dim=hidden_dim,
-            num_blocks=num_blocks,
+            layer_sizes=list(hidden_layer_sizes) + [1],
             activation=activation,
-            # kernel_init=kerneL_init,
             layer_norm=layer_norm,
         )(hidden)
         res.append(q)

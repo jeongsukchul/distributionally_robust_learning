@@ -76,4 +76,4 @@ dr_flow : false
 dr_train_ratio : 0.9
 
 #simba
-simba : true
+simba : false

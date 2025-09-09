@@ -15,6 +15,7 @@
 """Cheetah environment."""
 
 import functools
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import jax
@@ -28,7 +29,8 @@ from mujoco_playground._src import reward
 from mujoco_playground._src.dm_control_suite import common
 from omegaconf import OmegaConf
 
-_XML_PATH = mjx_env.ROOT_PATH / "dm_control_suite" / "xmls" / "cheetah.xml"
+ROOT_PATH = Path(__file__).parent
+_XML_PATH = ROOT_PATH / "xmls" / "cheetah.xml"
 # Running speed above which reward is 1.
 _RUN_SPEED = 10
 

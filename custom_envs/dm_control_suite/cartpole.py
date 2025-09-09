@@ -14,6 +14,7 @@
 # ==============================================================================
 """Cartpole environment."""
 
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 import warnings
 
@@ -28,7 +29,9 @@ from mujoco_playground._src import mjx_env
 from mujoco_playground._src import reward
 from mujoco_playground._src.dm_control_suite import common
 import functools
-_XML_PATH = mjx_env.ROOT_PATH / "dm_control_suite" / "xmls" / "cartpole.xml"
+# _XML_PATH = mjx_env.ROOT_PATH / "dm_control_suite" / "xmls" / "cartpole.xml"
+ROOT_PATH = Path(__file__).parent
+_XML_PATH = ROOT_PATH / "xmls" / "cartpole.xml"
 
 FLOOR_GEOM_ID = 0
 POLE_BODY_ID = 2

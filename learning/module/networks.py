@@ -133,12 +133,13 @@ class SimBaBlock(nn.Module):
   @nn.compact
   def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
       x = nn.Dense(
-          self.hidden_dim, kernel_init=orthogonal_init(1), 
+          self.layer_sizes[0], kernel_init=orthogonal_init(1), 
       )(x)
-      for dim in range(self.layer_sizes):
+      for dim in self.layer_sizes[1:-1]:
         x = ResidualBlock(dim, activation=self.activation)(x)
-      if self.layer_norm:
-        x = nn.LayerNorm()(x)
+        if self.layer_norm:
+          x = nn.LayerNorm()(x)
+      x = nn.Dense(self.layer_sizes[-1], kernel_init=orthogonal_init(1))(x),
 
       return x
 

@@ -1,5 +1,5 @@
 gpu_id=$1 
-wandb_project="flow-5"
+wandb_project="flow-nokl"
 seed=$2
 use_wandb=true
 dr_flow=false

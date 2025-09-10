@@ -222,8 +222,9 @@ def make_losses(
     # Calculate adversarial next V value
     next_v_adv = next_q_adv - alpha * next_log_prob
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_v_adv.mean())) * next_v_adv
-    value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
-    return lmbda_params* value_loss + kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
+    # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
+    value_loss = (data_log_prob * normalized_next_v_adv).mean()
+    return lmbda_params* value_loss + 0*kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
   def flow_dr_loss(
       flow_params: Params,
       target_flow_params: Params,
@@ -297,7 +298,7 @@ def make_losses(
     # Calculate adversarial next V value
     next_v_adv = next_q_adv - alpha * next_log_prob
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_v_adv.mean())) * next_v_adv
-    value_loss = (jnp.exp(data_log_prob) * normalized_next_v_adv).mean()
+    value_loss = (data_log_prob * normalized_next_v_adv).mean()
     return lmbda_params* value_loss +  kl_loss + proximal_loss, (next_v_adv, value_loss, kl_loss)
 #   def flow_dr_loss(
 #       flow_params: Params,

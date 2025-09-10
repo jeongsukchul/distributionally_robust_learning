@@ -13,6 +13,7 @@ eval_pi: true
 eval_value: true # evaluate value function approximation
 eval_freq: 50000
 
+eval_with_training_env : false #added
 #policy
 policy : wdsac
 asymmetric_critic: false

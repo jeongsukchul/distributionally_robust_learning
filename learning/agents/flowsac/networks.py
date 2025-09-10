@@ -50,7 +50,6 @@ def make_inference_fn(flowsac_networks: FLOWSACNetworks):
         observations: types.Observation, key_sample: PRNGKey
     ) -> Tuple[types.Action, types.Extra]:
       logits = flowsac_networks.policy_network.apply(*params, observations)
-      print("logits", logits.shape)
       if deterministic:
         return flowsac_networks.parametric_action_distribution.mode(logits), {}
       return (

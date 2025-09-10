@@ -48,7 +48,7 @@ import optax
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
-from agents.flowsac.adv_wrapper import wrap_for_adv_training
+from agents.flowsac.adv_wrapper import wrap_for_adv_training, AdvEvaluator
 # from module.distribution import render_flow_all_dims_1d_linspace, check_mass
 from module.simple_flow import render_flow_pdf_1d_subplots
 import distrax
@@ -187,8 +187,9 @@ def train(
     lmbda_lr : float = 3e-4,                #added
     init_lmbda : float = 0.,                #added
     dr_flow : bool= False,                  #added
-    dr_trane_ratio : float= 0.9,          #added
+    dr_train_ratio : float= 0.9,          #added
     use_wandb : bool= False, #added
+    eval_with_training_env : bool = False, #added
     deterministic_eval: bool = False, 
     network_factory: types.NetworkFactory[
         flowsac_networks.FLOWSACNetworks
@@ -244,14 +245,14 @@ def train(
     
   rng = jax.random.PRNGKey(seed)
   rng, key = jax.random.split(rng)
-  v_randomization_fn=functools.partial(randomization_fn, 
-      rng=jax.random.split(key, num_envs // jax.process_count()//local_devices_to_use), 
-  )
+  # v_randomization_fn=functools.partial(randomization_fn, 
+  #     rng=jax.random.split(key, num_envs // jax.process_count()//local_devices_to_use), 
+  # )
   env = wrap_for_adv_training(
       env,
       episode_length=episode_length,
       action_repeat=action_repeat,
-      randomization_fn=v_randomization_fn,
+      randomization_fn=randomization_fn,
   )
   
   obs_size = env.observation_size
@@ -493,6 +494,7 @@ def train(
       ReplayBufferState,
   ]:
     policy = make_policy((normalizer_params, policy_params))
+    print("dynamics_params in get_experience", dynamics_params)
     next_state, transitions = adv_step(
         env, env_state, dynamics_params, policy, key, extra_fields=('truncation',)
     )
@@ -711,24 +713,41 @@ def train(
       jax.random.split(rb_key, local_devices_to_use)
   ) 
   # buffer_state = replay_buffer.init(rb_key)
-  if not eval_env:
-    eval_env = environment
-
-  eval_env = wrap_eval_env_fn(
+  eval_env = environment
+  if eval_with_training_env:
+    eval_env = wrap_for_adv_training(
       eval_env,
       episode_length=episode_length,
       action_repeat=action_repeat,
-      randomization_fn=v_randomization_fn,
-  )  # pytype: disable=wrong-keyword-args
+      randomization_fn=randomization_fn,
+    )
+    evaluator = AdvEvaluator(
+        eval_env,
+        functools.partial(make_policy, deterministic=deterministic_eval),
+        num_eval_envs=num_eval_envs,
+        episode_length=episode_length,
+        action_repeat=action_repeat,
+        key=eval_key,
+    )
+  else:
+    v_randomization_fn=functools.partial(randomization_fn, 
+      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), params=env.dr_range
+    )
+    eval_env = wrap_eval_env_fn(
+        eval_env,
+        episode_length=episode_length,
+        action_repeat=action_repeat,
+        randomization_fn=v_randomization_fn,
+    )  # pytype: disable=wrong-keyword-args
 
-  evaluator = acting.Evaluator(
-      eval_env,
-      functools.partial(make_policy, deterministic=deterministic_eval),
-      num_eval_envs=num_eval_envs,
-      episode_length=episode_length,
-      action_repeat=action_repeat,
-      key=eval_key,
-  )
+    evaluator = acting.Evaluator(
+        eval_env,
+        functools.partial(make_policy, deterministic=deterministic_eval),
+        num_eval_envs=num_eval_envs,
+        episode_length=episode_length,
+        action_repeat=action_repeat,
+        key=eval_key,
+    )
   ed = time.time()
   print('setup time', ed-st)
   # Run initial eval
@@ -821,24 +840,25 @@ def train(
               training_step=0,
               use_wandb=use_wandb,
         )
-  pretrain_key, local_key = jax.random.split(local_key)
-  pretrain_keys = jax.random.split(pretrain_key, local_devices_to_use)
-  training_state, pretrain_metric = flow_pretrain(
-      training_state, pretrain_keys
-  )
+  if dr_flow:
+    pretrain_key, local_key = jax.random.split(local_key)
+    pretrain_keys = jax.random.split(pretrain_key, local_devices_to_use)
+    training_state, pretrain_metric = flow_pretrain(
+        training_state, pretrain_keys
+    )
 
-  if process_id==0:
-    fig1 = render_flow_pdf_1d_subplots(
-            flowsac_network.flow_network,
-              _unpmap(training_state.flow_params),
-              ndim=dr_range_low.shape[0],
-              low=dr_range_low,
-              high=dr_range_high,
-              training_step=11,
-              use_wandb=use_wandb,
-        )
-  pretrain_time = time.time() - t
-  print("flow pretrain time", pretrain_time)
+    if process_id==0:
+      fig1 = render_flow_pdf_1d_subplots(
+              flowsac_network.flow_network,
+                _unpmap(training_state.flow_params),
+                ndim=dr_range_low.shape[0],
+                low=dr_range_low,
+                high=dr_range_high,
+                training_step=11,
+                use_wandb=use_wandb,
+          )
+    pretrain_time = time.time() - t
+    print("flow pretrain time", pretrain_time)
   t2 = time.time()
   prefill_key, local_key = jax.random.split(local_key)
   prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
@@ -859,17 +879,21 @@ def train(
   for _ in range(num_evals_after_init):
     logging.info('step %s', current_step)
 
+
     # Optimization
     epoch_key, local_key = jax.random.split(local_key)
     epoch_keys = jax.random.split(epoch_key, local_devices_to_use)
+    training_metrics = {}
     (training_state, env_state, buffer_state, training_metrics) = (
         training_epoch_with_timing(
             training_state, env_state, buffer_state, epoch_keys
         )
     )
+    
     current_step = int(_unpmap(training_state.env_steps))
     # current_step = int(training_state.env_steps)
     # Eval and logging
+    
     if process_id == 0:
       if checkpoint_logdir:
           params = _unpmap(
@@ -898,15 +922,41 @@ def train(
       # print("check mass : ", check_mass(flowsac_network.flow_network, _unpmap(training_state.flow_params), \
       #                                   dr_range_low, dr_range_high, training_step=current_step))
 
-    # Run evals.
-    metrics = evaluator.run_evaluation(
-      _unpmap(
-            (training_state.normalizer_params, training_state.policy_params),
-      ),
-        training_metrics,
-    )
-    logging.info(metrics)
-    progress_fn(current_step, metrics)
+      # Run evals.
+      if eval_with_training_env:
+        param_key, local_key = jax.random.split(local_key)
+        dynamics_params, _ = flowsac_network.flow_network.apply(
+          _unpmap(training_state.flow_params),
+          low=dr_range_low,
+          high=dr_range_high,
+          mode='sample',
+          rng=param_key,
+          n_samples=num_eval_envs,
+        )
+        dynamics_params = jax.lax.stop_gradient(dynamics_params)
+        local_key, test_key = jax.random.split(local_key)
+        env_keys = jax.random.split(test_key, num_eval_envs)
+        env_keys = jnp.reshape(
+            env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
+        )
+        jax.pmap(env.reset)(env_keys)
+        # jax.pmap(eval_env.reset)(env_keys)
+        metrics = evaluator.run_evaluation(
+          _unpmap(
+                (training_state.normalizer_params, training_state.policy_params),
+          ),
+            dynamics_params,
+            training_metrics,
+        )
+      else:
+        metrics = evaluator.run_evaluation(
+          _unpmap(
+                (training_state.normalizer_params, training_state.policy_params)
+          ),
+            training_metrics,
+        )
+      logging.info(metrics)
+      progress_fn(current_step, metrics)
 
   total_steps = current_step
   if not total_steps >= num_timesteps:

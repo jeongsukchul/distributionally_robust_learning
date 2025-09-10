@@ -302,7 +302,7 @@ def render_flow_pdf_1d_subplots(
     rng=None, resolution=512, other_samples=512,
     normalize=True, ncols=4,
     suptitle="Flow PDF — 1D marginals via MC",
-    use_wandb=None, training_step=0,
+    use_wandb=None, training_step=0, 
 ):
     """
     Faster version:

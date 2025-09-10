@@ -177,9 +177,9 @@ class Run(mjx_env.MjxEnv):
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1
 
-def domain_randomize(model: mjx.Model, params, rng:jax.Array=None, deterministic=False):
+def domain_randomize(model: mjx.Model, params, rng:jax.Array=None):
   deterministic_cfg = None
-  if not deterministic:
+  if rng is not None:
     dr_low, dr_high = params
     dist = [functools.partial(jax.random.uniform,minval=dr_low[i], maxval=dr_high[i]) for i in range(len(dr_low))] 
 
@@ -245,7 +245,7 @@ def domain_randomize(model: mjx.Model, params, rng:jax.Array=None, deterministic
       dof_frictionloss,
     )
   
-  if deterministic:
+  if rng is None:
     (geom_friction, body_ipos, body_mass, dof_frictionloss) = shift_dynamics(params)
   else:
     (

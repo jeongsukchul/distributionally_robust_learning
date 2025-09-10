@@ -145,6 +145,7 @@ def progress_fn(num_steps, metrics, use_wandb=True):
 
 
 def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
+    randomization_fn = functools.partial(randomization_fn, params=env.dr_range)
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
@@ -200,6 +201,7 @@ def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
     return make_inference_fn, params, metrics
 
 def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
+    randomization_fn = functools.partial(randomization_fn, params=env.dr_range)
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         sac_params = brax_sac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
@@ -300,6 +302,7 @@ def train_rambo(cfg:dict, randomization_fn, env, eval_env=None):
     return make_inference_fn, params, metrics
 
 def train_wdsac(cfg:dict, randomization_fn, env, eval_env=None):
+    randomization_fn = functools.partial(randomization_fn, params=env.dr_range)
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         wdsac_params = brax_wdsac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
@@ -381,14 +384,15 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
         )
         
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
-    train_fn = functools.partial(
+    train_fn = functools.partial(  
         flowsac.train, **dict(flowsac_training_params),
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
         use_wandb=cfg.use_wandb,
         dr_flow = cfg.dr_flow,
-        dr_trane_ratio = cfg.dr_train_ratio,
+        dr_train_ratio = cfg.dr_train_ratio,
+        eval_with_training_env = cfg.eval_with_training_env,
     )
 
     make_inference_fn, params, metrics = train_fn(        
@@ -416,12 +420,11 @@ def train(cfg: dict):
 
     if cfg.randomization:
         randomizer = registry.get_domain_randomizer(cfg.task)
-        randomizer = functools.partial(randomizer, params=env.dr_range)
         randomization_fn = randomizer
     else:
         randomization_fn = None 
     if cfg.eval_randomization:
-        eval_randomization_fn = randomizer
+        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range)
     else:
         eval_randomization_fn = None
 

@@ -1,7 +1,7 @@
 gpu_id=$1 
 wandb_project="flow-simba"
 seed=$2
-use_wandb=false
+use_wandb=true
 dr_flow=false
 dr_train_ratio=0.9
 task="CheetahRun"

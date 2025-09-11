@@ -301,8 +301,11 @@ def train(
       next_observation=dummy_obs,
       extras={'state_extras': {'truncation': 0.}, 'policy_extras': {}},
   )
+  print("max replay size", max_replay_size // device_count)
+  print("N * num_envs", env.episode_length * num_envs // device_count)
+  max_replay_size = max(max_replay_size // device_count, env.episode_length * num_envs // device_count)
   replay_buffer = DynamicBatchQueue(
-      max_replay_size=max_replay_size // device_count,
+      max_replay_size=max_replay_size,
       dummy_data_sample=dummy_transition,
       sample_batch_size=batch_size * grad_updates_per_step // device_count,
   )

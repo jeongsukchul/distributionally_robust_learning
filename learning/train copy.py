@@ -207,11 +207,10 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         sac_params = locomotion_sac_config(cfg.task)
     sac_training_params = dict(sac_params)
     if cfg.randomization:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}.dr_train_ratio={cfg.dr_train_ratio}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     wandb_name += f"simba={cfg.simba}"
-    wandb_name 
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -253,6 +252,103 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         eval_env = eval_env,
         wrap_env_fn=wrap_fn,
         wrap_eval_env_fn=wrap_eval_fn,
+    )
+    return make_inference_fn, params, metrics
+
+def train_rambo(cfg:dict, randomization_fn, env, eval_env=None):
+    times = [datetime.now()]
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        rambo_params = brax_rambo_config(cfg.task)
+    # elif cfg.task in mujoco_playground._src.locomotion._envs:
+    #     sac_params = locomotion_params.brax_sac_config(cfg.task)
+
+    for param in rambo_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            rambo_params[param] = getattr(cfg, param)
+    if cfg.use_wandb:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.({rambo_params.rollout_length},\
+              {rambo_params.adv_weight}, {rambo_params.real_ratio})_{rambo_params.batch_size}_{rambo_params.rollout_batch_size}"
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    rambo_training_params = dict(rambo_params)
+    network_factory = rambo_networks.make_rambo_networks
+    if "network_factory" in rambo_params:
+
+        del rambo_training_params["network_factory"]
+        network_factory = functools.partial(
+            rambo_networks.make_rambo_networks,
+            **rambo_params.network_factory
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        rambo.train, **dict(rambo_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrapper.wrap_for_brax_training,
+    )
+    return make_inference_fn, params, metrics
+
+def train_wdsac(cfg:dict, randomization_fn, env, eval_env=None):
+    randomization_fn = functools.partial(randomization_fn, params=env.dr_range)
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        wdsac_params = brax_wdsac_config(cfg.task)
+    elif cfg.task in mujoco_playground._src.locomotion._envs:
+        wdsac_params = locomotion_params.brax_sac_config(cfg.task)
+    for param in wdsac_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            wdsac_params[param] = getattr(cfg, param)
+    if cfg.randomization:
+        wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.delta={wdsac_params.delta}\
+            .nominals={wdsac_params.n_nominals}.single_lambda={wdsac_params.single_lambda}.asym={cfg.asymmetric_critic}\
+                distance_type={wdsac_params.distance_type}.length={wdsac_params.lambda_update_steps}\
+                    .lmbda_lr={wdsac_params.lmbda_lr}.init_lmbda={wdsac_params.init_lmbda}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    network_factory = wdsac_networks.make_wdsac_networks
+    wdsac_training_params = dict(wdsac_params)
+    if "network_factory" in wdsac_params:
+        if not cfg.asymmetric_critic:
+            wdsac_params.network_factory.value_obs_key = "state"
+        del wdsac_training_params["network_factory"]
+        network_factory = functools.partial(
+            wdsac_networks.make_wdsac_networks,
+            **wdsac_params.network_factory
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        wdsac.train, **dict(wdsac_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrapper.wrap_for_brax_training,
     )
     return make_inference_fn, params, metrics
 
@@ -338,6 +434,10 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, eval_randomization_fn, env)
     elif cfg.policy == "ppo":
         make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, eval_randomization_fn, env)
+    elif cfg.policy == "rambo":
+        make_inference_fn, params, metrics = train_rambo(cfg, randomization_fn, env)
+    elif cfg.policy == "wdsac":
+        make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env)
     elif cfg.policy == "flowsac":
         make_inference_fn, params, metrics = train_flowsac(cfg, randomization_fn, env)
     else:

@@ -149,6 +149,7 @@ def train(
     ] = None,
     checkpoint_logdir: Optional[str] = None,
     restore_checkpoint_path: Optional[str] = None,
+    dr_train_ratio = 1.0,
 ):
   """SAC training."""
   process_id = jax.process_index()
@@ -204,20 +205,25 @@ def train(
 
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
-    v_randomization_fn = None
+    
+    dr_low, dr_high = env.dr_range
+    dr_mid = (dr_low + dr_high) / 2.
+    dr_scale = (dr_high - dr_low) / 2.
+    training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
+    training_randomization_fn = None
     if randomization_fn is not None:
-      v_randomization_fn = functools.partial(
+      training_randomization_fn = functools.partial(
           randomization_fn,
           rng=jax.random.split(
               key, num_envs // jax.process_count() // local_devices_to_use
-          ),
+          ),params=training_dr_range
       )
 
     env = wrap_for_training(
         env,
         episode_length=episode_length,
         action_repeat=action_repeat,
-        randomization_fn=v_randomization_fn,
+        randomization_fn=training_randomization_fn,
     )  # pytype: disable=wrong-keyword-args
   obs_shape = env.observation_size
 #   if isinstance(obs_size, Dict):
@@ -549,7 +555,7 @@ def train(
   if wrap_env:
     if eval_randomization_fn is not None:
       v_randomization_fn = functools.partial(
-          eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs)
+          eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), params=env.dr_range
       )
 
     eval_env = wrap_for_eval(

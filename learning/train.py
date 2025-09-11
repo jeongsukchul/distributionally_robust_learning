@@ -28,6 +28,8 @@ from agents.ppo import networks as ppo_networks
 from agents.ppo import train as ppo
 from agents.sac import networks as sac_networks
 from agents.sac import train as sac
+from agents.td3 import networks as td3_networks
+from agents.td3 import train as td3
 from agents.rambo import networks as rambo_networks
 from agents.rambo import train as rambo
 from agents.wdsac import train as wdsac
@@ -49,12 +51,13 @@ import numpy as np
 from orbax import checkpoint as ocp
 import wandb
 from mujoco_playground.config import locomotion_params
-from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_flowsac_config
-from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config
+from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_flowsac_config, brax_td3_config
+from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
 import mujoco_playground
 from mujoco_playground import wrapper
 import hydra
 from custom_envs import registry
+from brax import envs
 from helper import parse_cfg
 from helper import Logger
 from helper import make_dir
@@ -145,7 +148,7 @@ def progress_fn(num_steps, metrics, use_wandb=True):
 
 
 def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
-    randomization_fn = functools.partial(randomization_fn, params=env.dr_range)
+    randomization_fn = functools.partial(randomization_fn, params= env.dr_range if env.dr_range is not None else None)
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
@@ -255,7 +258,57 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
+def train_td3(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
+    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+        td3_params = brax_td3_config(cfg.task)
+    elif cfg.task in mujoco_playground._src.locomotion._envs:
+        td3_params = locomotion_td3_config(cfg.task)
+    td3_training_params = dict(td3_params)
+    if cfg.randomization:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}.dr_train_ratio={cfg.dr_train_ratio}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
 
+    network_factory = td3_networks.make_td3_networks
+    if "network_factory" in td3_params:
+        del td3_training_params["network_factory"]
+        if not cfg.asymmetric_critic:
+            td3_params.network_factory.value_obs_key = "state"
+        network_factory = functools.partial(
+            td3_networks.make_td3_networks,
+            **td3_params.network_factory
+        )
+    
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        td3.train, **dict(td3_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        eval_randomization_fn=eval_randomization_fn,
+        dr_train_ratio = cfg.dr_train_ratio,
+    )
+    if cfg.custom_wrapper and cfg.randomization:
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=td3_params.num_envs)
+    else:
+        wrap_fn = wrap_for_brax_training
+    wrap_eval_fn = wrap_for_brax_training
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_env_fn=wrap_fn,
+        wrap_eval_env_fn=wrap_eval_fn,
+    )
+    return make_inference_fn, params, metrics
 def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         flowsac_params = brax_flowsac_config(cfg.task)
@@ -266,7 +319,8 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
             flowsac_params[param] = getattr(cfg, param)
 
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
-                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}"
+                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
+                    .eval_param={cfg.eval_with_training_env}"
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -328,7 +382,7 @@ def train(cfg: dict):
     else:
         randomization_fn = None 
     if cfg.eval_randomization:
-        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range)
+        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range if env.dr_range is not None else None)
     else:
         eval_randomization_fn = None
 
@@ -336,6 +390,8 @@ def train(cfg: dict):
     print("eval_randomization_fn", eval_randomization_fn)
     if cfg.policy == "sac":
         make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, eval_randomization_fn, env)
+    if cfg.policy == "td3":
+        make_inference_fn, params, metrics = train_td3(cfg, randomization_fn, eval_randomization_fn, env)
     elif cfg.policy == "ppo":
         make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, eval_randomization_fn, env)
     elif cfg.policy == "flowsac":
@@ -358,7 +414,7 @@ def train(cfg: dict):
     if cfg.eval_randomization:
         eval_rng, rng = jax.random.split(rng)
         randomizer_eval = registry.get_domain_randomizer_eval(cfg.task)
-        randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng, params=env.dr_range)
+        randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng, params=env.dr_range if env.dr_range is not None else None)
         eval_env = BraxDomainRandomizationWrapper(
             registry.load(cfg.task),
             randomization_fn=randomizer_eval,

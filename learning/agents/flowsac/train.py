@@ -716,7 +716,8 @@ def train(
       jax.random.split(rb_key, local_devices_to_use)
   ) 
   # buffer_state = replay_buffer.init(rb_key)
-  eval_env = environment
+  import copy
+  eval_env = copy.deepcopy(environment)
   if eval_with_training_env:
     eval_env = wrap_for_adv_training(
       eval_env,
@@ -942,7 +943,6 @@ def train(
         env_keys = jnp.reshape(
             env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
         )
-        jax.pmap(env.reset)(env_keys)
         # jax.pmap(eval_env.reset)(env_keys)
         metrics = evaluator.run_evaluation(
           _unpmap(

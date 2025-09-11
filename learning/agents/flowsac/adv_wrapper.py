@@ -8,6 +8,17 @@ from brax.base import System
 import numpy as np
 import functools
 import time
+
+class TransitionwithParams(NamedTuple):
+  """Transition with additional dynamics parameters."""
+  observation: jax.Array
+  dynamics_params: jax.Array
+  action: jax.Array
+  reward: jax.Array
+  discount: jax.Array
+  next_observation: jax.Array
+  extras: Dict[str, Any] = {}
+
 def wrap_for_adv_training(
     env: mjx_env.MjxEnv,
     episode_length: int = 1000,

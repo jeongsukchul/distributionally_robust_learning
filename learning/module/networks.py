@@ -323,6 +323,45 @@ def make_policy_network(
   return FeedForwardNetwork(
       init=lambda key: policy_module.init(key, dummy_obs), apply=apply
   )
+def make_deterministic_policy_network(
+    action_size: int,
+    obs_size: types.ObservationSize,
+    preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
+    hidden_layer_sizes: Sequence[int] = (512, 256, 128),
+    activation: ActivationFn = linen.relu,
+    kernel_init: Initializer = jax.nn.initializers.lecun_uniform(),
+    layer_norm: bool = False,
+    obs_key: str = 'state',
+) -> FeedForwardNetwork:
+  """Creates a policy network."""
+  class ActorNet(nn.Module):
+    @nn.compact
+    def __call__(self, x):
+      x = MLP(
+        layer_sizes=list(hidden_layer_sizes) + [action_size],
+        activation=activation,
+        kernel_init=kernel_init,
+        layer_norm=layer_norm,
+      ) (x)
+    
+      return jnp.tanh(x)
+
+
+  policy_module = ActorNet()
+  def apply(processor_params, policy_params, obs):
+    if isinstance(obs, Mapping):
+      obs = preprocess_observations_fn(
+          obs[obs_key], normalizer_select(processor_params, obs_key)
+      )
+    else:
+      obs = preprocess_observations_fn(obs, processor_params)
+    return policy_module.apply(policy_params, obs)
+
+  obs_size = _get_obs_state_size(obs_size, obs_key)
+  dummy_obs = jnp.zeros((1, obs_size))
+  return FeedForwardNetwork(
+      init=lambda key: policy_module.init(key, dummy_obs), apply=apply
+  )
 
 
 def make_value_network(

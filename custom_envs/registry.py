@@ -19,6 +19,7 @@ import jax
 import ml_collections
 from mujoco import mjx
 import custom_envs.dm_control_suite as dm_control_suite
+import custom_envs.locomotion as locomotion
 # from mujoco_playground._src import locomotion
 # from mujoco_playground._src import manipulation
 from mujoco_playground._src import mjx_env
@@ -37,8 +38,8 @@ ALL_ENVS = (
 def get_default_config(env_name: str):
   # if env_name in manipulation.ALL_ENVS:
   #   return manipulation.get_default_config(env_name)
-  # elif env_name in locomotion.ALL_ENVS:
-  #   return locomotion.get_default_config(env_name)
+  if env_name in locomotion.ALL_ENVS:
+    return locomotion.get_default_config(env_name)
   if env_name in dm_control_suite.ALL_ENVS:
     return dm_control_suite.get_default_config(env_name)
 
@@ -56,7 +57,8 @@ def load(
   #   return locomotion.load(env_name, config, config_overrides)
   if env_name in dm_control_suite.ALL_ENVS:
     return dm_control_suite.load(env_name, config, config_overrides)
-
+  if env_name in locomotion.ALL_ENVS:
+    return locomotion.load(env_name, config, config_overrides)
   raise ValueError(f"Env '{env_name}' not found. Available envs: {ALL_ENVS}")
 
 
@@ -66,8 +68,8 @@ def get_domain_randomizer(env_name: str) -> Optional[DomainRandomizer]:
   # if env_name in manipulation.ALL_ENVS:
   #   return manipulation.get_domain_randomizer(env_name)
 
-  # if env_name in locomotion.ALL_ENVS:
-  #   return locomotion.get_domain_randomizer(env_name)
+  if env_name in locomotion.ALL_ENVS:
+    return locomotion.get_domain_randomizer(env_name)
 
   return None
 
@@ -76,7 +78,7 @@ def get_domain_randomizer_eval(env_name: str) -> Optional[DomainRandomizer]:
     return dm_control_suite.get_domain_randomizer_eval(env_name)
   # if env_name in manipulation.ALL_ENVS:
   #   return manipulation.get_domain_randomizer_eval(env_name)
-  # if env_name in locomotion.ALL_ENVS:
-  #   return locomotion.get_domain_randomizer_eval(env_name)
+  if env_name in locomotion.ALL_ENVS:
+    return locomotion.get_domain_randomizer_eval(env_name)
 
   return None

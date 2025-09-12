@@ -308,6 +308,8 @@ def locomotion_td3_config(env_name: str) -> config_dict.ConfigDict:
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192, #8192,
+      std_min=0.01,
+      std_max=0.4,
       network_factory=config_dict.create(
           q_network_layer_norm=True,
           hidden_layer_sizes=(256, 256, 256, 256, 256),
@@ -320,6 +322,7 @@ def locomotion_td3_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in ("Go1JoystickFlatTerrain", "Go1JoystickRoughTerrain"):
     rl_config.num_timesteps = 20_000_000
     rl_config.num_evals = 10
+    rl_config.std_max=0.8
     rl_config.network_factory = config_dict.create(
         hidden_layer_sizes=(512, 256, 128),
         policy_obs_key="state",
@@ -329,6 +332,7 @@ def locomotion_td3_config(env_name: str) -> config_dict.ConfigDict:
   elif env_name in ("Go1Handstand", "Go1Footstand"):
     rl_config.num_timesteps = 100_000_000
     rl_config.num_evals = 10
+    rl_config.std_max=0.6
     rl_config.network_factory = config_dict.create(
         hidden_layer_sizes=(512, 256, 128),
         policy_obs_key="state",

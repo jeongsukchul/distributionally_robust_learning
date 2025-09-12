@@ -156,6 +156,8 @@ def brax_td3_config(env_name: str) -> config_dict.ConfigDict:
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192,
+      std_min=0.01,
+      std_max=0.4,
       network_factory=config_dict.create(
           q_network_layer_norm=True,
       ),
@@ -173,6 +175,7 @@ def brax_td3_config(env_name: str) -> config_dict.ConfigDict:
       or env_name
       in ("CheetahRun", "HumanoidWalk", "PendulumSwingUp", "WalkerRun")
   ):
+    std_min=0.1
     rl_config.num_timesteps = 30_000_000
   if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup"):
     rl_config.network_factory = config_dict.create(

@@ -36,7 +36,7 @@ def make_inference_fn(flowtd3_networks: FlowTd3Networks):
   """Creates params and inference function for the td3 agent."""
 
   def make_policy(
-      params: types.PolicyParams, deterministic: bool = False, std_min: float = 0.05, std_max: float = 0.8 
+      params: types.PolicyParams, deterministic: bool = False,
   ) -> types.Policy:
 
     def deterministic_policy(

@@ -627,7 +627,7 @@ def train(
     )
     evaluator = AdvEvaluator(
         eval_env,
-        functools.partial(make_policy, deterministic=deterministic_eval),
+        functools.partial(make_policy, deterministic=True),
         num_eval_envs=num_eval_envs,
         episode_length=episode_length,
         action_repeat=action_repeat,
@@ -646,7 +646,7 @@ def train(
 
     evaluator = acting.Evaluator(
         eval_env,
-        functools.partial(make_policy, deterministic=deterministic_eval),
+        functools.partial(make_policy, deterministic=True),
         num_eval_envs=num_eval_envs,
         episode_length=episode_length,
         action_repeat=action_repeat,
@@ -769,4 +769,4 @@ def train(
   pmap.assert_is_replicated(training_state)
   logging.info('total steps: %s', total_steps)
   pmap.synchronize_hosts()
-  return (make_policy, params, metrics)
+  return (functools.partial(make_policy, deterministic=True), params, metrics)

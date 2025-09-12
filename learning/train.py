@@ -50,13 +50,10 @@ from mujoco import mjx
 import numpy as np
 from orbax import checkpoint as ocp
 import wandb
-from mujoco_playground.config import locomotion_params
 from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_flowsac_config, brax_td3_config
 from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
-import mujoco_playground
-from mujoco_playground import wrapper
 import hydra
-from custom_envs import registry
+from custom_envs import registry, dm_control_suite, locomotion
 from brax import envs
 from helper import parse_cfg
 from helper import Logger
@@ -152,9 +149,9 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
         randomization_fn = functools.partial(randomization_fn, params= env.dr_range if hasattr(env,'dr_range') else None)
 
     print("training with ppo")
-    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+    if cfg.task in dm_control_suite._envs:
         ppo_params = brax_ppo_config(cfg.task)
-    elif cfg.task in mujoco_playground._src.locomotion._envs:
+    elif cfg.task in locomotion._envs:
         ppo_params = locomotion_ppo_config(cfg.task)
     if cfg.randomization:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}"
@@ -204,9 +201,9 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
     return make_inference_fn, params, metrics
 
 def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
-    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+    if cfg.task in dm_control_suite._envs:
         sac_params = brax_sac_config(cfg.task)
-    elif cfg.task in mujoco_playground._src.locomotion._envs:
+    elif cfg.task in locomotion._envs:
         sac_params = locomotion_sac_config(cfg.task)
     sac_training_params = dict(sac_params)
     if cfg.randomization:
@@ -258,9 +255,9 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
     )
     return make_inference_fn, params, metrics
 def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
-    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+    if cfg.task in dm_control_suite._envs:
         td3_params = brax_td3_config(cfg.task)
-    elif cfg.task in mujoco_playground._src.locomotion._envs:
+    elif cfg.task in locomotion._envs:
         td3_params = locomotion_td3_config(cfg.task)
     td3_training_params = dict(td3_params)
     if cfg.randomization:
@@ -308,10 +305,60 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
     )
     return make_inference_fn, params, metrics
 def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
-    if cfg.task in mujoco_playground._src.dm_control_suite._envs:
+    if cfg.task in dm_control_suite._envs:
         flowsac_params = brax_flowsac_config(cfg.task)
-    elif cfg.task in mujoco_playground._src.locomotion._envs:
+    elif cfg.task in locomotion._envs:
         flowsac_params = locomotion_params.brax_sac_config(cfg.task)
+    for param in flowsac_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            flowsac_params[param] = getattr(cfg, param)
+
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
+                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
+                    .eval_param={cfg.eval_with_training_env}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    flowsac_training_params = dict(flowsac_params)
+    if "network_factory" in flowsac_params:
+        if not cfg.asymmetric_critic:
+            flowsac_params.network_factory.value_obs_key = "state"
+        del flowsac_training_params["network_factory"]
+        network_factory = functools.partial(
+            flowsac_networks.make_flowsac_networks,
+            simba=cfg.simba,
+            **flowsac_params.network_factory,
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(  
+        flowsac.train, **dict(flowsac_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        use_wandb=cfg.use_wandb,
+        dr_flow = cfg.dr_flow,
+        dr_train_ratio = cfg.dr_train_ratio,
+        eval_with_training_env = cfg.eval_with_training_env,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+        eval_env = eval_env,
+        wrap_eval_env_fn = wrap_for_brax_training,
+    )
+    return make_inference_fn, params, metrics
+def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
+    if cfg.task in dm_control_suite._envs:
+        flowsac_params = brax_flowtd3_config(cfg.task)
+    elif cfg.task in locomotion._envs:
+        flowsac_params = brax_td3_config(cfg.task)
     for param in flowsac_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
             flowsac_params[param] = getattr(cfg, param)

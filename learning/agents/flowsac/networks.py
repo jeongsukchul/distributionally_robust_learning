@@ -27,7 +27,6 @@ from flax import linen
 import jax 
 import jax.numpy as jnp
 import dataclasses
-from module.distribution import make_flow_network, FlowRQSConfig
 from module.simple_flow import make_realnvp_flow_networks
 @flax.struct.dataclass
 class FLOWSACNetworks:

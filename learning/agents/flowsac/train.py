@@ -271,7 +271,7 @@ def train(
     ValueError("Environment does not have dr_range attribute. Please provide a valid environment with dr_range.")
   
 
-
+  normalize_fn = lambda x, y: x
   if normalize_observations:
     normalize_fn = running_statistics.normalize
   flowsac_network = network_factory(
@@ -483,7 +483,7 @@ def train(
         discount=1 - nstate.done,
         next_observation= nstate.obs,
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
-        )
+      )
 
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
@@ -717,7 +717,8 @@ def train(
       jax.random.split(rb_key, local_devices_to_use)
   ) 
   # buffer_state = replay_buffer.init(rb_key)
-  eval_env = copy.deepcopy(environment)
+  if not eval_env:
+    eval_env = copy.deepcopy(environment)
   if eval_with_training_env:
     eval_env = wrap_for_adv_training(
       eval_env,

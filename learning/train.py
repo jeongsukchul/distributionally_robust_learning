@@ -148,7 +148,7 @@ def progress_fn(num_steps, metrics, use_wandb=True):
 
 
 def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
-    randomization_fn = functools.partial(randomization_fn, params= env.dr_range if env.dr_range is not None else None)
+    randomization_fn = functools.partial(randomization_fn, params= env.dr_range if hasattr(env,'dr_range') else None)
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
@@ -382,7 +382,7 @@ def train(cfg: dict):
     else:
         randomization_fn = None 
     if cfg.eval_randomization:
-        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range if env.dr_range is not None else None)
+        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range if hasattr(env,'dr_range') else None)
     else:
         eval_randomization_fn = None
 
@@ -414,7 +414,7 @@ def train(cfg: dict):
     if cfg.eval_randomization:
         eval_rng, rng = jax.random.split(rng)
         randomizer_eval = registry.get_domain_randomizer_eval(cfg.task)
-        randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng, params=env.dr_range if env.dr_range is not None else None)
+        randomizer_eval = functools.partial(randomizer_eval, rng=eval_rng, params=env.dr_range if hasattr(env,'dr_range') else None)
         eval_env = BraxDomainRandomizationWrapper(
             registry.load(cfg.task),
             randomization_fn=randomizer_eval,
@@ -422,25 +422,30 @@ def train(cfg: dict):
     else:
         eval_env = registry.load(cfg.task)
     if cfg.save_video and cfg.use_wandb:
+        n_episodes = 10
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
         jit_reset = jax.jit(eval_env.reset)
         jit_step = jax.jit(eval_env.step)
         total_reward = 0.0
-
-        state = jit_reset(jax.random.PRNGKey(0))
-        rollout = [state]
-        for _ in range(env_cfg.episode_length):
-            act_rng, rng = jax.random.split(rng)
-            action, info = jit_inference_fn(state.obs, act_rng)
-            state = jit_step(state, action)
-            rollout.append(state)
-            total_reward += state.reward
+        rollout = []
+        rng, eval_rng = jax.random.split(rng)
+        rngs = jax.random.split(eval_rng, n_episodes)
+        for i in range(n_episodes): #10 episodes
+            state = jit_reset(rngs[i])
+            rollout = [state]
+            total_reward= 0.0
+            for _ in range(env_cfg.episode_length):
+                act_rng, rng = jax.random.split(rng)
+                action, info = jit_inference_fn(state.obs, act_rng)
+                state = jit_step(state, action)
+                rollout.append(state)
+                total_reward += state.reward
             
         frames = eval_env.render(rollout, camera=CAMERAS[cfg.task],)
         frames = np.stack(frames).transpose(0, 3, 1, 2)
         fps=1.0 / env.dt
         wandb.log({'eval_video': wandb.Video(frames, fps=fps, format='mp4')})
-        wandb.log({'final_eval_reward' : total_reward})
+        wandb.log({'final_eval_reward' : total_reward/n_episodes})
 
    
 if __name__ == "__main__":

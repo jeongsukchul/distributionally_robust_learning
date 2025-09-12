@@ -124,7 +124,7 @@ _randomizer = {
     "T1JoystickRoughTerrain": t1_randomize.domain_randomize,
 }
 
-_randomizer = {
+_randomizer_eval = {
     # "BerkeleyHumanoidJoystickFlatTerrain": (
     #     berkeley_humanoid_randomize.domain_randomize_eval
     # ),

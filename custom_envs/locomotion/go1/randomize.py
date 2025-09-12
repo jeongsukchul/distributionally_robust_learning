@@ -21,7 +21,7 @@ FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1
 
 
-def domain_randomize(model: mjx.Model, rng: jax.Array):
+def domain_randomize(model: mjx.Model, rng: jax.Array, params=None):
   @jax.vmap
   def rand_dynamics(rng):
     # Floor friction: =U(0.4, 1.0).

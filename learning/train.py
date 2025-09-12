@@ -36,6 +36,8 @@ from agents.wdsac import train as wdsac
 from agents.wdsac import networks as wdsac_networks
 from agents.flowsac import train as flowsac
 from agents.flowsac import networks as flowsac_networks
+from agents.flowtd3 import train as flowtd3
+from agents.flowtd3 import networks as flowtd3_networks
 from etils import epath
 from flax import struct
 from flax.training import orbax_utils
@@ -306,9 +308,15 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
     return make_inference_fn, params, metrics
 def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
     if cfg.task in dm_control_suite._envs:
-        flowsac_params = brax_flowsac_config(cfg.task)
+        flowsac_params = brax_sac_config(cfg.task)
     elif cfg.task in locomotion._envs:
-        flowsac_params = locomotion_params.brax_sac_config(cfg.task)
+        flowsac_params = locomotion_sac_config(cfg.task)
+    flowsac_params.delta = 0.01
+    flowsac_params.lambda_update_steps = 10
+    flowsac_params.lmbda_lr = 3e-4
+    flowsac_params.flow_lr = 3e-4
+    flowsac_params.init_lmbda = 0.
+
     for param in flowsac_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
             flowsac_params[param] = getattr(cfg, param)
@@ -356,15 +364,17 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
     return make_inference_fn, params, metrics
 def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
     if cfg.task in dm_control_suite._envs:
-        flowsac_params = brax_flowtd3_config(cfg.task)
+        flowtd3_params = brax_td3_config(cfg.task)
     elif cfg.task in locomotion._envs:
-        flowsac_params = brax_td3_config(cfg.task)
-    for param in flowsac_params.keys():
+        flowtd3_params = locomotion_td3_config(cfg.task)
+    flowtd3_params.flow_lr = 3e-4
+    flowtd3_params.init_lmbda = 0.
+    for param in flowtd3_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
-            flowsac_params[param] = getattr(cfg, param)
+            flowtd3_params[param] = getattr(cfg, param)
 
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
-                .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
+                .init_lmbda={flowtd3_params.init_lmbda}.flow_lr={flowtd3_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
                     .eval_param={cfg.eval_with_training_env}"
     if cfg.use_wandb:
         wandb.init(
@@ -375,25 +385,24 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
             config=OmegaConf.to_container(cfg, resolve=True),
         )
         wandb.config.update({"env_name": cfg.task})
-    flowsac_training_params = dict(flowsac_params)
-    if "network_factory" in flowsac_params:
+    flowtd3_training_params = dict(flowtd3_params)
+    if "network_factory" in flowtd3_params:
         if not cfg.asymmetric_critic:
-            flowsac_params.network_factory.value_obs_key = "state"
-        del flowsac_training_params["network_factory"]
+            flowtd3_params.network_factory.value_obs_key = "state"
+        del flowtd3_training_params["network_factory"]
         network_factory = functools.partial(
-            flowsac_networks.make_flowsac_networks,
+            flowtd3_networks.make_flowtd3_networks,
             simba=cfg.simba,
-            **flowsac_params.network_factory,
+            **flowtd3_params.network_factory,
         )
         
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
     train_fn = functools.partial(  
-        flowsac.train, **dict(flowsac_training_params),
+        flowtd3.train, **dict(flowtd3_training_params),
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
         use_wandb=cfg.use_wandb,
-        dr_flow = cfg.dr_flow,
         dr_train_ratio = cfg.dr_train_ratio,
         eval_with_training_env = cfg.eval_with_training_env,
     )

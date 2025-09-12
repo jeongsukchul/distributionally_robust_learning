@@ -736,7 +736,7 @@ def train(
     )
   else:
     v_randomization_fn=functools.partial(randomization_fn, 
-      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), params=env.dr_range
+      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), params=env.dr_range if hasattr(env,'dr_range')  else None
     )
     eval_env = wrap_eval_env_fn(
         eval_env,

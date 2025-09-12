@@ -207,17 +207,21 @@ def train(
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
     
-    # dr_low, dr_high = env.dr_range
-    # dr_mid = (dr_low + dr_high) / 2.
-    # dr_scale = (dr_high - dr_low) / 2.
-    # training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
+    if hasattr(env,'dr_range') :
+      dr_low, dr_high = env.dr_range
+      dr_mid = (dr_low + dr_high) / 2.
+      dr_scale = (dr_high - dr_low) / 2.
+      training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
+    else:
+      training_dr_range = None
     training_randomization_fn = None
     if randomization_fn is not None:
       training_randomization_fn = functools.partial(
           randomization_fn,
           rng=jax.random.split(
               key, num_envs // jax.process_count() // local_devices_to_use
-          ),#params=training_dr_range
+          ),
+          params=training_dr_range,
       )
 
     env = wrap_for_training(
@@ -571,7 +575,7 @@ def train(
     v_randomization_fn=None
     if eval_randomization_fn is not None:
       v_randomization_fn = functools.partial(
-          eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), #params=env.dr_range
+          eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), params=env.dr_range if hasattr(env,'dr_range')  else None
       )
 
     eval_env = wrap_for_eval(

@@ -91,7 +91,6 @@ def _init_training_state(
     policy_optimizer: optax.GradientTransformation,
     q_optimizer: optax.GradientTransformation,
     flow_optimizer: optax.GradientTransformation,
-    single_lambda : bool,
     num_envs : int,
     std_max: float =0.4,
     std_min : float =0.05,
@@ -227,11 +226,6 @@ def train(
 
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
-    
-    # dr_low, dr_high = env.dr_range
-    # dr_mid = (dr_low + dr_high) / 2.
-    # dr_scale = (dr_high - dr_low) / 2.
-    # training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
 
     env = wrap_for_adv_training(
         env,
@@ -261,6 +255,7 @@ def train(
       observation_size=obs_shape,
       action_size=action_size,
       preprocess_observations_fn=normalize_fn,
+      dynamics_param_size=len(dr_range_low),
   )
   make_policy = flowtd3_networks.make_inference_fn(flowtd3_network)
 
@@ -650,7 +645,7 @@ def train(
     )
   else:
     v_randomization_fn=functools.partial(randomization_fn, 
-      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), params=env.dr_range
+      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use),  params=env.dr_range if hasattr(env,'dr_range')  else None
     )
     eval_env = wrap_eval_env_fn(
         eval_env,

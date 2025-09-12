@@ -147,8 +147,9 @@ def progress_fn(num_steps, metrics, use_wandb=True):
     print("-------------------------------------------------------------------")
 
 
-def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
-    randomization_fn = functools.partial(randomization_fn, params= env.dr_range if hasattr(env,'dr_range') else None)
+def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
+    if cfg.randomization:
+        randomization_fn = functools.partial(randomization_fn, params= env.dr_range if hasattr(env,'dr_range') else None)
 
     print("training with ppo")
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
@@ -187,10 +188,9 @@ def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         progress_fn=progress,
         policy_params_fn=functools.partial(policy_params_fn, ckpt_path=cfg.work_dir / "models" ),
         randomization_fn=randomization_fn,
-        eval_randomization_fn=eval_randomization_fn,
     )
     if cfg.custom_wrapper and cfg.randomization:
-        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1,n_envs=ppo_params.num_envs)
+        wrap_fn = functools.partial(wrap_for_dr_training, n_nominals=1, n_envs=ppo_params.num_envs)
     else:
         wrap_fn = wrap_for_brax_training
     wrap_eval_fn = wrap_for_brax_training
@@ -203,7 +203,7 @@ def train_ppo(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
     )
     return make_inference_fn, params, metrics
 
-def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
+def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         sac_params = brax_sac_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
@@ -243,7 +243,6 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
-        eval_randomization_fn=eval_randomization_fn,
         dr_train_ratio = cfg.dr_train_ratio,
     )
     if cfg.custom_wrapper and cfg.randomization:
@@ -258,7 +257,7 @@ def train_sac(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         wrap_eval_env_fn=wrap_eval_fn,
     )
     return make_inference_fn, params, metrics
-def train_td3(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=None):
+def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
     if cfg.task in mujoco_playground._src.dm_control_suite._envs:
         td3_params = brax_td3_config(cfg.task)
     elif cfg.task in mujoco_playground._src.locomotion._envs:
@@ -294,7 +293,6 @@ def train_td3(cfg:dict, randomization_fn, eval_randomization_fn, env, eval_env=N
         network_factory=network_factory,
         progress_fn=progress,
         randomization_fn=randomization_fn,
-        eval_randomization_fn=eval_randomization_fn,
         dr_train_ratio = cfg.dr_train_ratio,
     )
     if cfg.custom_wrapper and cfg.randomization:
@@ -381,19 +379,14 @@ def train(cfg: dict):
         randomization_fn = randomizer
     else:
         randomization_fn = None 
-    if cfg.eval_randomization:
-        eval_randomization_fn = functools.partial(randomizer, params=env.dr_range if hasattr(env,'dr_range') else None)
-    else:
-        eval_randomization_fn = None
 
     print("randomization_fn:", randomization_fn)
-    print("eval_randomization_fn", eval_randomization_fn)
     if cfg.policy == "sac":
-        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, eval_randomization_fn, env)
+        make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env)
     if cfg.policy == "td3":
-        make_inference_fn, params, metrics = train_td3(cfg, randomization_fn, eval_randomization_fn, env)
+        make_inference_fn, params, metrics = train_td3(cfg, randomization_fn, env)
     elif cfg.policy == "ppo":
-        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, eval_randomization_fn, env)
+        make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env)
     elif cfg.policy == "flowsac":
         make_inference_fn, params, metrics = train_flowsac(cfg, randomization_fn, env)
     else:

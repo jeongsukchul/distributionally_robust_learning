@@ -241,7 +241,8 @@ def train(
     raise ValueError(f'num_envs ({num_envs}) must be divisible by device_count ({device_count})')
   num_envs_per_device = num_envs // device_count
 
-  env = environment
+  import copy
+  env = copy.deepcopy(environment)
     
   rng = jax.random.PRNGKey(seed)
   rng, key = jax.random.split(rng)
@@ -716,7 +717,6 @@ def train(
       jax.random.split(rb_key, local_devices_to_use)
   ) 
   # buffer_state = replay_buffer.init(rb_key)
-  import copy
   eval_env = copy.deepcopy(environment)
   if eval_with_training_env:
     eval_env = wrap_for_adv_training(

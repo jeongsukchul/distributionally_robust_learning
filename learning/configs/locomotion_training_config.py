@@ -303,8 +303,8 @@ def locomotion_td3_config(env_name: str) -> config_dict.ConfigDict:
       action_repeat=1,
       discounting=0.97,
       learning_rate=1e-3,
-      num_envs=1024,
-      batch_size=4096,
+      num_envs=512,
+      batch_size=2048,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192, #8192,
@@ -328,7 +328,7 @@ def locomotion_td3_config(env_name: str) -> config_dict.ConfigDict:
 
   elif env_name in ("Go1Handstand", "Go1Footstand"):
     rl_config.num_timesteps = 100_000_000
-    rl_config.num_evals = 5
+    rl_config.num_evals = 10
     rl_config.network_factory = config_dict.create(
         hidden_layer_sizes=(512, 256, 128),
         policy_obs_key="state",

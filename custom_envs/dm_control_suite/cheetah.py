@@ -182,7 +182,9 @@ def domain_randomize(model: mjx.Model, params, rng:jax.Array=None):
   if rng is not None:
     dr_low, dr_high = params
     dist = [functools.partial(jax.random.uniform,minval=dr_low[i], maxval=dr_high[i]) for i in range(len(dr_low))] 
-
+  print("params", params)
+  print("rng", rng.shape)
+  print("dist", dist)
   @jax.vmap
   def shift_dynamics(params):
     idx = 0

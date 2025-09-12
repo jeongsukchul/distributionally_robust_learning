@@ -207,9 +207,6 @@ def train(
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
-    eval_randomization_fn: Optional[
-        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
-    ] = None,
     # ppo params
     learning_rate: float = 1e-4,
     entropy_cost: float = 1e-4,
@@ -373,9 +370,9 @@ def train(
   del global_key
 
   assert num_envs % device_count == 0
-
+  import copy
   env = _maybe_wrap_env(
-      environment,
+      copy.deepcopy(environment),
       wrap_env,
       num_envs,
       episode_length,
@@ -651,7 +648,7 @@ def train(
   )
 
   eval_env = _maybe_wrap_env(
-      eval_env or environment,
+      eval_env or copy.deepcopy(environment),
       wrap_env,
       num_eval_envs,
       episode_length,
@@ -659,7 +656,7 @@ def train(
       device_count=1,  # eval on the host only
       key_env=eval_key,
       wrap_env_fn=wrap_eval_env_fn,
-      randomization_fn=eval_randomization_fn,
+      randomization_fn=randomization_fn,
   )
   evaluator = acting.Evaluator(
       eval_env,

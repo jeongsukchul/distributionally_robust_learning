@@ -144,9 +144,6 @@ def train(
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
-    eval_randomization_fn: Optional[
-        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
-    ] = None,
     checkpoint_logdir: Optional[str] = None,
     restore_checkpoint_path: Optional[str] = None,
     dr_train_ratio = 1.0,
@@ -188,7 +185,9 @@ def train(
   )
 
   assert num_envs % device_count == 0
-  env = environment
+  import copy
+  env = copy.deepcopy(environment)
+
   if wrap_env:
     if wrap_env_fn is not None:
       wrap_for_training = wrap_env_fn
@@ -205,7 +204,7 @@ def train(
 
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
-    if env.dr_range is not None:
+    if hasattr(env,'dr_range') :
       dr_low, dr_high = env.dr_range
       dr_mid = (dr_low + dr_high) / 2.
       dr_scale = (dr_high - dr_low) / 2.
@@ -551,14 +550,13 @@ def train(
   buffer_state = jax.pmap(replay_buffer.init)(
       jax.random.split(rb_key, local_devices_to_use)
   )
-
-  if not eval_env:
-    eval_env = environment
+  import copy
+  eval_env = copy.deepcopy(environment)
   if wrap_env:
     v_randomization_fn=None
-    if eval_randomization_fn is not None:
+    if randomization_fn is not None:
       v_randomization_fn = functools.partial(
-          eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), params=env.dr_range if env.dr_range is not None else None
+          randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), params=env.dr_range if hasattr(env,'dr_range')  else None
       )
 
     eval_env = wrap_for_eval(

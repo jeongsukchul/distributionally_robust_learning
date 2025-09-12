@@ -188,7 +188,8 @@ def train(
   )
 
   assert num_envs % device_count == 0
-  env = environment
+  import copy
+  env = copy.deepcopy(environment)
   if wrap_env:
     if wrap_env_fn is not None:
       wrap_for_training = wrap_env_fn
@@ -565,7 +566,7 @@ def train(
   )
 
   if not eval_env:
-    eval_env = environment
+    eval_env = copy.deepcopy(environment)
   if wrap_env:
     v_randomization_fn=None
     if eval_randomization_fn is not None:

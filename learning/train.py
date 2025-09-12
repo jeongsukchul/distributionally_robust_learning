@@ -374,7 +374,7 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
             flowtd3_params[param] = getattr(cfg, param)
 
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
-                .init_lmbda={flowtd3_params.init_lmbda}.flow_lr={flowtd3_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
+                .init_lmbda={flowtd3_params.init_lmbda}.flow_lr={flowtd3_params.flow_lr} \
                     .eval_param={cfg.eval_with_training_env}"
     if cfg.use_wandb:
         wandb.init(

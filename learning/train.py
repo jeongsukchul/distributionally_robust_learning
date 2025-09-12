@@ -52,7 +52,7 @@ from mujoco import mjx
 import numpy as np
 from orbax import checkpoint as ocp
 import wandb
-from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_flowsac_config, brax_td3_config
+from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_td3_config
 from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
 import hydra
 from custom_envs import registry, dm_control_suite, locomotion
@@ -482,7 +482,6 @@ def train(cfg: dict):
         for i in range(n_episodes): #10 episodes
             state = jit_reset(rngs[i])
             rollout = [state]
-            total_reward= 0.0
             for _ in range(env_cfg.episode_length):
                 act_rng, rng = jax.random.split(rng)
                 action, info = jit_inference_fn(state.obs, act_rng)

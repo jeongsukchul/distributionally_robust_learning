@@ -427,6 +427,21 @@ def train(cfg: dict):
     cfg_dir = make_dir(cfg.work_dir / "cfg")
     shutil.copy('config.yaml', os.path.join(cfg_dir, 'config.yaml'))
     env_cfg = registry.get_default_config(cfg.task)
+    if cfg.policy == "td3" :
+        if "stand" in cfg.task:
+            env_cfg.reward_config.scales.energy = -5e-5
+            env_cfg.reward_config.scales.action_rate = -1e-1
+            env_cfg.reward_config.scales.torques = -1e-3
+        elif "T1" in cfg.task:
+            env_cfg.reward_config.scales.energy = -5e-5
+            env_cfg.reward_config.scales.action_rate = -1e-1
+            env_cfg.reward_config.scales.torques = -1e-3
+            env_cfg.reward_config.scales.pose = -1.0
+            env_cfg.reward_config.scales.tracking_ang_vel = 1.25
+            env_cfg.reward_config.scales.tracking_lin_vel = 1.25
+            env_cfg.reward_config.scales.feet_phase = 1.0
+            env_cfg.reward_config.scales.ang_vel_xy = -0.3
+            env_cfg.reward_config.scales.orientation = -5.0
     env = registry.load(cfg.task, config=env_cfg)
 
     if cfg.randomization:

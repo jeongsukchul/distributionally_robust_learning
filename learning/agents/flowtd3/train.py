@@ -77,6 +77,8 @@ class TrainingState:
   gradient_steps: types.UInt64
   env_steps: types.UInt64
   normalizer_params: running_statistics.RunningStatisticsState
+  flow_optimizer_state : optax.OptState
+  flow_params : Params
   noise_scales: jnp.ndarray
 
 def _unpmap(v):
@@ -139,7 +141,7 @@ def train(
     num_eval_envs: int = 128,
     learning_rate: float = 1e-4,
     flow_lr : float = 1e-4,  # Learning rate for flow network
-    init_lambda: float = 0.1,   #added
+    init_lmbda: float = 0.1,   #added
     discounting: float = 0.9, 
     seed: int = 0,
     batch_size: int = 256,
@@ -210,29 +212,16 @@ def train(
   assert num_envs % device_count == 0
   import copy
   env = copy.deepcopy(environment)
-  if wrap_env:
-    if wrap_env_fn is not None:
-      wrap_for_training = wrap_env_fn
-    elif isinstance(env, envs.Env):
-      wrap_for_training = envs.training.wrap
-    else:
-      raise ValueError('Unsupported environment type: %s' % type(env))
-    if wrap_eval_env_fn is not None:
-      wrap_for_eval = wrap_eval_env_fn
-    elif isinstance(env, envs.Env):
-      wrap_for_eval = envs.training.wrap
-    else:
-      raise ValueError('Unsupported environment type: %s' % type(env))
 
-    rng = jax.random.PRNGKey(seed)
-    rng, key = jax.random.split(rng)
+  rng = jax.random.PRNGKey(seed)
+  rng, key = jax.random.split(rng)
 
-    env = wrap_for_adv_training(
-        env,
-        episode_length=episode_length,
-        action_repeat=action_repeat,
-        randomization_fn=randomization_fn,
-    )  # pytype: disable=wrong-keyword-args
+  env = wrap_for_adv_training(
+      env,
+      episode_length=episode_length,
+      action_repeat=action_repeat,
+      randomization_fn=randomization_fn,
+  )  # pytype: disable=wrong-keyword-args
   obs_shape = env.observation_size
   print("flowtd3 OBS SIZE", obs_shape)
   action_size = env.action_size
@@ -305,7 +294,7 @@ def train(
     training_state, key = carry
     noise_clip=0.5
     policy_noise = 0.2
-    key, key_critic, key_actor,key_noise = jax.random.split(key, 4)
+    key, key_critic, key_actor,key_noise,key_flow = jax.random.split(key, 5)
     
     (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_params, flow_optimizer_state = flow_update(
         training_state.flow_params,
@@ -315,7 +304,7 @@ def train(
         transitions,
         dr_range_high,
         dr_range_low,
-        init_lambda,
+        init_lmbda,
         key_flow,  # Reuse key_actor for flow update
         optimizer_state=training_state.flow_optimizer_state,
     )
@@ -390,6 +379,7 @@ def train(
     return nstate, TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
+        dynamics_params=dynamics_params,
         reward=nstate.reward,
         discount=1 - nstate.done,
         next_observation= nstate.obs,
@@ -492,8 +482,7 @@ def train(
       key: PRNGKey,
   ) -> Tuple[TrainingState, envs.State, ReplayBufferState, PRNGKey]:
 
-    def f(carry, unused):
-      del unused
+    def f(carry, params):
       training_state, env_state, buffer_state, key = carry
       key, new_key = jax.random.split(key)
       new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info = get_experience(
@@ -501,6 +490,7 @@ def train(
           training_state.policy_params,
           training_state.noise_scales,
           env_state,
+          params,
           buffer_state,
           key,
       )
@@ -731,7 +721,7 @@ def train(
       # Run evals.
       if eval_with_training_env:
         param_key, local_key = jax.random.split(local_key)
-        dynamics_params, _ = flowsac_network.flow_network.apply(
+        dynamics_params, _ = flowtd3_network.flow_network.apply(
           _unpmap(training_state.flow_params),
           low=dr_range_low,
           high=dr_range_high,

@@ -392,7 +392,6 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
         del flowtd3_training_params["network_factory"]
         network_factory = functools.partial(
             flowtd3_networks.make_flowtd3_networks,
-            simba=cfg.simba,
             **flowtd3_params.network_factory,
         )
         
@@ -445,6 +444,8 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env)
     elif cfg.policy == "flowsac":
         make_inference_fn, params, metrics = train_flowsac(cfg, randomization_fn, env)
+    elif cfg.policy == "flowtd3":
+        make_inference_fn, params, metrics = train_flowtd3(cfg, randomization_fn, env)
     else:
         print("no policy!")
 

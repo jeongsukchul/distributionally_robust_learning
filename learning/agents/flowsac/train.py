@@ -50,7 +50,7 @@ from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
 from agents.flowsac.adv_wrapper import wrap_for_adv_training, AdvEvaluator
 # from module.distribution import render_flow_all_dims_1d_linspace, check_mass
-from module.simple_flow import render_flow_pdf_1d_subplots
+from learning.module.normalizing_flow.simple_flow import render_flow_pdf_1d_subplots
 import distrax
 Metrics = types.Metrics
 Transition = types.Transition

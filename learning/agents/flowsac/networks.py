@@ -27,7 +27,7 @@ from flax import linen
 import jax 
 import jax.numpy as jnp
 import dataclasses
-from module.simple_flow import make_realnvp_flow_networks
+from learning.module.normalizing_flow.simple_flow import make_realnvp_flow_networks
 @flax.struct.dataclass
 class FLOWSACNetworks:
   # lmbda_network: networks.FeedForwardNetwork

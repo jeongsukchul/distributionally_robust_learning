@@ -51,9 +51,6 @@ class RandomVmapWrapper(Wrapper):
     self.rand_fn = functools.partial(randomization_fn,model=self.mjx_model)
     self.n_nominals= n_nominals
     self.n_envs = n_envs
-    dr_low, dr_high = self.env.dr_range
-    self.dr_low = dr_low
-    self.dr_high = dr_high
   def _env_fn(self,  mjx_model: mjx.Model) -> mjx_env.MjxEnv:
     env = self.env
     env.unwrapped._mjx_model = mjx_model
@@ -62,20 +59,11 @@ class RandomVmapWrapper(Wrapper):
   def reset(self, rng: jax.Array) -> mjx_env.State:
     # state = jax.vmap(reset, in_axes=[self._in_axes, 0])(self._mjx_model_v, rng)
     state = jax.vmap(self.env.reset)(rng)
-    rng1, param_key = jax.random.split(rng[0])
-    rng = rng.at[0].set(rng1)
-    dynamics_params = jax.random.uniform(key=param_key, shape=(self.n_envs * self.n_nominals,len(self.dr_low)), minval=self.dr_low, maxval=self.dr_high)
-    state.info['dr_params'] = dynamics_params
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, key:jax.random.PRNGKey) -> State:
-    # keys = jax.random.split(key, self.n_nominals* self.n_envs)
-    dynamics_params = jax.random.uniform(key=key, shape=(self.n_envs * self.n_nominals,len(self.dr_low)), minval=self.dr_low, maxval=self.dr_high)
-    done = jnp.repeat(state.done, self.n_nominals,axis=0)
-    
-    params = state.info["dr_params"] * (1 - done[..., None]) + dynamics_params * done[..., None]
-    state.info["dr_params"] = params
-    mjx_model_v, in_axes = self.rand_fn(params=params)
+    keys = jax.random.split(key, self.n_nominals* self.n_envs)
+    mjx_model_v, in_axes = self.rand_fn(rng=keys)
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)
@@ -143,7 +131,7 @@ class EpisodeWrapper(Wrapper):
 class BraxAutoResetWrapper(Wrapper):
   """Automatically resets Brax envs that are done."""
 
-  def reset(self, rng: jax.Array) -> mjx_env.State:
+  def reset(self, rng: jax.random.PRNGKey) -> mjx_env.State:
     state = self.env.reset(rng)
     state.info['first_state'] = state.data
     state.info['first_obs'] = state.obs

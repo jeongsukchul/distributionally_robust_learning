@@ -69,11 +69,7 @@ class AdVmapWrapper(Wrapper):
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> State:
-    #params shape is [n_envs, params,]
-    # print("params in  adv wrapper", params)
     mjx_model_v, in_axes = self.rand_fn(params=params)
-    # print("mjx_model_v shape", mjx_model_v)
-    # print("in_axes shape", in_axes)
     def step(mjx_model, s, a):
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)
@@ -139,10 +135,11 @@ class EpisodeWrapper(Wrapper):
 class BraxAutoResetWrapper(Wrapper):
   """Automatically resets Brax envs that are done."""
 
-  def reset(self, rng: jax.Array) -> mjx_env.State:
+  def reset(self, rng: jax.Array, params:jax.Array) -> mjx_env.State:
     state = self.env.reset(rng)
     state.info['first_state'] = state.data
     state.info['first_obs'] = state.obs
+    state.info['dr_params'] = params
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> mjx_env.State:
@@ -152,7 +149,7 @@ class BraxAutoResetWrapper(Wrapper):
       state.info.update(steps=steps)
     state = state.replace(done=jnp.zeros_like(state.done))
     state = self.env.step(state, action, params)
-
+    state.info['dr_params']=params
     def where_done(x, y):
       done = state.done
       if done.shape:

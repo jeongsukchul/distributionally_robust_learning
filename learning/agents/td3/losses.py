@@ -37,7 +37,6 @@ def make_losses(
 ):
   """Creates the td3 losses."""
 
-  target_entropy = -0.5 * action_size
   policy_network = td3_network.policy_network
   q_network = td3_network.q_network
 

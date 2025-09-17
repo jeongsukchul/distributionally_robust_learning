@@ -26,7 +26,6 @@ from brax.training.types import PRNGKey
 import jax
 import jax.numpy as jnp
 
-Transition = types.Transition
 
 
 def make_losses(
@@ -46,7 +45,7 @@ def make_losses(
       policy_params: Params,
       normalizer_params: Any,
       target_q_params: Params,
-      transitions: Transition,
+      transitions: Any,
       noise: jnp.ndarray,
       key: PRNGKey,
   ) -> jnp.ndarray:
@@ -81,7 +80,7 @@ def make_losses(
       policy_params: Params,
       normalizer_params: Any,
       q_params: Params,
-      transitions: Transition,
+      transitions: Any,
       key: PRNGKey,
   ) -> jnp.ndarray:
     action = policy_network.apply(
@@ -99,7 +98,7 @@ def make_losses(
       policy_params: Params,
       normalizer_params: Any,
       target_q_params: Params,
-      transitions: Transition,
+      transitions: Any,
       dr_range_high,
       dr_range_low,
       lmbda_params:Params,
@@ -135,6 +134,6 @@ def make_losses(
     
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
-    value_loss = (data_log_prob * normalized_next_v_adv).mean()
+    value_loss = (data_log_prob * transitions.discount* normalized_next_v_adv).mean()
     return lmbda_params* value_loss + kl_loss, (next_q_adv, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss

@@ -65,16 +65,16 @@ rollout_batch_size : ???
 n_nominals : ???
 delta : ???
 lambda_update_steps : ???
-single_lambda : ???
+single_lambda : false
 lmbda_lr : ???
 init_lmbda : ???
 distance_type : wass
 custom_wrapper: true
-
+adv_wrapper : true
 #flow
 flow_lr : ???
 dr_flow : false
-dr_train_ratio : 0.9
+dr_train_ratio : 1.0
 
 #simba
 simba : false

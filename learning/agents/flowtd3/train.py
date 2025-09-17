@@ -20,7 +20,7 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 import functools
 import struct
 from learning.agents.flowsac.adv_wrapper import AdvEvaluator, wrap_for_adv_training
-from learning.module.simple_flow import render_flow_pdf_1d_subplots
+from learning.module.normalizing_flow.simple_flow import render_flow_pdf_1d_subplots
 import time
 from typing import Any, Callable, Dict, Optional, Tuple, Union, NamedTuple, Sequence
 
@@ -46,7 +46,8 @@ import jax.numpy as jnp
 import optax
 from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics, Transition
-
+from flax.core import FrozenDict
+from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 Metrics = types.Metrics
 Transition = types.Transition
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
@@ -63,8 +64,7 @@ class TransitionwithParams(NamedTuple):
   reward: jax.Array
   discount: jax.Array
   next_observation: jax.Array
-  extras: Dict[str, Any] = {}
-
+  extras: FrozenDict[str, Any]  # recommended
 @flax.struct.dataclass
 class TrainingState:
   """Contains training state for the learner."""
@@ -133,9 +133,6 @@ def train(
     environment: envs.Env,
     num_timesteps,
     episode_length: int,
-    wrap_env: bool = True,
-    wrap_env_fn: Optional[Callable[[Any], Any]] = None,
-    wrap_eval_env_fn: Optional[Callable[[Any], Any]] = None,
     action_repeat: int = 1,
     num_envs: int = 1,
     num_eval_envs: int = 128,
@@ -153,7 +150,6 @@ def train(
     min_replay_size: int = 0,
     max_replay_size: Optional[int] = None,
     grad_updates_per_step: int = 1,
-    deterministic_eval: bool = False,
     network_factory: types.NetworkFactory[
         flowtd3_networks.FlowTd3Networks
     ] = flowtd3_networks.make_flowtd3_networks,
@@ -216,18 +212,12 @@ def train(
   rng = jax.random.PRNGKey(seed)
   rng, key = jax.random.split(rng)
 
-  env = wrap_for_adv_training(
-      env,
-      episode_length=episode_length,
-      action_repeat=action_repeat,
-      randomization_fn=randomization_fn,
-  )  # pytype: disable=wrong-keyword-args
+
   obs_shape = env.observation_size
   print("flowtd3 OBS SIZE", obs_shape)
   action_size = env.action_size
   if hasattr(env, 'dr_range'):
     dr_range_low, dr_range_high = env.dr_range
-    dr_train_ratio = 0.9
     dr_range = dr_range_high - dr_range_low
     dr_range_mid = (dr_range_high + dr_range_low) / 2.0
     dr_range_low, dr_range_high = dr_range_mid - dr_range/2 * dr_train_ratio, dr_range_mid + dr_range/2 * dr_train_ratio
@@ -235,8 +225,14 @@ def train(
     print("volume : ", volume)
   else:
     # Fallback configuration if environment doesn't have dr_range
-    ValueError("Environment does not have dr_range attribute. Please provide a valid environment with dr_range.")
-  
+    raise ValueError("Environment does not have dr_range attribute. Please provide a valid environment with dr_range.")
+  training_dr_range=  dr_range_low, dr_range_high
+  env = wrap_for_adv_training(
+      env,
+      episode_length=episode_length,
+      action_repeat=action_repeat,
+      randomization_fn=functools.partial(randomization_fn,dr_range=training_dr_range),
+  )  # pytype: disable=wrong-keyword-args
   normalize_fn = lambda x, y: x
   if normalize_observations:
     normalize_fn = running_statistics.normalize
@@ -268,7 +264,7 @@ def train(
   )
   max_replay_size = max(max_replay_size // device_count, env.episode_length * num_envs // device_count)
   replay_buffer = replay_buffers.UniformSamplingQueue(
-      max_replay_size=max_replay_size // device_count,
+      max_replay_size=max_replay_size,
       dummy_data_sample=dummy_transition,
       sample_batch_size=batch_size * grad_updates_per_step // device_count,
   )
@@ -373,8 +369,11 @@ def train(
     key: PRNGKey,
     extra_fields: Sequence[str] = (),
   ):
+    step_key, key = jax.random.split(key)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    nstate = env.step(env_state, actions, dynamics_params)
+    # dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+    params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
+    nstate = env.step(env_state, actions, params)
     state_extras = {x: nstate.info[x] for x in extra_fields}
     return nstate, TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
@@ -409,9 +408,8 @@ def train(
         transitions.observation,
         pmap_axis_name=_PMAP_AXIS_NAME,
     )
-    noise_scales = (1-env_state.done[None,...])* training_state.noise_scales + \
-          env_state.done[None, ...]* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
-    noise_scales = jnp.squeeze(noise_scales)
+    noise_scales = (1-env_state.done)* noise_scales + \
+          env_state.done* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
     
 
     simul_info ={
@@ -419,6 +417,8 @@ def train(
       "simul/reward_std" : transitions.reward.std(),
       "simul/reward_max" : transitions.reward.max(),
       "simul/reward_min" : transitions.reward.min(),
+      "simul/dynamics_params_mean" : dynamics_params.mean(),
+      "simul/dynamics_params_std" : dynamics_params.std(),
 
     }
     buffer_state = replay_buffer.insert(buffer_state, transitions)
@@ -506,6 +506,8 @@ def train(
           n_samples=num_prefill_actor_steps * num_envs // jax.process_count() // local_devices_to_use
         )
     dynamics_params = jax.lax.stop_gradient(dynamics_params) 
+    # dynamics_params = jax.random.uniform(param_key, shape=(num_prefill_actor_steps * num_envs // jax.process_count() // local_devices_to_use, len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+
     dynamics_params = jnp.reshape(
         dynamics_params, (num_prefill_actor_steps, num_envs // jax.process_count() // local_devices_to_use) + dynamics_params.shape[1:]
     )
@@ -573,19 +575,22 @@ def train(
 
   global_key, local_key = jax.random.split(rng)
   local_key = jax.random.fold_in(local_key, process_id)
-  local_key, rb_key, env_key, eval_key = jax.random.split(local_key, 4)
+  local_key, rb_key, env_key, param_key, eval_key = jax.random.split(local_key, 5)
 
     # Env init
   env_keys = jax.random.split(env_key, num_envs // jax.process_count())
   env_keys = jnp.reshape(
       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
   )
-  
-  env_state = jax.pmap(env.reset)(env_keys)
 
+  dynamics_params = jnp.zeros((local_devices_to_use, num_envs//jax.process_count(), len(dr_range_low)))
+  # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
+  env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
   obs_shape = jax.tree_util.tree_map(
       lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
+
   )
+
   print("flowtd3 OBS SHAPE2", obs_shape)
   # Training state init
   training_state = _init_training_state(
@@ -601,7 +606,17 @@ def train(
       std_min=std_min,
   )
   del global_key
-
+  dynamics_params, _ = flowtd3_network.flow_network.apply(
+    _unpmap(training_state.flow_params),
+    low=dr_range_low,
+    high=dr_range_high,
+    mode='sample',
+    rng=param_key,
+    n_samples=num_eval_envs,
+  )
+  dynamics_params = jax.lax.stop_gradient(dynamics_params)
+  # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
+  env_state = jax.pmap(env.reset)(env_keys, dynamics_params[None,...])
   if restore_checkpoint_path is not None:
     params = checkpoint.load(restore_checkpoint_path)
     training_state = training_state.replace(
@@ -616,14 +631,13 @@ def train(
       jax.random.split(rb_key, local_devices_to_use)
   )
 
-  if not eval_env:
-    eval_env = copy.deepcopy(environment)
+  eval_env = copy.deepcopy(environment)
   if eval_with_training_env:
     eval_env = wrap_for_adv_training(
       eval_env,
       episode_length=episode_length,
       action_repeat=action_repeat,
-      randomization_fn=randomization_fn,
+      randomization_fn=functools.partial(randomization_fn,dr_range=env.dr_range),
     )
     evaluator = AdvEvaluator(
         eval_env,
@@ -635,9 +649,10 @@ def train(
     )
   else:
     v_randomization_fn=functools.partial(randomization_fn, 
-      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use),  params=env.dr_range if hasattr(env,'dr_range')  else None
+      rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), dr_range=env.dr_range
     )
-    eval_env = wrap_eval_env_fn(
+
+    eval_env = wrap_for_brax_training(
         eval_env,
         episode_length=episode_length,
         action_repeat=action_repeat,

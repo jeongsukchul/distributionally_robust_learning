@@ -42,6 +42,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 Metrics = types.Metrics
@@ -95,20 +96,16 @@ def _validate_madrona_args(
 
 def _maybe_wrap_env(
     env: envs.Env,
-    wrap_env: bool,
     num_envs: int,
     episode_length: Optional[int],
     action_repeat: int,
     device_count: int,
     key_env: PRNGKey,
-    wrap_env_fn: Optional[Callable[[Any], Any]] = None,
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
 ):
   """Wraps the environment for training/eval if wrap_env is True."""
-  if not wrap_env:
-    return env
   if episode_length is None:
     raise ValueError('episode_length must be specified in ppo.train')
   v_randomization_fn = None
@@ -117,13 +114,10 @@ def _maybe_wrap_env(
     # all devices gets the same randomization rng
     randomization_rng = jax.random.split(key_env, randomization_batch_size)
     v_randomization_fn = functools.partial(
-        randomization_fn, rng=randomization_rng
+        randomization_fn, rng=randomization_rng, dr_range= ev.dr_range
     )
-  if wrap_env_fn is not None:
-    wrap_for_training = wrap_env_fn
-  else:
-    wrap_for_training = envs.training.wrap
-  env = wrap_for_training(
+
+  env = wrap_for_brax_training(
       env,
       episode_length=episode_length,
       action_repeat=action_repeat,
@@ -195,7 +189,6 @@ def train(
     num_timesteps: int,
     max_devices_per_host: Optional[int] = None,
     # high-level control flow
-    wrap_env: bool = True,
     madrona_backend: bool = False,
     augment_pixels: bool = False,
     # environment wrapper
@@ -243,6 +236,7 @@ def train(
     restore_params: Optional[Any] = None,
     restore_value_fn: bool = True,
     run_evals: bool = True,
+    custom_wrapper = False,
 ):
   """PPO training.
 
@@ -373,13 +367,11 @@ def train(
   import copy
   env = _maybe_wrap_env(
       copy.deepcopy(environment),
-      wrap_env,
       num_envs,
       episode_length,
       action_repeat,
       device_count,
       key_env,
-      wrap_env_fn,
       randomization_fn,
   )
   if local_devices_to_use > 1:

@@ -255,13 +255,7 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
       grad_updates_per_step=8,
       max_replay_size=1048576 * 8,
       min_replay_size=8192,
-      n_nominals = 10,# added
-      delta = 0.01,    #added
-      lambda_update_steps = 100,  #added: number of lambda optimization steps
-      single_lambda = False, #added
-      distance_type = "wass", #added
-      lmbda_lr = 3e-4, #added
-      init_lmbda = 0., #added
+
       network_factory=config_dict.create(
           q_network_layer_norm=True,
           policy_obs_key="state",

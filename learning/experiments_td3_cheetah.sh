@@ -1,7 +1,7 @@
 gpu_id=$1 
-wandb_project="td3-custom_wrapper-test3"
+wandb_project="td3-custom_wrapper-test-cheetah3"
 use_wandb=true
-task="CartpoleSwingup"
+task="CheetahRun"
 dr_train_ratio=1.0
 for seed in 1 2 3
 do

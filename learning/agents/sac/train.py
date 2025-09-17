@@ -20,7 +20,7 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 import functools
 import struct
 import time
-from typing import Any, Callable, Dict, Optional, Tuple, Union, NamedTuple
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union, NamedTuple
 
 from absl import logging
 from brax import base
@@ -38,6 +38,9 @@ from agents.sac import networks as sac_networks
 from brax.training.types import Params
 from brax.training.types import PRNGKey
 from brax.envs.base import Wrapper
+from learning.agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.agents.flowsac.adv_wrapper import wrap_for_adv_training
+from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 import flax
 import jax
 import jax.numpy as jnp
@@ -117,9 +120,6 @@ def train(
     environment: envs.Env,
     num_timesteps,
     episode_length: int,
-    wrap_env: bool = True,
-    wrap_env_fn: Optional[Callable[[Any], Any]] = None,
-    wrap_eval_env_fn: Optional[Callable[[Any], Any]] = None,
     action_repeat: int = 1,
     num_envs: int = 1,
     num_eval_envs: int = 128,
@@ -147,6 +147,8 @@ def train(
     checkpoint_logdir: Optional[str] = None,
     restore_checkpoint_path: Optional[str] = None,
     dr_train_ratio = 1.0,
+    custom_wrapper=True,
+    adv_wrapper=True,
 ):
   """SAC training."""
   process_id = jax.process_index()
@@ -188,44 +190,59 @@ def train(
   import copy
   env = copy.deepcopy(environment)
 
-  if wrap_env:
-    if wrap_env_fn is not None:
-      wrap_for_training = wrap_env_fn
-    elif isinstance(env, envs.Env):
-      wrap_for_training = envs.training.wrap
-    else:
-      raise ValueError('Unsupported environment type: %s' % type(env))
-    if wrap_eval_env_fn is not None:
-      wrap_for_eval = wrap_eval_env_fn
-    elif isinstance(env, envs.Env):
-      wrap_for_eval = envs.training.wrap
-    else:
-      raise ValueError('Unsupported environment type: %s' % type(env))
 
-    rng = jax.random.PRNGKey(seed)
-    rng, key = jax.random.split(rng)
-    if hasattr(env,'dr_range') :
-      dr_low, dr_high = env.dr_range
-      dr_mid = (dr_low + dr_high) / 2.
-      dr_scale = (dr_high - dr_low) / 2.
-      training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
+  rng = jax.random.PRNGKey(seed)
+  rng, key = jax.random.split(rng)
+  if hasattr(env,'dr_range') :
+    dr_low, dr_high = env.dr_range
+    dr_mid = (dr_low + dr_high) / 2.
+    dr_scale = (dr_high - dr_low) / 2.
+    training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
+  else:
+    training_dr_range = None
+  training_randomization_fn = None
+  if randomization_fn is not None:
+    if custom_wrapper:
+      training_randomization_fn = functools.partial(
+          randomization_fn,
+          # rng=jax.random.split(
+          #     key, num_envs // jax.process_count() // local_devices_to_use
+          # ),
+          dr_range=training_dr_range,
+      )
     else:
-      training_dr_range = None
-    training_randomization_fn = None
-    if randomization_fn is not None:
       training_randomization_fn = functools.partial(
           randomization_fn,
           rng=jax.random.split(
               key, num_envs // jax.process_count() // local_devices_to_use
-          ),params=training_dr_range
+          ),
+          dr_range=training_dr_range,
       )
-
-    env = wrap_for_training(
+  if custom_wrapper and randomization_fn is not None:
+    if adv_wrapper:
+      env = wrap_for_adv_training(
         env,
         episode_length=episode_length,
         action_repeat=action_repeat,
         randomization_fn=training_randomization_fn,
-    )  # pytype: disable=wrong-keyword-args
+      )
+    else:
+      env = wrap_for_dr_training(#wrap_for_training(
+          env,
+          episode_length=episode_length,
+          action_repeat=action_repeat,
+          randomization_fn=training_randomization_fn,
+          n_nominals=1,
+          n_envs=num_envs
+      )  # pytype: disable=wrong-keyword-args
+
+  else:
+    env = wrap_for_brax_training(
+      env,
+        episode_length=episode_length,
+        action_repeat=action_repeat,
+        randomization_fn=training_randomization_fn,
+    )
   obs_shape = env.observation_size
 #   if isinstance(obs_size, Dict):
 #     obs_size = jax.tree_util.tree_map(lambda x: x.shape[2:], env_state.obs)
@@ -349,7 +366,33 @@ def train(
         normalizer_params=training_state.normalizer_params,
     )
     return (new_training_state, key), metrics
-
+  def adv_step(
+      env,
+      env_state,
+      policy,
+      key: PRNGKey,
+      extra_fields: Sequence[str] = (),
+    ):
+      step_key, key = jax.random.split(key)
+      actions, policy_extras = policy(env_state.obs, key)
+      # dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_low)), minval=dr_low, maxval=dr_high)
+      if randomization_fn is not None and custom_wrapper:
+        if adv_wrapper:
+          dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_low)), minval=dr_low, maxval=dr_high)
+          params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
+          nstate = env.step(env_state, actions, params)
+        else:
+          nstate = env.step(env_state, actions, step_key)
+      else:
+        nstate = env.step(env_state, actions)
+      state_extras = {x: nstate.info[x] for x in extra_fields}
+      return nstate, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+          observation=env_state.obs,
+          action=actions,
+          reward=nstate.reward,
+          discount=1 - nstate.done,
+          next_observation= nstate.obs,
+          extras={'policy_extras': policy_extras, 'state_extras': state_extras},)
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
@@ -362,10 +405,9 @@ def train(
       ReplayBufferState,
   ]:
     policy = make_policy((normalizer_params, policy_params))
-    env_state, transitions = acting.actor_step(
+    env_state, transitions = adv_step(
         env, env_state, policy, key, extra_fields=('truncation',)
     )
-
     normalizer_params = running_statistics.update(
         normalizer_params,
         transitions.observation,
@@ -518,8 +560,16 @@ def train(
   env_keys = jnp.reshape(
       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
   )
-  
-  env_state = jax.pmap(env.reset)(env_keys)
+  if randomization_fn is not None and custom_wrapper :
+    if adv_wrapper:
+      local_key, param_key = jax.random.split(local_key)
+      dynamics_params = jax.random.uniform(key=param_key, shape=(num_envs // jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
+      dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
+      env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
+    else:
+      env_state = jax.pmap(env.reset)(env_keys)#, dynamics_params
+  else:
+    env_state = jax.pmap(env.reset)(env_keys)
 
   obs_shape = jax.tree_util.tree_map(
       lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
@@ -552,19 +602,18 @@ def train(
   )
   import copy
   eval_env = copy.deepcopy(environment)
-  if wrap_env:
-    v_randomization_fn=None
-    if randomization_fn is not None:
-      v_randomization_fn = functools.partial(
-          randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), params=env.dr_range if hasattr(env,'dr_range')  else None
-      )
+  v_randomization_fn=None
+  if randomization_fn is not None:
+    v_randomization_fn = functools.partial(
+        randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), dr_range=env.dr_range if hasattr(env,'dr_range')  else None
+    )
 
-    eval_env = wrap_for_eval(
-        eval_env,
-        episode_length=episode_length,
-        action_repeat=action_repeat,
-        randomization_fn=v_randomization_fn,
-    )  # pytype: disable=wrong-keyword-args
+  eval_env = wrap_for_brax_training(
+      eval_env,
+      episode_length=episode_length,
+      action_repeat=action_repeat,
+      randomization_fn=v_randomization_fn,
+  )  # pytype: disable=wrong-keyword-args
 
   evaluator = acting.Evaluator(
       eval_env,

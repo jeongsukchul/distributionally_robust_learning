@@ -24,7 +24,7 @@ import flax
 from flax import linen
 import jax.numpy as jnp
 import jax
-from module.simple_flow import make_realnvp_flow_networks
+from learning.module.normalizing_flow.simple_flow import make_realnvp_flow_networks
 
 @flax.struct.dataclass
 class FlowTd3Networks:

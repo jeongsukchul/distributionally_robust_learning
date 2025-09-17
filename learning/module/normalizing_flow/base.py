@@ -39,7 +39,7 @@ class NormalizingFlow(nn.Module):
         if mode=="forward_kld":
             return self.forward_kld(x)
         if mode=="inverse_kld":
-            return self.reverse_kld(num_samples)
+            return self.reverse_kld(num_samples, rng)
 
     @staticmethod
     def _zeros_like_batch(x: jnp.ndarray) -> jnp.ndarray:
@@ -97,9 +97,9 @@ class NormalizingFlow(nn.Module):
     def reverse_kld(
         self,
         num_samples: int = 1,
-        *,
+        sample_key : jax.random.PRNGKey= jax.random.PRNGKey(0),
         beta: float = 1.0,
-        score_fn: bool = True,
+        score_fn: bool = False,
         **q0_kwargs,
     ) -> jnp.ndarray:
         """
@@ -115,9 +115,7 @@ class NormalizingFlow(nn.Module):
             raise ValueError("reverse_kld requires a target distribution `p`.")
 
         # Sample from q
-        z, log_q0 = self.q0.forward(num_samples=num_samples, **q0_kwargs)
-        x, logdet = self.forward(z)
-        log_q = log_q0 - logdet                        # (N,)
+        x, log_q = self.sample(num_samples=num_samples, key=sample_key)
 
         if not score_fn:
             log_q = jax.lax.stop_gradient(log_q)       # exclude score-function grads

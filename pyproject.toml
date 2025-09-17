@@ -8,10 +8,9 @@ version = "0.1.0"
 description = ""
 authors = ["You <you@example.com>"]
 
-# Tell Poetry which *Python package directory* to ship:
-packages = [
-  { include = "learning" }
-]
+
+# Tell setuptools: read deps from a file instead of hard-coding here
+dynamic = ["dependencies"]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+python = ">=3.12,<3.13"

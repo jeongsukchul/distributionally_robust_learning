@@ -1,5 +1,4 @@
 from typing import Callable, Tuple
-import numpy as np
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -45,12 +44,13 @@ class Planar(Flow):
     w_init: Array | None = None
     b_init: float = 0.0
     def setup(self):
-        D = int(jnp.prod(jnp.array(self.shape)))
+        # D = int(jnp.prod(jnp.array(self.shape)))
+        D = jnp.prod(jnp.array(self.shape))
         if len(self.shape) != 1:
             raise ValueError(f"Planner expects 1D feature shape (D,), got {self.shape}")
 
-        lim_w = np.sqrt(2.0 / D)
-        lim_u = np.sqrt(2)
+        lim_w = jnp.sqrt(2.0 / D)
+        lim_u = jnp.sqrt(2)
 
         def _rand_uniform(minv, maxv):
             return lambda key, shape: jax.random.uniform(key, shape, minval=minv, maxval=maxv)

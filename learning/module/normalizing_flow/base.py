@@ -27,7 +27,8 @@ class NormalizingFlow(nn.Module):
     def __call__(self, mode : str,                 
                  x: jnp.ndarray = None,
                 rng: jax.random.PRNGKey = None,
-                num_samples: int = None):
+                num_samples: int = None,
+                beta: float = 1.0):
         if mode=="forward":
             return self.forward(x)
         elif mode=="inverse":
@@ -38,8 +39,8 @@ class NormalizingFlow(nn.Module):
             return self.log_prob(x)
         if mode=="forward_kld":
             return self.forward_kld(x)
-        if mode=="inverse_kld":
-            return self.reverse_kld(num_samples, rng)
+        if mode=="reverse_kld":
+            return self.reverse_kld(num_samples, rng, beta)
 
     @staticmethod
     def _zeros_like_batch(x: jnp.ndarray) -> jnp.ndarray:
@@ -99,7 +100,7 @@ class NormalizingFlow(nn.Module):
         num_samples: int = 1,
         sample_key : jax.random.PRNGKey= jax.random.PRNGKey(0),
         beta: float = 1.0,
-        score_fn: bool = False,
+        score_fn: bool = True,
         **q0_kwargs,
     ) -> jnp.ndarray:
         """

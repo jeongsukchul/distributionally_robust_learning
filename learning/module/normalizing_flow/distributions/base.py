@@ -57,7 +57,6 @@ class DiagGaussian(BaseDistribution):
           z: (num_samples, *shape)
           log_p: (num_samples,)
         """
-        print("shape", self.shape)
         eps = jax.random.normal(sample_key, (num_samples,) + self.shape, dtype=self.dtype)
 
         log_scale = self._effective_log_scale(temperature)

@@ -33,8 +33,8 @@ class TwoModes(PriorDistribution):
           loc: distance of modes from the origin
           scale: scale of modes
         """
-        self.loc = float(loc)
-        self.scale = float(scale)
+        self.loc = loc
+        self.scale = scale
 
     def log_prob(self, z:jnp.ndarray)->jnp.ndarray:
         """
@@ -51,19 +51,17 @@ class TwoModes(PriorDistribution):
           log probability of the distribution for z
         """
         z = jnp.asarray(z)
-        z0 = jnp.abs(z[..., 0])
+        z0 = jnp.abs(z[:, 0])
         r = jnp.linalg.norm(z, axis=-1)
         eps = jnp.abs(jnp.asarray(self.loc))
 
-        # first term
-        t1 = -0.5 * ((r - self.loc) / (2.0 * self.scale)) ** 2
+        log_prob = (
+            -0.5 * ((r- self.loc) / (2 * self.scale)) ** 2 \
+            - 0.5 * ((z0 - eps) / (3 * self.scale)) ** 2  \
+            + jnp.log(1 + jnp.exp(-2 * (z0 * eps) / (3 * self.scale) ** 2))
+          )
 
-        # second term via logsumexp for stability
-        a = -0.5 * ((z0 - self.loc) / (3.0 * self.scale)) ** 2
-        b = -0.5 * ((z0 + self.loc) / (3.0 * self.scale)) ** 2
-        t2 = jax.nn.logsumexp(jnp.stack([a, b], axis=-1), axis=-1)  # log(e^a + e^b)
-
-        return t1-t2
+        return log_prob
 
 class Sinusoidal(PriorDistribution):
     def __init__(self, scale, period):

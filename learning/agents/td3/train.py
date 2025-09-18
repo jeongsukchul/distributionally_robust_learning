@@ -108,7 +108,7 @@ def _init_training_state(
       gradient_steps=types.UInt64(hi=0, lo=0),
       env_steps=types.UInt64(hi=0, lo=0),
       normalizer_params=normalizer_params,
-      noise_scales= jax.random.normal(key_noise, (num_envs, )) *(std_max - std_min) + std_min,
+      noise_scales= jax.random.normal(key_noise, (num_envs//local_devices_to_use//jax.process_count(), )) *(std_max - std_min) + std_min,
   )
   return jax.device_put_replicated(
       training_state, jax.local_devices()[:local_devices_to_use]
@@ -184,7 +184,8 @@ def train(
       -(num_timesteps - num_prefill_env_steps)
       // (num_evals_after_init * env_steps_per_actor_step)
   )
-
+  print("local devices to us", local_devices_to_use)
+  print("process count", jax.process_count())
   assert num_envs % device_count == 0
   import copy
   env = copy.deepcopy(environment)
@@ -625,7 +626,7 @@ def train(
   v_randomization_fn=None
   if randomization_fn is not None:
     v_randomization_fn = functools.partial(
-        randomization_fn, rng=jax.random.split(eval_key, num_eval_envs// jax.process_count()//local_devices_to_use), dr_range=env.dr_range
+        randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), dr_range=env.dr_range
     )
 
   eval_env = wrap_for_brax_training(

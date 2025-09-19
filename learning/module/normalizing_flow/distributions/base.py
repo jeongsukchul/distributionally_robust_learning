@@ -31,16 +31,14 @@ class DiagGaussian(BaseDistribution):
     `shape` is the event shape (e.g., (D,) or (H,W,C)).
     """
     shape: Tuple[int, ...] | int | Sequence[int]
-    trainable: bool = True
-    dtype: jnp.dtype = jnp.float32
 
     def setup(self):
         self._n_dim = len(self.shape)
         self._d = int(np.prod(self.shape))
 
         # Trainable parameters: loc and log_scale of shape (1, *shape)
-        loc_init = lambda key: jnp.zeros((1,) + self.shape, dtype=self.dtype)
-        log_scale_init = lambda key: jnp.zeros((1,) + self.shape, dtype=self.dtype)
+        loc_init = lambda key: jnp.zeros((1,) + self.shape)
+        log_scale_init = lambda key: jnp.zeros((1,) + self.shape)
 
         self._loc = self.param('loc', loc_init)
         self._log_scale = self.param('log_scale', log_scale_init)
@@ -48,16 +46,16 @@ class DiagGaussian(BaseDistribution):
     def _effective_log_scale(self, temperature: Optional[float]) -> jnp.ndarray:
         if temperature is None:
             return self._log_scale
-        return self._log_scale + jnp.asarray(jnp.log(temperature), dtype=self.dtype)
+        return self._log_scale + jnp.asarray(jnp.log(temperature))#, dtype=self.dtype)
 
-    def forward(self,sample_key, num_samples: int = 1, temperature: Optional[float] = None):
+    def forward(self, sample_key, num_samples: int = 1, temperature: Optional[float] = None):
         """
         Draw `num_samples` iid samples. Requires rngs={'sample': key} in apply().
         Returns:
           z: (num_samples, *shape)
           log_p: (num_samples,)
         """
-        eps = jax.random.normal(sample_key, (num_samples,) + self.shape, dtype=self.dtype)
+        eps = jax.random.normal(sample_key, (num_samples,) + self.shape)#, dtype=self.dtype)
 
         log_scale = self._effective_log_scale(temperature)
         scale = jnp.exp(log_scale)  # (1, *shape)
@@ -78,7 +76,7 @@ class DiagGaussian(BaseDistribution):
         Returns:
           log_p: (...)  (batch dims preserved)
         """
-        z = jnp.asarray(z, dtype=self.dtype)
+        z = jnp.asarray(z)#, dtype=self.dtype)
         log_scale = self._effective_log_scale(temperature)
         scale = jnp.exp(log_scale)
 

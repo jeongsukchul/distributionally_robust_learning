@@ -30,7 +30,7 @@ def _h_and_hprime(activation: Callable[[Array], Array]) -> Tuple[Callable[[Array
     else:
         raise ValueError("Unsupported activation for planar flow. Use tanh or leaky_relu.")
 
-class Planar(Flow):
+class Radial(Flow):
 
     """ Planar flow
         f(z) = z + u * h(w*z + b)
@@ -38,55 +38,51 @@ class Planar(Flow):
     """
 
     shape: Tuple[int, ...]
-    activation: Callable[[Array], Array] = jnp.tanh
+    # activation: Callable[[Array], Array] = jnp.tanh
     # Optional custom initial values (arrays) or None to use default initializers
-    u_init: Array | None = None
-    w_init: Array | None = None
-    b_init: float = 0.0
+    alpha_init: Array | None = None
+    beta_init: Array | None = None
     def setup(self):
         # D = int(jnp.prod(jnp.array(self.shape)))
-        D = jnp.prod(jnp.array(self.shape))
+        self.D = jnp.prod(jnp.array(self.shape))
         if len(self.shape) != 1:
             raise ValueError(f"Planner expects 1D feature shape (D,), got {self.shape}")
 
-        lim_w = jnp.sqrt(2.0 / D)
-        lim_u = jnp.sqrt(2)
+        lim = 1.0 / self.D
 
         def uniform(minv, maxv):
             return lambda key, shape: jax.random.uniform(key, shape, minval=minv, maxval=maxv)
+        def normal():
+            return lambda key, shape: jax.random.normal(key, shape)
         def constant(arr):
             return lambda key, shape: jnp.asarray(arr).reshape(shape)
-        self.u = self.param('u', uniform(-lim_u,lim_u) if self.u_init is None else constant(self.u_init), self.shape)
-        self.w = self.param('w', uniform(-lim_w,lim_w) if self.w_init is None else constant(self.w_init), self.shape)
-            
-        self.b = self.param('b', lambda x: jnp.asarray(self.b_init).reshape(()))
-        self.h, self.hprime = _h_and_hprime(self.activation)
-    # def __call__(self, x, reverse = False):
-    #     return self.inverse(x) if reverse else self.forward(x)
+        self.alpha = self.param('alpha', uniform(-lim,lim) if self.alpha_init is None else constant(self.alpha_init), (1,))
+        self.beta = self.param('beta', uniform(-lim-1,lim-1) if self.beta_init is None else constant(self.beta_init), (1,))
+        self.z_0 = self.param('z_0', normal(), self.shape)
+
     
     def forward(self, z) -> Tuple[Array, Array]:
-        u_hat = _u_constrained(self.u, self.w)            #(D,)
-        lin = jnp.einsum('...d,d->...', z, self.w)+self.b #[...]
-        h_lin = self.h(lin)
+        beta = jnp.log(1 + jnp.exp(self.beta)) - jnp.abs(self.alpha)
+        dz = z - self.z_0
+        r = jnp.linalg.vector_norm(dz, axis=list(range(1, self.shape[0])), keepdims=True)
+        h_arr = beta / (jnp.abs(self.alpha) + r)
+        h_arr_ = -beta * r / (jnp.abs(self.alpha) + r) ** 2
+        z_ = z + h_arr * dz
+        log_det = (self.D - 1) * jnp.log(1 + h_arr) + jnp.log(1 + h_arr + h_arr_)
+        log_det = log_det.reshape(-1)
+        return z_, log_det
 
-        z_out = z+ jnp.expand_dims(h_lin,-1) * u_hat  #[..., D]
-
-        wu = jnp.dot(self.w, u_hat)
-        psi = self.hprime(lin) * wu
-        log_det = jnp.log(jnp.abs(1.0+psi) +1e-12)
-        return z_out, log_det
-
-    def inverse(self, z):
-        if self.activation is not jax.nn.leaky_relu:
-            raise NotImplementedError("This flow has no algebraic inverse.")
-        u_hat = _u_constrained(self.u, self.w)
-        lin = jnp.einsum('...d,d->...', z, self.w) + self.b 
-        slope = 0.01
-        a = jnp.where(lin < 0.0, slope, 1.0)                   # [...]
-        u_eff = a[..., None] * u_hat                # [..., D]
-        inner = jnp.einsum('d,...d->...', self.w, u_eff)       # [...]
-        # z' = z - u_eff * (lin / (1 + inner))
-        denom = (1.0 + inner)
-        z_inv = z - u_eff * (lin / (denom))[..., None]
-        log_det = -jnp.log(jnp.abs(denom) + 1e-12)
-        return z_inv, log_det
+    # def inverse(self, z):
+    #     if self.activation is not jax.nn.leaky_relu:
+    #         raise NotImplementedError("This flow has no algebraic inverse.")
+    #     u_hat = _u_constrained(self.u, self.w)
+    #     lin = jnp.einsum('...d,d->...', z, self.w) + self.b 
+    #     slope = 0.01
+    #     a = jnp.where(lin < 0.0, slope, 1.0)                   # [...]
+    #     u_eff = a[..., None] * u_hat                # [..., D]
+    #     inner = jnp.einsum('d,...d->...', self.w, u_eff)       # [...]
+    #     # z' = z - u_eff * (lin / (1 + inner))
+    #     denom = (1.0 + inner)
+    #     z_inv = z - u_eff * (lin / (denom))[..., None]
+    #     log_det = -jnp.log(jnp.abs(denom) + 1e-12)
+    #     return z_inv, log_det

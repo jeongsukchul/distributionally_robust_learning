@@ -524,7 +524,7 @@ def train(cfg: dict):
     else:
         eval_env = registry.load(cfg.task, config=env_cfg),
     if cfg.save_video and cfg.use_wandb:
-        n_episodes = 10
+        n_episodes = 100
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
         jit_reset = jax.jit(eval_env.reset)
         jit_step = jax.jit(eval_env.step)

@@ -1,5 +1,5 @@
 gpu_id=$1 
-wandb_project="td3-custom_wrapper-test3"
+wandb_project="td3-custom_wrapper-test4"
 use_wandb=true
 task="CartpoleSwingup"
 dr_train_ratio=1.0
@@ -34,7 +34,7 @@ do
                             wandb_project=$wandb_project asymmetric_critic=true custom_wrapper=false task=$task seed=$seed use_wandb=$use_wandb 
 done
 
-wandb_project="sac-custom_wrapper-test3"
+wandb_project="sac-custom_wrapper-test4"
 for seed in 1 2 3
 do
     CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="sac" \

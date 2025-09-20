@@ -59,8 +59,7 @@ class Radial(Flow):
         self.alpha = self.param('alpha', uniform(-lim,lim) if self.alpha_init is None else constant(self.alpha_init), (1,))
         self.beta = self.param('beta', uniform(-lim-1,lim-1) if self.beta_init is None else constant(self.beta_init), (1,))
         self.z_0 = self.param('z_0', normal(), self.shape)
-    def __call__(self, x, reverse = False):
-        return self.inverse(x) if reverse else self.forward(x)
+
     
     def forward(self, z) -> Tuple[Array, Array]:
         beta = jnp.log(1 + jnp.exp(self.beta)) - jnp.abs(self.alpha)

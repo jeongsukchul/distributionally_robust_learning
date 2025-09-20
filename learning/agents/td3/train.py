@@ -45,7 +45,7 @@ import optax
 from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics, Transition
 from learning.agents.flowsac.adv_wrapper import AdvEvaluator, wrap_for_adv_training
-from learning.agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.agents.wdtd3.dr_wrapper import wrap_for_dr_training          #changed with td3
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 
 

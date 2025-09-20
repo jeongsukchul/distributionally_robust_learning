@@ -61,8 +61,8 @@ class Planar(Flow):
             
         self.b = self.param('b', lambda x: jnp.asarray(self.b_init).reshape(()))
         self.h, self.hprime = _h_and_hprime(self.activation)
-    def __call__(self, x, reverse = False):
-        return self.inverse(x) if reverse else self.forward(x)
+    # def __call__(self, x, reverse = False):
+    #     return self.inverse(x) if reverse else self.forward(x)
     
     def forward(self, z) -> Tuple[Array, Array]:
         u_hat = _u_constrained(self.u, self.w)            #(D,)

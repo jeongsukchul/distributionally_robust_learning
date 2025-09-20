@@ -1,8 +1,10 @@
+from typing import Callable, Literal, Sequence, Tuple
 import numpy as np
 import jax
 import jax.numpy as jnp
+import flax.linen as nn
 
-from ...base import Flow, zero_log_det_like_z
+from ..base import Flow, zero_log_det_like_z
 from ..reshape import Split, Merge
 
 
@@ -11,8 +13,10 @@ class AffineConstFlow(Flow):
     scales and shifts with learned constants per dimension. In the NICE paper there is a
     scaling layer which is a special case of this where t is None
     """
-
-    def __init__(self, shape, scale=True, shift=True):
+    shape: Tuple[int, ...]
+    use_scale : bool = True
+    use_shift : bool = True
+    def setup(self):
         """Constructor
 
         Args:
@@ -21,36 +25,28 @@ class AffineConstFlow(Flow):
           shift: Flag whether to apply shift
           logscale_factor: Optional factor which can be used to control the scale of the log scale factor
         """
-        super().__init__()
-        if scale:
-            self.s = nn.Parameter(torch.zeros(shape)[None])
-        else:
-            self.register_buffer("s", torch.zeros(shape)[None])
-        if shift:
-            self.t = nn.Parameter(torch.zeros(shape)[None])
-        else:
-            self.register_buffer("t", torch.zeros(shape)[None])
-        self.n_dim = self.s.dim()
-        self.batch_dims = torch.nonzero(
-            torch.tensor(self.s.shape) == 1, as_tuple=False
-        )[:, 0].tolist()
-
+        if self.use_scale:
+            self.s = self.param('s', lambda key : jnp.zeros(self.shape))
+        if self.use_shift:
+            self.t = self.param('t', lambda key: jnp.zeros(self.shape))
+        self.n_dim = jnp.ndim(self.s)
+        self.batch_dims = [i for i, d in enumerate(self.s.shape) if d == 1]
     def forward(self, z):
-        z_ = z * torch.exp(self.s) + self.t
+        z_ = z * jnp.exp(self.s) + self.t
         if len(self.batch_dims) > 1:
-            prod_batch_dims = np.prod([z.size(i) for i in self.batch_dims[1:]])
+            prod_batch_dims = jnp.prod([z.size(i) for i in self.batch_dims[1:]])
         else:
             prod_batch_dims = 1
-        log_det = prod_batch_dims * torch.sum(self.s)
+        log_det = prod_batch_dims * jnp.sum(self.s)
         return z_, log_det
 
     def inverse(self, z):
-        z_ = (z - self.t) * torch.exp(-self.s)
+        z_ = (z - self.t) * jnp.exp(-self.s)
         if len(self.batch_dims) > 1:
             prod_batch_dims = np.prod([z.size(i) for i in self.batch_dims[1:]])
         else:
             prod_batch_dims = 1
-        log_det = -prod_batch_dims * torch.sum(self.s)
+        log_det = -prod_batch_dims * jnp.sum(self.s)
         return z_, log_det
 
 
@@ -58,41 +54,37 @@ class CCAffineConst(Flow):
     """
     Affine constant flow layer with class-conditional parameters
     """
-
-    def __init__(self, shape, num_classes):
-        super().__init__()
-        if isinstance(shape, int):
-            shape = (shape,)
+    shape : Tuple[int, ...]
+    num_classes : int 
+    def setup(self, shape, num_classes):
         self.shape = shape
-        self.s = nn.Parameter(torch.zeros(shape)[None])
-        self.t = nn.Parameter(torch.zeros(shape)[None])
-        self.s_cc = nn.Parameter(torch.zeros(num_classes, np.prod(shape)))
-        self.t_cc = nn.Parameter(torch.zeros(num_classes, np.prod(shape)))
-        self.n_dim = self.s.dim()
-        self.batch_dims = torch.nonzero(
-            torch.tensor(self.s.shape) == 1, as_tuple=False
-        )[:, 0].tolist()
+        self.s = self.param('s', lambda key : jnp.zeros(self.shape))
+        self.t = self.param('t', lambda key : jnp.zeros(self.shape))
+        self.s_cc = self.param('s_cc', lambda key: jnp.zeros(num_classes, np.prod(shape)))
+        self.t_cc = self.param('t_cc', lambda key : jnp.zeros(num_classes, np.prod(shape)))
+        self.n_dim = jnp.ndim(self.s)
+        self.batch_dims = [i for i, d in enumerate(self.s.shape) if d == 1]
 
     def forward(self, z, y):
-        s = self.s + (y @ self.s_cc).view(-1, *self.shape)
-        t = self.t + (y @ self.t_cc).view(-1, *self.shape)
-        z_ = z * torch.exp(s) + t
+        s = self.s + (y @ self.s_cc).reshape(-1, *self.shape)
+        t = self.t + (y @ self.t_cc).reshape(-1, *self.shape)
+        z_ = z * jnp.exp(s) + t
         if len(self.batch_dims) > 1:
             prod_batch_dims = np.prod([z.size(i) for i in self.batch_dims[1:]])
         else:
             prod_batch_dims = 1
-        log_det = prod_batch_dims * torch.sum(s, dim=list(range(1, self.n_dim)))
+        log_det = prod_batch_dims * jnp.sum(s, dim=list(range(1, self.n_dim)))
         return z_, log_det
 
     def inverse(self, z, y):
-        s = self.s + (y @ self.s_cc).view(-1, *self.shape)
-        t = self.t + (y @ self.t_cc).view(-1, *self.shape)
-        z_ = (z - t) * torch.exp(-s)
+        s = self.s + (y @ self.s_cc).reshape(-1, *self.shape)
+        t = self.t + (y @ self.t_cc).reshape(-1, *self.shape)
+        z_ = (z - t) * jnp.exp(-s)
         if len(self.batch_dims) > 1:
             prod_batch_dims = np.prod([z.size(i) for i in self.batch_dims[1:]])
         else:
             prod_batch_dims = 1
-        log_det = -prod_batch_dims * torch.sum(s, dim=list(range(1, self.n_dim)))
+        log_det = -prod_batch_dims * jnp.sum(s, dim=list(range(1, self.n_dim)))
         return z_, log_det
 
 
@@ -100,8 +92,12 @@ class AffineCoupling(Flow):
     """
     Affine Coupling layer as introduced RealNVP paper, see arXiv: 1605.08803
     """
-
-    def __init__(self, param_map, scale=True, scale_map="exp"):
+    param_map_ctor: Callable[[], nn.Module]
+    use_scale : bool = True
+    scale_map : Literal["exp", "sigmoid", "sigmoid_inv"] = "exp"
+    feature_last : bool = False
+    @nn.compact
+    def __call__(self,  z: Tuple[jnp.ndarray, jnp.ndarray], *, inverse: bool = False):
         """Constructor
 
         Args:
@@ -109,66 +105,47 @@ class AffineCoupling(Flow):
           scale: Flag whether scale shall be applied
           scale_map: Map to be applied to the scale parameter, can be 'exp' as in RealNVP or 'sigmoid' as in Glow, 'sigmoid_inv' uses multiplicative sigmoid scale when sampling from the model
         """
-        super().__init__()
-        self.add_module("param_map", param_map)
-        self.scale = scale
-        self.scale_map = scale_map
-
-    def forward(self, z):
-        """
-        z is a list of z1 and z2; ```z = [z1, z2]```
-        z1 is left constant and affine map is applied to z2 with parameters depending
-        on z1
-
-        Args:
-          z
-        """
         z1, z2 = z
-        param = self.param_map(z1)
-        if self.scale:
-            shift = param[:, 0::2, ...]
-            scale_ = param[:, 1::2, ...]
-            if self.scale_map == "exp":
-                z2 = z2 * torch.exp(scale_) + shift
-                log_det = torch.sum(scale_, dim=list(range(1, shift.dim())))
-            elif self.scale_map == "sigmoid":
-                scale = torch.sigmoid(scale_ + 2)
-                z2 = z2 / scale + shift
-                log_det = -torch.sum(torch.log(scale), dim=list(range(1, shift.dim())))
-            elif self.scale_map == "sigmoid_inv":
-                scale = torch.sigmoid(scale_ + 2)
-                z2 = z2 * scale + shift
-                log_det = torch.sum(torch.log(scale), dim=list(range(1, shift.dim())))
+        param = self.param_map_ctor()(z1)
+        if self.use_scale:
+            shift = param[:,0::2, ...]
+            scale = param[:, 1::2, ...]
+            if self.scale_map=="exp":
+                if not inverse:
+                    y2 = z2 * jnp.exp(scale) + shift
+                    log_det = jnp.sum(scale, axis=tuple(range(1, scale.ndim)))
+                else:
+                    y2 = (z2-shift) * jnp.exp(-scale)
+                    log_det = -jnp.sum(scale, axis=tuple(range(1, scale.ndim)))
+            elif self.scale_map=="sigmoid":
+                scale_sig = jax.nn.sigmoid(scale + 2.0)
+                if not inverse:
+                    y2 = z2 / scale_sig + shift
+                    log_det = -jnp.sum(jnp.log(scale_sig), axis=tuple(range(1, scale.ndim)))
+                else:
+                    y2 = (z2-shift) * scale_sig
+                    log_det = jnp.sum(jnp.log(scale_sig), axis=tuple(range(1, scale.ndim)))
+            elif self.scale_map=="sigmoid_inv":
+                scale_sig = jax.nn.sigmoid(scale + 2.0)
+                if not inverse:
+                    y2 = z2 * scale_sig + shift
+                    log_det = jnp.sum(jnp.log(scale_sig), axis=tuple(range(1,scale.ndim)))
+                else:
+                    y2 = (z2-shift)/scale_sig
+                    log_det = -jnp.sum(jnp.log(scale_sig), axis=tuple(range(1, scale.ndim)))
             else:
-                raise NotImplementedError("This scale map is not implemented.")
+                raise ValueError("This scale map is not implemented")
         else:
-            z2 = z2 + param
-            log_det = zero_log_det_like_z(z2)
-        return [z1, z2], log_det
+            y2 = z2 + shift if not inverse else z2 - shift
+            log_det = jnp.zeros(z2.shape[:1], dtype=z2.dtype)
+        
+        return (z1,y2), log_det
+     # Convenience wrappers
+    def forward(self, z: Tuple[jnp.ndarray, jnp.ndarray]):
+        return self(z, inverse=False)
 
-    def inverse(self, z):
-        z1, z2 = z
-        param = self.param_map(z1)
-        if self.scale:
-            shift = param[:, 0::2, ...]
-            scale_ = param[:, 1::2, ...]
-            if self.scale_map == "exp":
-                z2 = (z2 - shift) * torch.exp(-scale_)
-                log_det = -torch.sum(scale_, dim=list(range(1, shift.dim())))
-            elif self.scale_map == "sigmoid":
-                scale = torch.sigmoid(scale_ + 2)
-                z2 = (z2 - shift) * scale
-                log_det = torch.sum(torch.log(scale), dim=list(range(1, shift.dim())))
-            elif self.scale_map == "sigmoid_inv":
-                scale = torch.sigmoid(scale_ + 2)
-                z2 = (z2 - shift) / scale
-                log_det = -torch.sum(torch.log(scale), dim=list(range(1, shift.dim())))
-            else:
-                raise NotImplementedError("This scale map is not implemented.")
-        else:
-            z2 = z2 - param
-            log_det = zero_log_det_like_z(z2)
-        return [z1, z2], log_det
+    def inverse(self, z: Tuple[jnp.ndarray, jnp.ndarray]):
+        return self(z, inverse=True)   
 
 
 class MaskedAffineFlow(Flow):
@@ -183,8 +160,11 @@ class MaskedAffineFlow(Flow):
     - class AffineHalfFlow(Flow): is MaskedAffineFlow with alternating bit mask
     - NICE is AffineFlow with only shifts (volume preserving)
     """
-
-    def __init__(self, b, t=None, s=None):
+    b : jnp.ndarray
+    t : Callable[[], nn.Module] = jnp.zeros_like
+    s : Callable[[], nn.Module] = jnp.zeros_like
+    @nn.compact
+    def __call__(self, z : Tuple[jnp.ndarray, jnp.ndarray], inverse=False):
         """Constructor
 
         Args:
@@ -192,49 +172,35 @@ class MaskedAffineFlow(Flow):
           t: translation mapping, i.e. neural network, where first input dimension is batch dim, if None no translation is applied
           s: scale mapping, i.e. neural network, where first input dimension is batch dim, if None no scale is applied
         """
-        super().__init__()
-        self.b_cpu = b.view(1, *b.size())
-        self.register_buffer("b", self.b_cpu)
 
-        if s is None:
-            self.s = torch.zeros_like
-        else:
-            self.add_module("s", s)
-
-        if t is None:
-            self.t = torch.zeros_like
-        else:
-            self.add_module("t", t)
-
-    def forward(self, z):
         z_masked = self.b * z
         scale = self.s(z_masked)
-        nan = torch.tensor(np.nan, dtype=z.dtype, device=z.device)
-        scale = torch.where(torch.isfinite(scale), scale, nan)
         trans = self.t(z_masked)
-        trans = torch.where(torch.isfinite(trans), trans, nan)
-        z_ = z_masked + (1 - self.b) * (z * torch.exp(scale) + trans)
-        log_det = torch.sum((1 - self.b) * scale, dim=list(range(1, self.b.dim())))
+
+        if not inverse:
+            z_ = z_masked + (1- self.b) * (z * jnp.exp(scale) + trans)
+            log_det = jnp.sum((1-self.b)*scale, axis = list(tuple(range(1, scale.ndim))))
+        else:
+            z_ = z_masked + (1- self.b) * (z - trans) * jnp.exp(-scale)
+            log_det = -jnp.sum((1-self.b)*scale, axis = list(tuple(range(1, scale.ndim))))
         return z_, log_det
+    def forward(self, z):
+        return self(z, inverse=False)
 
     def inverse(self, z):
-        z_masked = self.b * z
-        scale = self.s(z_masked)
-        nan = torch.tensor(np.nan, dtype=z.dtype, device=z.device)
-        scale = torch.where(torch.isfinite(scale), scale, nan)
-        trans = self.t(z_masked)
-        trans = torch.where(torch.isfinite(trans), trans, nan)
-        z_ = z_masked + (1 - self.b) * (z - trans) * torch.exp(-scale)
-        log_det = -torch.sum((1 - self.b) * scale, dim=list(range(1, self.b.dim())))
-        return z_, log_det
-
+        return self(z, inverse=True)
 
 class AffineCouplingBlock(Flow):
     """
     Affine Coupling layer including split and merge operation
     """
-
-    def __init__(self, param_map, scale=True, scale_map="exp", split_mode="channel"):
+    flows : Sequence[nn.Module]
+    param_map: Callable[[], nn.Module]
+    scale_map : Literal["exp", "sigmoid", "sigmoid_inv"] = "exp"
+    split_mode : Literal['channel','channel_inv','checkerboard','checkerboard_inv'] = 'channel'
+    use_scale : bool =True
+    @nn.compact
+    def __call__(self, z):
         """Constructor
 
         Args:
@@ -243,24 +209,23 @@ class AffineCouplingBlock(Flow):
           scale_map: Map to be applied to the scale parameter, can be 'exp' as in RealNVP or 'sigmoid' as in Glow
           split_mode: Splitting mode, for possible values see Split class
         """
-        super().__init__()
-        self.flows = nn.ModuleList([])
+        self.flows = []
         # Split layer
-        self.flows += [Split(split_mode)]
+        self.flows += [Split(self.split_mode)]
         # Affine coupling layer
-        self.flows += [AffineCoupling(param_map, scale, scale_map)]
+        self.flows += [AffineCoupling(self.param_map, self.use_scale, self.scale_map)]
         # Merge layer
-        self.flows += [Merge(split_mode)]
+        self.flows += [Merge(self.split_mode)]
 
     def forward(self, z):
-        log_det_tot = torch.zeros(z.shape[0], dtype=z.dtype, device=z.device)
+        log_det_tot = jnp.zeros(z.shape[0], dtype=z.dtype)
         for flow in self.flows:
             z, log_det = flow(z)
             log_det_tot += log_det
         return z, log_det_tot
 
     def inverse(self, z):
-        log_det_tot = torch.zeros(z.shape[0], dtype=z.dtype, device=z.device)
+        log_det_tot = jnp.zeros(z.shape[0], dtype=z.dtype)
         for i in range(len(self.flows) - 1, -1, -1):
             z, log_det = self.flows[i].inverse(z)
             log_det_tot += log_det

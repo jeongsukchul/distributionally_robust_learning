@@ -83,7 +83,25 @@ class TransitionwithParams(NamedTuple):
   discount: jax.Array
   next_observation: jax.Array
   extras: Dict[str, Any] = {}
-
+def actor_step(
+    env: Env,
+    env_state: State,
+    policy: Policy,
+    key: PRNGKey,
+    extra_fields: Sequence[str] = (),
+) -> Tuple[State, Transition]:
+  """Collect data."""
+  actions, policy_extras = policy(env_state.obs, key)
+  nstate = env.step(env_state, actions)
+  state_extras = {x: nstate.info[x] for x in extra_fields}
+  return nstate, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+      observation=env_state.obs,
+      action=actions,
+      reward=nstate.reward,
+      discount=1 - nstate.done,
+      next_observation=nstate.obs,
+      extras={'policy_extras': policy_extras, 'state_extras': state_extras},
+  )
 def adv_step(
   env: Env,
   env_state: State,
@@ -108,6 +126,31 @@ def adv_step(
       )
 
 def generate_unroll(
+    env: Env,
+    env_state: State,
+    policy: Policy,
+    key: PRNGKey,
+    unroll_length: int,
+    extra_fields: Sequence[str] = (),
+) -> Tuple[State, Transition]:
+  """Collect trajectories of given unroll_length."""
+
+  @jax.jit
+  def f(carry, unused_t):
+    state, current_key = carry
+    current_key, next_key = jax.random.split(current_key)
+    nstate, transition = actor_step(
+        env, state, policy, current_key, extra_fields=extra_fields
+    )
+    return (nstate, next_key), transition
+
+  (final_state, _), data = jax.lax.scan(
+      f, (env_state, key), (), length=unroll_length
+  )
+  return final_state, data
+
+
+def generate_adv_unroll(
     env: Env,
     env_state: State,
     dynamics_params :jnp.ndarray,
@@ -177,14 +220,13 @@ class Evaluator:
   def run_evaluation(
       self,
       policy_params: PolicyParams,
-      dynamics_params : jnp.ndarray,
       training_metrics: Metrics,
       aggregate_episodes: bool = True,
   ) -> Metrics:
     """Run one epoch of evaluation."""
     self._key, unroll_key = jax.random.split(self._key)
     t = time.time()
-    eval_state = self._generate_eval_unroll(policy_params, dynamics_params, unroll_key)
+    eval_state = self._generate_eval_unroll(policy_params, unroll_key)
     eval_metrics = eval_state.info['eval_metrics']
     eval_metrics.active_episodes.block_until_ready()
     epoch_eval_time = time.time() - t
@@ -243,7 +285,7 @@ class AdvEvaluator:
     ) -> State:
       reset_keys = jax.random.split(key, num_eval_envs)
       eval_first_state = eval_env.reset(reset_keys)
-      return generate_unroll(
+      return generate_adv_unroll(
           eval_env,
           eval_first_state,
           eval_dynamics_params,

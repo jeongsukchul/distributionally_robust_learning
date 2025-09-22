@@ -18,7 +18,7 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 """
 
 import functools
-from learning.agents.flowsac.adv_wrapper import wrap_for_adv_training
+from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 import time
 from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple, Union
 
@@ -48,7 +48,8 @@ import optax
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
-from agents.flowsac.adv_wrapper import wrap_for_adv_training, AdvEvaluator
+from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
+from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
 # from module.distribution import render_flow_all_dims_1d_linspace, check_mass
 from learning.module.normalizing_flow.simple_flow import render_flow_pdf_1d_subplots
 import distrax
@@ -745,7 +746,7 @@ def train(
         randomization_fn=v_randomization_fn,
     )  # pytype: disable=wrong-keyword-args
 
-    evaluator = acting.Evaluator(
+    evaluator = Evaluator(
         eval_env,
         functools.partial(make_policy, deterministic=deterministic_eval),
         num_eval_envs=num_eval_envs,

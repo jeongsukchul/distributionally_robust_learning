@@ -38,8 +38,9 @@ from module.buffer import DynamicBatchQueue  # noqa: E402
 from agents.wdtd3 import checkpoint
 from agents.wdtd3 import losses as wdtd3_losses
 from agents.wdtd3 import networks as wdtd3_networks
-from agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.evaluator import Evaluator
 
 Metrics = types.Metrics
 Transition = types.Transition
@@ -607,7 +608,7 @@ def train(
       randomization_fn=v_randomization_fn_eval,
   )
 
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=True),
       num_eval_envs=num_eval_envs,

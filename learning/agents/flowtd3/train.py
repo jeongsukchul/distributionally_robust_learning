@@ -19,7 +19,8 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 
 import functools
 import struct
-from learning.agents.flowsac.adv_wrapper import AdvEvaluator, wrap_for_adv_training
+from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
+from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
 from learning.module.normalizing_flow.simple_flow import render_flow_pdf_1d_subplots
 import time
 from typing import Any, Callable, Dict, Optional, Tuple, Union, NamedTuple, Sequence
@@ -659,7 +660,7 @@ def train(
         randomization_fn=v_randomization_fn,
     )  # pytype: disable=wrong-keyword-args
 
-    evaluator = acting.Evaluator(
+    evaluator = Evaluator(
         eval_env,
         functools.partial(make_policy, deterministic=True),
         num_eval_envs=num_eval_envs,

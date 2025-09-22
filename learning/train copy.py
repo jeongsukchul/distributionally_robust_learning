@@ -1,6 +1,6 @@
 import os
 
-from learning.agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
 from omegaconf import OmegaConf
 os.environ['MUJOCO_GL'] = 'glfw'
 

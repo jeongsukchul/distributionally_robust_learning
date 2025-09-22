@@ -44,8 +44,9 @@ import jax.numpy as jnp
 import optax
 from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics, Transition
-from learning.agents.flowsac.adv_wrapper import AdvEvaluator, wrap_for_adv_training
-from learning.agents.wdtd3.dr_wrapper import wrap_for_dr_training          #changed with td3
+from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
+from learning.module.warpper.evaluator import Evaluator, AdvEvaluator
+from learning.module.wrapper.drhard_wrapper import wrap_for_dr_training          #changed with td3
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 
 
@@ -636,7 +637,7 @@ def train(
       randomization_fn=v_randomization_fn,
   )  # pytype: disable=wrong-keyword-args
 
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=True),
       num_eval_envs=num_eval_envs,

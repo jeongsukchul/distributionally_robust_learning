@@ -50,7 +50,7 @@ import optax
 from mujoco import mjx
 from mujoco_playground._src import mjx_env
 from brax.envs.wrappers import training as brax_training
-from agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
 Metrics = types.Metrics
 Transition = types.Transition
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]

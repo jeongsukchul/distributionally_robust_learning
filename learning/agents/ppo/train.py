@@ -43,7 +43,7 @@ import numpy as np
 import optax
 
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
-
+from learning.module.wrapper.evaluator import Evaluator
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 Metrics = types.Metrics
 
@@ -650,7 +650,7 @@ def train(
       wrap_env_fn=wrap_eval_env_fn,
       randomization_fn=randomization_fn,
   )
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=deterministic_eval),
       num_eval_envs=num_eval_envs,

@@ -38,7 +38,8 @@ from module.buffer import DynamicBatchQueue  # noqa: E402
 from agents.wdsac import checkpoint
 from agents.wdsac import losses as wdsac_losses
 from agents.wdsac import networks as wdsac_networks
-from agents.wdsac.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.evaluator import Evaluator
 
 Metrics = types.Metrics
 Transition = types.Transition
@@ -600,7 +601,7 @@ def train(
         randomization_fn=v_randomization_fn_eval,
     )
 
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=deterministic_eval),
       num_eval_envs=num_eval_envs,

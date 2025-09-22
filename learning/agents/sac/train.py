@@ -38,13 +38,14 @@ from agents.sac import networks as sac_networks
 from brax.training.types import Params
 from brax.training.types import PRNGKey
 from brax.envs.base import Wrapper
-from learning.agents.wdsac.dr_wrapper import wrap_for_dr_training
-from learning.agents.flowsac.adv_wrapper import wrap_for_adv_training
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 import flax
 import jax
 import jax.numpy as jnp
 import optax
+from learning.module.wrapper.evaluator import Evaluator
 
 Metrics = types.Metrics
 Transition = types.Transition
@@ -615,7 +616,7 @@ def train(
       randomization_fn=v_randomization_fn,
   )  # pytype: disable=wrong-keyword-args
 
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=deterministic_eval),
       num_eval_envs=num_eval_envs,

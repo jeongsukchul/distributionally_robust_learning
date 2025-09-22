@@ -44,6 +44,7 @@ import optax
 Metrics = types.Metrics
 Transition = types.Transition
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
+from learning.module.wrapper.evaluator import Evaluator
 
 ReplayBufferState = Any
 
@@ -643,7 +644,7 @@ def train(
         randomization_fn=v_randomization_fn,
     )  # pytype: disable=wrong-keyword-args
 
-  evaluator = acting.Evaluator(
+  evaluator = Evaluator(
       eval_env,
       functools.partial(make_policy, deterministic=deterministic_eval),
       num_eval_envs=num_eval_envs,

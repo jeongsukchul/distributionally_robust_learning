@@ -542,7 +542,7 @@ def train(
   local_key, rb_key, env_key, eval_key = jax.random.split(local_key, 4)
 
   # env.reset per device
-  env_keys = jax.random.split(env_key, num_envs // jax.process_count())
+  env_keys = jax.random.split(env_key, num_envs * n_nominals // jax.process_count())
   env_keys = jnp.reshape(env_keys, (local_devices_to_use, -1) + env_keys.shape[1:])
   env_state = jax.pmap(env.reset)(env_keys)
 

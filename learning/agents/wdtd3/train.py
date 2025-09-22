@@ -92,6 +92,7 @@ def _init_training_state(
     per_replica_batch: int,
     init_lmbda: float,
     num_envs : int,
+    num_nominals : int,
     std_max: float =0.4,
     std_min : float =0.05,
 ) -> TrainingState:
@@ -125,7 +126,7 @@ def _init_training_state(
       lmbda_params=lmbda_params,
       normalizer_params=normalizer_params,
       noise_scales= jax.random.normal(key_noise,\
-         (num_envs// jax.process_count() // local_devices_to_use, )) *(std_max - std_min) + std_min,
+         (num_envs // jax.process_count() // local_devices_to_use, )) *(std_max - std_min) + std_min,
   )
   return jax.device_put_replicated(ts, jax.local_devices()[:local_devices_to_use])
 
@@ -552,6 +553,9 @@ def train(
   # env.reset per device
   env_keys = jax.random.split(env_key, num_envs // jax.process_count())
   env_keys = jnp.reshape(env_keys, (local_devices_to_use, -1) + env_keys.shape[1:])
+  print("num envs", num_envs)
+  print("n_nominals", n_nominals)
+  print(" env keys shape", env_keys.shape)
   env_state = jax.pmap(env.reset)(env_keys)
 
   # Build obs specs per device for normalizer init
@@ -573,6 +577,7 @@ def train(
       per_replica_batch=per_replica_batch_nominal,
       init_lmbda=init_lmbda,
       num_envs=num_envs,
+      num_nominals=n_nominals,
       std_max=std_max,
       std_min=std_min,
 

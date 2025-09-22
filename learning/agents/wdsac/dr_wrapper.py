@@ -71,8 +71,9 @@ class RandomVmapWrapper(Wrapper):
   def step(self, state: mjx_env.State, action: jax.Array, key:jax.random.PRNGKey) -> State:
     # keys = jax.random.split(key, self.n_nominals* self.n_envs)
     dynamics_params = jax.random.uniform(key=key, shape=(self.n_envs * self.n_nominals,len(self.dr_low)), minval=self.dr_low, maxval=self.dr_high)
-    done = jnp.repeat(state.done, self.n_nominals,axis=0)
-    
+    # done = jnp.repeat(state.done, self.n_nominals,axis=0)
+    print("stat done ", state.done)
+    done = state.done
     params = state.info["dr_params"] * (1 - done[..., None]) + dynamics_params * done[..., None]
     state.info["dr_params"] = params
     mjx_model_v, in_axes = self.rand_fn(params=params)

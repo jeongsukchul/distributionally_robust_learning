@@ -95,6 +95,7 @@ def make_losses(
     
   def flow_loss(
       flow_params: Params,
+      target_flow_params : Params,
       policy_params: Params,
       normalizer_params: Any,
       target_q_params: Params,
@@ -102,6 +103,7 @@ def make_losses(
       dr_range_high,
       dr_range_low,
       lmbda_params:Params,
+      alpha,
       key: jax.random.PRNGKey,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
@@ -135,5 +137,20 @@ def make_losses(
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
     value_loss = (data_log_prob * transitions.discount* normalized_next_v_adv).mean()
-    return lmbda_params* value_loss + kl_loss, (next_q_adv, value_loss, kl_loss)
+    target_samples, target_log_prob = flow_network.apply(
+        flow_params,
+        mode='sample',
+        low=dr_range_low,
+        high=dr_range_high,
+        n_samples=1000,     # <- pass the data here
+    )
+    current_log_prob = flow_network.apply(
+        flow_params,
+        mode='log_prob',
+        low=dr_range_low,
+        high=dr_range_high,
+        x=target_samples,    # <- pass the data here
+    )
+    proximal_loss = (target_log_prob - current_log_prob).mean()
+    return lmbda_params* value_loss + kl_loss + alpha * proximal_loss, (next_q_adv, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss

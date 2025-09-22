@@ -1,7 +1,7 @@
 import os
 
 from omegaconf import OmegaConf
-os.environ['MUJOCO_GL'] = 'glfw'
+os.environ['MUJOCO_GL'] = 'egl'
 
 import mediapy as media
 import matplotlib.pyplot as plt
@@ -68,9 +68,10 @@ from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 from mujoco_playground._src import mjx_env
 from utils import save_configs_to_wandb_and_local
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+import scipy
 
 
-
+import jax.numpy as jnp
 #egl로 바꾸는 게 왜인지 모르겠지만 RAM을 적게 먹는다.
 # # Ignore the info logs from brax
 # logging.set_verbosity(logging.WARNING)
@@ -535,7 +536,7 @@ def train(cfg: dict):
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
         jit_reset = jax.jit(eval_env.reset)
         jit_step = jax.jit(eval_env.step)
-        total_reward = 0.0
+        reward_list = []
         rollout = []
         rng, eval_rng = jax.random.split(rng)
         rngs = jax.random.split(eval_rng, n_episodes)
@@ -547,13 +548,16 @@ def train(cfg: dict):
                 action, info = jit_inference_fn(state.obs, act_rng)
                 state = jit_step(state, action)
                 rollout.append(state)
-                total_reward += state.reward
+                reward_list.append(state.reward)
             
         frames = eval_env.render(rollout, camera=CAMERAS[cfg.task],)
         frames = np.stack(frames).transpose(0, 3, 1, 2)
         fps=1.0 / env.dt
+        rewards = jnp.asarray(reward_list)
+        wandb.log({'final_eval_reward' : rewards.mean()})
+        wandb.log({'final_eval_reward_iqm' : scipy.stats.trim_mean(rewards, proportiontocut=0.25, axis=None) })
+        wandb.log({'final_eval_reward_std' :rewards.std() })
         wandb.log({'eval_video': wandb.Video(frames, fps=fps, format='mp4')})
-        wandb.log({'final_eval_reward' : total_reward/n_episodes})
 
    
 if __name__ == "__main__":

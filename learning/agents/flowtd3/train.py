@@ -80,6 +80,7 @@ class TrainingState:
   normalizer_params: running_statistics.RunningStatisticsState
   flow_optimizer_state : optax.OptState
   flow_params : Params
+  target_flow_params : Params
   noise_scales: jnp.ndarray
 
 def _unpmap(v):
@@ -107,6 +108,7 @@ def _init_training_state(
   q_optimizer_state = q_optimizer.init(q_params)
 
   flow_params = flowtd3_network.flow_network.init({"params": key_flow ,'constant':key_flow})
+  target_flow_params = flowtd3_network.flow_network.init({"params": key_flow ,'constant':key_flow})
   flow_optimizer_state = flow_optimizer.init(flow_params)
   normalizer_params = running_statistics.init_state(
     #   specs.Array((obs_size,), jnp.dtype('float32'))
@@ -123,6 +125,7 @@ def _init_training_state(
       normalizer_params=normalizer_params,
       flow_optimizer_state=flow_optimizer_state,
       flow_params=flow_params,
+      target_flow_params=target_flow_params,
       noise_scales= jax.random.normal(key_noise, (num_envs, )) *(std_max - std_min) + std_min,
   )
   return jax.device_put_replicated(
@@ -140,6 +143,7 @@ def train(
     learning_rate: float = 1e-4,
     flow_lr : float = 1e-4,  # Learning rate for flow network
     init_lmbda: float = 0.1,   #added
+    alpha : float = 0.5,
     discounting: float = 0.9, 
     seed: int = 0,
     batch_size: int = 256,
@@ -295,6 +299,7 @@ def train(
     
     (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_params, flow_optimizer_state = flow_update(
         training_state.flow_params,
+        training_state.target_flow_params,
         training_state.policy_params,
         training_state.normalizer_params,
         training_state.target_q_params,
@@ -302,6 +307,7 @@ def train(
         dr_range_high,
         dr_range_low,
         init_lmbda,
+        alpha,
         key_flow,  # Reuse key_actor for flow update
         optimizer_state=training_state.flow_optimizer_state,
     )
@@ -331,7 +337,11 @@ def train(
         training_state.target_q_params,
         q_params,
     )
-
+    new_target_flow_params = jax.tree_util.tree_map(
+        lambda x, y: x * (1 - tau) + y * tau,
+        training_state.target_q_params,
+        flow_params,
+    )
     metrics = {
         'critic_loss': critic_loss,
         'actor_loss': actor_loss,
@@ -354,6 +364,7 @@ def train(
         target_q_params=new_target_q_params,
         flow_optimizer_state=flow_optimizer_state,
         flow_params=flow_params,
+        target_flow_params = new_target_flow_params,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,

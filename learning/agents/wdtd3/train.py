@@ -38,7 +38,7 @@ from module.buffer import DynamicBatchQueue  # noqa: E402
 from agents.wdtd3 import checkpoint
 from agents.wdtd3 import losses as wdtd3_losses
 from agents.wdtd3 import networks as wdtd3_networks
-from agents.wdtd3.dr_wrapper import wrap_for_dr_training
+from agents.wdsac.dr_wrapper import wrap_for_dr_training
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 
 Metrics = types.Metrics

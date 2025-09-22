@@ -190,6 +190,7 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
         progress_fn=progress,
         policy_params_fn=functools.partial(policy_params_fn, ckpt_path=cfg.work_dir / "models" ),
         randomization_fn=randomization_fn,
+        seed=cfg.seed,
         # custom_wrapper = cfg.custom_wrapper
     )
     
@@ -241,6 +242,7 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
         randomization_fn=randomization_fn,
         dr_train_ratio = cfg.dr_train_ratio,
         custom_wrapper=cfg.custom_wrapper,
+        seed=cfg.seed,
         adv_wrapper = cfg.adv_wrapper
     )
 
@@ -256,7 +258,9 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
     td3_training_params = dict(td3_params)
     if cfg.randomization:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.\
-            hard_dr={cfg.custom_wrapper}.adv_wrapper={cfg.adv_wrapper}"#dr_train_ratio={cfg.dr_train_ratio}"
+            hard_dr={cfg.custom_wrapper}"
+        if cfg.custom_wrapper and cfg.adv_wrapper:
+        wandb_name+=f".adv_wrapper={cfg.adv_wrapper}"#dr_train_ratio={cfg.dr_train_ratio}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     if cfg.use_wandb:
@@ -287,6 +291,7 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         randomization_fn=randomization_fn,
         dr_train_ratio = cfg.dr_train_ratio,
         custom_wrapper = cfg.custom_wrapper,
+        seed=cfg.seed,
         adv_wrapper = cfg.adv_wrapper
     )
     make_inference_fn, params, metrics = train_fn(        
@@ -340,6 +345,7 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
         use_wandb=cfg.use_wandb,
         dr_flow = cfg.dr_flow,
         dr_train_ratio = cfg.dr_train_ratio,
+        seed=cfg.seed,
         eval_with_training_env = cfg.eval_with_training_env,
     )
 
@@ -390,6 +396,7 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
         randomization_fn=randomization_fn,
         use_wandb=cfg.use_wandb,
         dr_train_ratio = cfg.dr_train_ratio,
+        seed=cfg.seed,
         eval_with_training_env = cfg.eval_with_training_env,
     )
 
@@ -441,6 +448,7 @@ def train_wdtd3(cfg:dict, randomization_fn, env):
         wdtd3.train, **dict(wdtd3_training_params),
         network_factory=network_factory,
         progress_fn=progress,
+        seed=cfg.seed,
         randomization_fn=randomization_fn,
     )
 

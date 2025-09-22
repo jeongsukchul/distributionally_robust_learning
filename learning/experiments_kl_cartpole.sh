@@ -1,7 +1,7 @@
 gpu_id=$1 
 wandb_project="wdtd3-kl4"
 use_wandb=true
-task="CheetahRun"
+task="CartpoleSwingup"
 for seed in 1 2 3
 do 
     CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="td3" wandb_project=$wandb_project custom_wrapper=false asymmetric_critic=false task=$task seed=$seed use_wandb=$use_wandb
@@ -18,7 +18,10 @@ do
             done
         done
 done
-
+for seed in 1 2 3
+do 
+    CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="td3" wandb_project=$wandb_project custom_wrapper=false asymmetric_critic=true task=$task seed=$seed use_wandb=$use_wandb
+done 
 for delta in 0.001 0.05 
 do
     for n_nominals in 5 

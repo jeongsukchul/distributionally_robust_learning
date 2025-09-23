@@ -143,7 +143,7 @@ def train(
     learning_rate: float = 1e-4,
     flow_lr : float = 1e-4,  # Learning rate for flow network
     init_lmbda: float = 0.1,   #added
-    alpha : float = 0.5,
+    alpha : float = 2.0,
     discounting: float = 0.9, 
     seed: int = 0,
     batch_size: int = 256,
@@ -339,7 +339,7 @@ def train(
     )
     new_target_flow_params = jax.tree_util.tree_map(
         lambda x, y: x * (1 - tau) + y * tau,
-        training_state.target_q_params,
+        training_state.target_flow_params,
         flow_params,
     )
     metrics = {

@@ -98,6 +98,7 @@ def make_losses(
       target_flow_params : Params,
       policy_params: Params,
       normalizer_params: Any,
+      current_q_params: Params,
       target_q_params: Params,
       transitions: Any,
       dr_range_high,
@@ -107,6 +108,7 @@ def make_losses(
       key: jax.random.PRNGKey,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
+    key1, key2 = jax.random.split(key)
     # If dr_low/dr_high are 1-D (shape: [D]) → scalar
     data_log_prob = flow_network.apply(
         flow_params,
@@ -122,7 +124,7 @@ def make_losses(
         low=dr_range_low,
         high=dr_range_high,
         n_samples=1000,
-        rng=key,
+        rng=key1,
     )
     # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
     kl_loss = current_logp.mean()
@@ -135,14 +137,17 @@ def make_losses(
     next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
     
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
+    current_q = q_network.apply(normalizer_params, current_q_params, transitions.observation, transitions.action).min(-1)
+    normalized_current_q = (jax.lax.stop_gradient(1/current_q.mean())) * current_q
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
-    value_loss = (data_log_prob * transitions.discount* normalized_next_v_adv).mean()
+    value_loss = (data_log_prob *( transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q)).mean()
     target_samples, target_log_prob = flow_network.apply(
         flow_params,
         mode='sample',
         low=dr_range_low,
         high=dr_range_high,
         n_samples=1000,     # <- pass the data here
+        rng=key2
     )
     current_log_prob = flow_network.apply(
         flow_params,
@@ -151,6 +156,6 @@ def make_losses(
         high=dr_range_high,
         x=target_samples,    # <- pass the data here
     )
-    proximal_loss = (target_log_prob - current_log_prob).mean()
-    return lmbda_params* value_loss + kl_loss + alpha * proximal_loss, (next_q_adv, value_loss, kl_loss)
+    proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
+    return lmbda_params* value_loss + kl_loss + 0 * proximal_loss, (next_q_adv, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss

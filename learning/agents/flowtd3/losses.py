@@ -140,9 +140,12 @@ def make_losses(
     current_q = q_network.apply(normalizer_params, current_q_params, transitions.observation, transitions.action).min(-1)
     normalized_current_q = (jax.lax.stop_gradient(1/current_q.mean())) * current_q
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
-    value_loss = (data_log_prob *( transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q)).mean()
+    truncation = transitions.extras['state_extras']['truncation']
+    advantage = transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q
+    advantage *= jnp.expand_dims(1 - truncation, -1)
+    value_loss = (data_log_prob *advantage).mean()
     target_samples, target_log_prob = flow_network.apply(
-        flow_params,
+        target_flow_params,
         mode='sample',
         low=dr_range_low,
         high=dr_range_high,

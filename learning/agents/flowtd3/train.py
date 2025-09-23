@@ -302,6 +302,7 @@ def train(
         training_state.target_flow_params,
         training_state.policy_params,
         training_state.normalizer_params,
+        training_state.q_params,
         training_state.target_q_params,
         transitions,
         dr_range_high,

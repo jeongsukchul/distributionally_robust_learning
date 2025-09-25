@@ -15,26 +15,11 @@ def _pad_last(x: jnp.ndarray, pad_left: int, pad_right: int, value: float = 0.0)
     return jnp.pad(x, pads, mode="constant", constant_values=value)
 
 
-def searchsorted(bin_locations: jnp.ndarray, inputs: jnp.ndarray, eps: float = 1e-6) -> jnp.ndarray:
-    """
-    Returns the index of the bin for each input using 'right' side search,
-    equivalent to torch-style sum(inputs >= bins) - 1 with a tiny epsilon to
-    include the rightmost edge.
-    Shapes:
-      bin_locations: (..., K+1)
-      inputs:        (...,)
-    """
-    # Avoid boundary issues on the last knot
+def searchsorted(bin_locations, inputs, eps=1e-6):
     bin_locations = bin_locations.at[..., -1].add(eps)
-    return jnp.sum(inputs[..., None] >= bin_locations, axis=-1) - 1
-
-    # jnp.searchsorted broadcasts over leading dims when last dims align
-    # idx = jnp.searchsorted(bin_locations, inputs, side="right") - 1
-    # # Clamp into valid bin range [0, K-1]
-    # K = bin_locations.shape[-1] - 1
-    # idx = jnp.clip(idx, 0, K - 1)
-    # return idx
-
+    idx = jnp.sum(inputs[..., None] >= bin_locations, axis=-1) - 1
+    K = bin_locations.shape[-1] - 1
+    return jnp.clip(idx, 0, K - 1)
 
 def _cum_from_unnorm(
     unnormalized: jnp.ndarray,

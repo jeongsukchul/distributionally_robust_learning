@@ -311,12 +311,12 @@ class Balance(mjx_env.MjxEnv):
         [0.9] +                             #floor_friction_min 
         [0.] * self.mjx_model.nv +   # dof_friction_min (2)
         [-0.3] * 2 +                          #com_offset_min
-        [0.5] * (self.mjx_model.nbody - 1)) #body_mass_min (2)
+        [0.75] * (self.mjx_model.nbody - 1)) #body_mass_min (2)
     high = jp.array(
-        [1.0] +                             #floor_friction_max
+        [2.0] +                             #floor_friction_max
         [1.] * self.mjx_model.nv+   #dof_friction_max
         [0.3] * 2 +                          #com_offset_max
-        [1.5] * (self.mjx_model.nbody - 1)) #body_mass_max
+        [1.25] * (self.mjx_model.nbody - 1)) #body_mass_max
     return low, high
 FLOOR_GEOM_ID = 0
 POLE_BODY_ID = 2

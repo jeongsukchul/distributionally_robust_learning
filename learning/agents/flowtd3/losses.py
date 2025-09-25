@@ -134,7 +134,7 @@ def make_losses(
     )
 
     # Get Q-value for adversarial next state-action pair
-    next_q_adv = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
+    next_q_adv = q_network.apply(normalizer_params, current_q_params, transitions.next_observation, next_action).min(-1)
     
     normalized_next_v_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
     current_q = q_network.apply(normalizer_params, current_q_params, transitions.observation, transitions.action).min(-1)
@@ -160,5 +160,6 @@ def make_losses(
         x=target_samples,    # <- pass the data here
     )
     proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
-    return lmbda_params* value_loss + kl_loss + 0 * proximal_loss, (next_q_adv, value_loss, kl_loss)
+    return lmbda_params* value_loss + 0.01* kl_loss +  proximal_loss, (next_q_adv, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
+

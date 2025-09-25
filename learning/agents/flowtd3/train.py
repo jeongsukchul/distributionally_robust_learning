@@ -29,7 +29,7 @@ from absl import logging
 from brax import base
 from brax import envs
 from brax.training import acting
-from brax.training import gradients
+from learning.module import gradients
 from brax.training import pmap
 from brax.training import replay_buffers
 from brax.training import types
@@ -297,7 +297,7 @@ def train(
     policy_noise = 0.2
     key, key_critic, key_actor,key_noise,key_flow = jax.random.split(key, 5)
     
-    (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_params, flow_optimizer_state = flow_update(
+    (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
         training_state.flow_params,
         training_state.target_flow_params,
         training_state.policy_params,
@@ -314,7 +314,7 @@ def train(
     )
     noise = jax.random.normal(key_noise, shape=transitions.action.shape) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)
-    (critic_loss, (current_q, next_v)), q_params, q_optimizer_state = critic_update(
+    (critic_loss, (current_q, next_v)), critic_grads, q_params, q_optimizer_state = critic_update(
         training_state.q_params,
         training_state.policy_params,
         training_state.normalizer_params,
@@ -324,7 +324,7 @@ def train(
         key_critic,
         optimizer_state=training_state.q_optimizer_state,
     )
-    actor_loss, policy_params, policy_optimizer_state = actor_update(
+    actor_loss, actor_grads, policy_params, policy_optimizer_state = actor_update(
         training_state.policy_params,
         training_state.normalizer_params,
         training_state.q_params,
@@ -349,6 +349,7 @@ def train(
         'flow_loss' : flow_loss,
         'flow_value_loss':value_loss,
         'flow_kl_loss' : kl_loss,
+        'flow_grad_norm' : flow_grads,
         'current_q_min' : current_q.min(),
         'current_q_max' : current_q.max(),
         'current_q_mean' : current_q.mean(),

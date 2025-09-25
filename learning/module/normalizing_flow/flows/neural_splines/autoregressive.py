@@ -128,27 +128,24 @@ class Autoregressive(nn.Module):
                 rngs: Optional[dict] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
         return self.__call__(inputs, context, training=training, rngs=rngs)
 
-    def inverse(self,
-                inputs: jnp.ndarray,
-                context: Optional[jnp.ndarray] = None,
-                *,
-                training: bool = False,
-                rngs: Optional[dict] = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        """Inverse via D iterative passes (matches the PyTorch reference)."""
+    def inverse(self, inputs, context=None, *, training: bool = False, rngs=None):
         D = int(np.prod(inputs.shape[1:]))
-        y0 = jnp.zeros_like(inputs)
+        y = jnp.zeros_like(inputs)
 
-        def body(carry, _):
-            y = carry
+        def step(_, y):
             params = self._net_apply(y, context, training, rngs)
-            y_new, ladj = self._elementwise(inputs, params, inverse=True)
-            # we keep the latest ladj only (same as the PyTorch loop behavior)
-            return y_new, ladj
+            y, _ = self._elementwise(inputs, params, inverse=True)
+            return y
 
-        # y_final, last_ladj = jax.lax.scan(body, y0, xs=None, length=D)
-        y_final, last_ladj = body(y0, None)
-        return y_final, sum_except_batch(last_ladj) # sum_except_batch(last_ladj[-1])
-
+        # y_final = jax.lax.fori_loop(0, D, step, y)
+        for i in range(D):
+            params = self._net_apply(y, context, training, rngs)
+            y, _ = self._elementwise(inputs, params, inverse=True)
+        y_final = y
+        # compute final logdet with the final parameters
+        params = self._net_apply(y_final, context, training, rngs)
+        _, ladj = self._elementwise(inputs, params, inverse=True)
+        return y_final, sum_except_batch(ladj)
     def _net_apply(self,
                    x: jnp.ndarray,
                    context: Optional[jnp.ndarray],
@@ -313,7 +310,7 @@ class AutoregressiveRationalQuadraticSpline(Flow):
     num_input_channels: int
     num_blocks : int
     num_hidden_channels : int
-    num_context_channels : bool =  None
+    num_context_channels : Optional[int] =  None
     num_bins : int = 8
     tail_bound : int = 3
     activation : callable = jax.nn.relu
@@ -356,8 +353,10 @@ class AutoregressiveRationalQuadraticSpline(Flow):
 
     def forward(self, z, context=None):
         z, log_det = self.mprqat.inverse(z, context=context)
+        # print("log det forward shape", log_det)
         return z, log_det#.view(-1)
 
     def inverse(self, z, context=None):
         z, log_det = self.mprqat(z, context=context)
+        # print("log det inverse shape", log_det)
         return z, log_det#.view(-1)

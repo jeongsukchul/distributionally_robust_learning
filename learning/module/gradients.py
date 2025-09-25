@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 import jax
 import optax
-
+import jax.numpy as jnp
 
 def loss_and_pgrad(
     loss_fn: Callable[..., float],

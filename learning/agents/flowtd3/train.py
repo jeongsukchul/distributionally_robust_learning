@@ -297,21 +297,21 @@ def train(
     policy_noise = 0.2
     key, key_critic, key_actor,key_noise,key_flow = jax.random.split(key, 5)
     
-    (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
-        training_state.flow_params,
-        training_state.target_flow_params,
-        training_state.policy_params,
-        training_state.normalizer_params,
-        training_state.q_params,
-        training_state.target_q_params,
-        transitions,
-        dr_range_high,
-        dr_range_low,
-        init_lmbda,
-        alpha,
-        key_flow,  # Reuse key_actor for flow update
-        optimizer_state=training_state.flow_optimizer_state,
-    )
+    # (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
+    #     training_state.flow_params,
+    #     training_state.target_flow_params,
+    #     training_state.policy_params,
+    #     training_state.normalizer_params,
+    #     training_state.q_params,
+    #     training_state.target_q_params,
+    #     transitions,
+    #     dr_range_high,
+    #     dr_range_low,
+    #     init_lmbda,
+    #     alpha,
+    #     key_flow,  # Reuse key_actor for flow update
+    #     optimizer_state=training_state.flow_optimizer_state,
+    # )
     noise = jax.random.normal(key_noise, shape=transitions.action.shape) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)
     (critic_loss, (current_q, next_v)), critic_grads, q_params, q_optimizer_state = critic_update(
@@ -338,18 +338,18 @@ def train(
         training_state.target_q_params,
         q_params,
     )
-    new_target_flow_params = jax.tree_util.tree_map(
-        lambda x, y: x * (1 - tau) + y * tau,
-        training_state.target_flow_params,
-        flow_params,
-    )
+    # new_target_flow_params = jax.tree_util.tree_map(
+    #     lambda x, y: x * (1 - tau) + y * tau,
+    #     training_state.target_flow_params,
+    #     flow_params,
+    # )
     metrics = {
         'critic_loss': critic_loss,
         'actor_loss': actor_loss,
-        'flow_loss' : flow_loss,
-        'flow_value_loss':value_loss,
-        'flow_kl_loss' : kl_loss,
-        'flow_grad_norm' : flow_grads,
+        # 'flow_loss' : flow_loss,
+        # 'flow_value_loss':value_loss,
+        # 'flow_kl_loss' : kl_loss,
+        # 'flow_grad_norm' : flow_grads,
         'current_q_min' : current_q.min(),
         'current_q_max' : current_q.max(),
         'current_q_mean' : current_q.mean(),
@@ -364,9 +364,9 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
-        flow_optimizer_state=flow_optimizer_state,
-        flow_params=flow_params,
-        target_flow_params = new_target_flow_params,
+        # flow_optimizer_state=flow_optimizer_state,
+        # flow_params=flow_params,
+        # target_flow_params = new_target_flow_params,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,
@@ -436,7 +436,7 @@ def train(
 
     }
     buffer_state = replay_buffer.insert(buffer_state, transitions)
-    return normalizer_params, noise_scales, env_state, buffer_state, simul_info
+    return normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions
 
   def training_step(
       training_state: TrainingState,
@@ -449,7 +449,7 @@ def train(
       ReplayBufferState,
       Metrics,
   ]:
-    experience_key, param_key, training_key = jax.random.split(key, 3)
+    experience_key, param_key, training_key, flow_key = jax.random.split(key, 4)
     dynamics_params, logp = flowtd3_network.flow_network.apply(
         training_state.flow_params,
         low=dr_range_low,
@@ -458,8 +458,8 @@ def train(
         rng=param_key,
         n_samples=num_envs // jax.process_count() // local_devices_to_use,
     )
-    dynamics_params = jax.lax.stop_gradient(dynamics_params)
-    normalizer_params, noise_scales, env_state, buffer_state, simul_info = get_experience(
+    # dynamics_params = jax.lax.stop_gradient(dynamics_params)
+    normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
         training_state.noise_scales,
@@ -473,7 +473,26 @@ def train(
         noise_scales = noise_scales,
         env_steps=training_state.env_steps + env_steps_per_actor_step,
     )
-
+    (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
+        training_state.flow_params,
+        training_state.target_flow_params,
+        training_state.policy_params,
+        training_state.normalizer_params,
+        training_state.q_params,
+        simul_transitions,
+        dr_range_high,
+        dr_range_low,
+        init_lmbda,
+        alpha,
+        flow_key,  # Reuse key_actor for flow update
+        optimizer_state=training_state.flow_optimizer_state,
+    )
+    flow_metric={}
+    flow_metric['flow_loss'] = flow_loss
+    flow_metric['value_loss'] = value_loss
+    flow_metric['kl_loss'] = kl_loss
+    flow_metric['flow_grad_norm'] = flow_grads
+    training_state = training_state.replace(flow_params = flow_params, flow_optimizer_state=flow_optimizer_state)
     buffer_state, transitions = replay_buffer.sample(buffer_state)
     # Change the front dimension of transitions so 'update_step' is called
     # grad_updates_per_step times by the scan.
@@ -487,6 +506,7 @@ def train(
 
     metrics['buffer_current_size'] = replay_buffer.size(buffer_state)
     metrics.update(simul_info)
+    metrics.update(flow_metric)
     return training_state, env_state, buffer_state, metrics
 
   def prefill_replay_buffer(
@@ -499,7 +519,7 @@ def train(
     def f(carry, params):
       training_state, env_state, buffer_state, key = carry
       key, new_key = jax.random.split(key)
-      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info = get_experience(
+      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
           training_state.noise_scales,

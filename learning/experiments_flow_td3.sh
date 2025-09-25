@@ -1,5 +1,5 @@
 gpu_id=$1 
-wandb_project="flow-td3-cartpole6"
+wandb_project="flow-td3-cartpole5"
 use_wandb=true
 dr_train_ratio=1.0
 task="CartpoleSwingup"
@@ -10,13 +10,10 @@ task="CartpoleSwingup"
 #     # seed=$seed use_wandb=$use_wandb dr_train_ratio=$dr_train_ratio 
 # CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="td3" wandb_project=$wandb_project asymmetric_critic=true custom_wrapper=true task=$task seed=$seed use_wandb=$use_wandb
 
-for seed in 1 2 3
-do
-    CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="td3" wandb_project=$wandb_project asymmetric_critic=true custom_wrapper=false task=$task seed=$seed use_wandb=$use_wandb
-done
+
 for flow_lr in 1e-5 1e-4
 do
-    for init_lmbda in 1. 2.5 5. 10. 
+    for init_lmbda in 0.01 0.05 0.1
         do
         for seed in 1 2 3 
         do
@@ -25,4 +22,8 @@ do
                 seed=$seed use_wandb=$use_wandb dr_flow=$dr_flow dr_train_ratio=$dr_train_ratio 
             done
         done 
+done
+for seed in 1 2 3
+do
+    CUDA_VISIBLE_DEVICES=$gpu_id python train.py policy="td3" wandb_project=$wandb_project asymmetric_critic=true custom_wrapper=false task=$task seed=$seed use_wandb=$use_wandb
 done

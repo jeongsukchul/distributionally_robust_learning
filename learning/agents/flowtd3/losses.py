@@ -99,7 +99,6 @@ def make_losses(
       policy_params: Params,
       normalizer_params: Any,
       current_q_params: Params,
-      target_q_params: Params,
       transitions: Any,
       dr_range_high,
       dr_range_low,
@@ -160,6 +159,6 @@ def make_losses(
         x=target_samples,    # <- pass the data here
     )
     proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
-    return lmbda_params* value_loss + 0.01* kl_loss +  proximal_loss, (next_q_adv, value_loss, kl_loss)
+    return lmbda_params* value_loss +  0*kl_loss +  0*proximal_loss, (next_q_adv, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
 

@@ -1,5 +1,5 @@
 gpu_id=$1 
-wandb_project="flow-td3-cartpole4"
+wandb_project="flow-td3-cartpole6"
 use_wandb=true
 dr_train_ratio=1.0
 task="CartpoleSwingup"
@@ -16,7 +16,7 @@ do
 done
 for flow_lr in 1e-5 1e-4
 do
-    for init_lmbda in 0.005 0.01 0.05 
+    for init_lmbda in 1. 2.5 5. 10. 
         do
         for seed in 1 2 3 
         do

@@ -251,9 +251,11 @@ def train(
 
 
   policy_optimizer = optax.adam(learning_rate=learning_rate)
-  q_optimizer = optax.adam(learning_rate=learning_rate)
-  flow_optimizer = optax.adam(learning_rate=flow_lr)  # Flow network optimizer
-
+  q_optimizer = optax.adam(learning_rate=learning_rate)    
+  flow_optimizer = optax.chain(
+    optax.clip_by_global_norm(1.0),
+    optax.adam(learning_rate=flow_lr)  # Flow network optimizer
+  )
   dummy_params = jnp.zeros((len(dr_range_low),))  # Dummy dynamics parameters
   dummy_obs = { key: jnp.zeros(obs_shape[key]) for key in obs_shape } if isinstance(obs_shape, dict) else jnp.zeros((obs_shape,))
   print("dummy_obs", dummy_obs)
@@ -492,7 +494,7 @@ def train(
     )
     print("simul info reward", simul_info["simul/reward_mean"])
     print("dynamics_param", simul_info["simul/dynamics_params_mean"])
-
+    print("grad norm", flow_grads)
     training_state = training_state.replace(
         normalizer_params=normalizer_params,
         noise_scales = noise_scales,
@@ -716,30 +718,30 @@ def train(
   print("setup time", ed-st)
 
   
-  if process_id==0:
-    fig1 = render_flow_pdf_1d_subplots(
-            flowtd3_network.flow_network,
-              _unpmap(training_state.flow_params),
-              ndim=dr_range_low.shape[0],
-              low=dr_range_low,
-              high=dr_range_high,
-              training_step=0,
-              use_wandb=use_wandb,
-        )
+  # if process_id==0:
+  #   fig1 = render_flow_pdf_1d_subplots(
+  #           flowtd3_network.flow_network,
+  #             _unpmap(training_state.flow_params),
+  #             ndim=dr_range_low.shape[0],
+  #             low=dr_range_low,
+  #             high=dr_range_high,
+  #             training_step=0,
+  #             use_wandb=use_wandb,
+  #       )
 
-  # Create and initialize the replay buffer.
+  # # Create and initialize the replay buffer.
   t = time.time()
-  prefill_key, local_key = jax.random.split(local_key)
-  prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
-  training_state, env_state, buffer_state, _ = prefill_replay_buffer(
-      training_state, env_state, buffer_state, prefill_keys
-  )
+  # prefill_key, local_key = jax.random.split(local_key)
+  # prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
+  # training_state, env_state, buffer_state, _ = prefill_replay_buffer(
+  #     training_state, env_state, buffer_state, prefill_keys
+  # )
 
-  replay_size = (
-      jnp.sum(jax.vmap(replay_buffer.size)(buffer_state)) * jax.process_count()
-  )
-  logging.info('replay size after prefill %s', replay_size)
-  assert replay_size >= min_replay_size
+  # replay_size = (
+  #     jnp.sum(jax.vmap(replay_buffer.size)(buffer_state)) * jax.process_count()
+  # )
+  # logging.info('replay size after prefill %s', replay_size)
+  # assert replay_size >= min_replay_size
   training_walltime = time.time() - t
 
   current_step = 0

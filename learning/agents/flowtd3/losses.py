@@ -237,9 +237,10 @@ def make_losses(
     truncation = transitions.extras['state_extras']['truncation']
     advantage = transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q
     advantage *= 1-truncation
-    
+    print("log prob", jnp.isnan(data_log_prob))
+    print("advantage mean", jnp.isnan(advantage.mean()))
     value_loss = (data_log_prob *advantage).mean()
-    
+    print("value loss", jnp.isnan(value_loss))
     # target_samples, target_log_prob = flow_network.apply(
     #     target_flow_params,
     #     mode='sample',

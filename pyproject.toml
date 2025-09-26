@@ -7,7 +7,7 @@ name = "distributionally-robust-learning"   # distribution name: can have hyphen
 version = "0.1.0"
 description = ""
 authors = ["You <you@example.com>"]
-
+packages = [{ include = "learning" }] 
 
 # Tell setuptools: read deps from a file instead of hard-coding here
 dynamic = ["dependencies"]

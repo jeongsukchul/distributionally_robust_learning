@@ -1,5 +1,5 @@
 gpu_id=$1 
-wandb_project="wdtd3-kl4-cheetah"
+wandb_project="wdtd3-kl5-cheetah"
 use_wandb=true
 task="CheetahRun"
 for seed in 1 2 3

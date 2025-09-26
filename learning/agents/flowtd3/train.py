@@ -450,42 +450,53 @@ def train(
       Metrics,
   ]:
     experience_key, param_key, training_key, flow_key = jax.random.split(key, 4)
-    dynamics_params, logp = flowtd3_network.flow_network.apply(
-        training_state.flow_params,
-        low=dr_range_low,
-        high=dr_range_high,
-        mode='sample',
-        rng=param_key,
-        n_samples=num_envs // jax.process_count() // local_devices_to_use,
-    )
+    # dynamics_params, logp = flowtd3_network.flow_network.apply(
+    #     training_state.flow_params,
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     mode='sample',
+    #     rng=param_key,
+    #     n_samples=num_envs // jax.process_count() // local_devices_to_use,
+    # )
     # dynamics_params = jax.lax.stop_gradient(dynamics_params)
-    normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+    # normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+    #     training_state.normalizer_params,
+    #     training_state.policy_params,
+    #     training_state.noise_scales,
+    #     env_state,
+    #     dynamics_params,
+    #     buffer_state,
+    #     experience_key,
+    # )
+
+    (flow_loss, (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
+        training_state.flow_params,
         training_state.normalizer_params,
         training_state.policy_params,
+        training_state.q_params,
         training_state.noise_scales,
         env_state,
-        dynamics_params,
         buffer_state,
-        experience_key,
-    )
-    training_state = training_state.replace(
-        normalizer_params=normalizer_params,
-        noise_scales = noise_scales,
-        env_steps=training_state.env_steps + env_steps_per_actor_step,
-    )
-    (flow_loss, (next_q_adv, value_loss, kl_loss)), flow_grads, flow_params, flow_optimizer_state = flow_update(
-        training_state.flow_params,
-        training_state.target_flow_params,
-        training_state.policy_params,
-        training_state.normalizer_params,
-        training_state.q_params,
-        simul_transitions,
         dr_range_high,
         dr_range_low,
         init_lmbda,
         alpha,
         flow_key,  # Reuse key_actor for flow update
+        num_envs // jax.process_count() // local_devices_to_use,
+        env,
+        replay_buffer,
+        make_policy,
+        std_min,
+        std_max,
         optimizer_state=training_state.flow_optimizer_state,
+    )
+    print("simul info reward", simul_info["simul/reward_mean"])
+    print("dynamics_param", simul_info["simul/dynamics_params_mean"])
+
+    training_state = training_state.replace(
+        normalizer_params=normalizer_params,
+        noise_scales = noise_scales,
+        env_steps=training_state.env_steps + env_steps_per_actor_step,
     )
     flow_metric={}
     flow_metric['flow_loss'] = flow_loss

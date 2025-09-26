@@ -17,7 +17,7 @@
 See: https://arxiv.org/pdf/1812.05905.pdf
 """
 
-from typing import Any
+from typing import Any, Sequence, Tuple
 
 from brax.training import types
 from agents.flowtd3 import networks as flowtd3_networks
@@ -25,9 +25,81 @@ from brax.training.types import Params
 from brax.training.types import PRNGKey
 import jax
 import jax.numpy as jnp
+from brax import envs
 
+from learning.agents.flowtd3.train import TransitionwithParams
+_PMAP_AXIS_NAME = 'i'
+from brax.training.acme import running_statistics
+from brax.envs.base import Wrapper, Env, State
 
+def adv_step(
+    env: Env,
+    env_state: State,
+    dynamics_params: jnp.ndarray,
+    policy: Any,
+    noise_scales : jnp.ndarray,
+    key: PRNGKey,
+    extra_fields: Sequence[str] = (),
+  ):
+    step_key, key = jax.random.split(key)
+    actions, policy_extras = policy(env_state.obs, noise_scales, key)
+    # dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+    params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
+    nstate = env.step(env_state, actions, params)
+    state_extras = {x: nstate.info[x] for x in extra_fields}
+    return nstate, TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
+        observation=env_state.obs,
+        action=actions,
+        dynamics_params=dynamics_params,
+        reward=nstate.reward,
+        discount=1 - nstate.done,
+        next_observation= nstate.obs,
+        extras={'policy_extras': policy_extras, 'state_extras': state_extras},
+    )
+def get_experience(
+      normalizer_params: running_statistics.RunningStatisticsState,
+      policy_params: Params,
+      noise_scales: jnp.ndarray,
+      env_state: envs.State,
+      dynamics_params: jnp.ndarray, #[num_envs(local), dynamics_param_size]
+      buffer_state: Any,
+      key: PRNGKey,
+      env,
+      replay_buffer,
+      make_policy,
+      std_min,
+      std_max,
+  ) -> Tuple[
+      running_statistics.RunningStatisticsState,
+      envs.State,
+      Any,
+  ]:
+    noise_key, key = jax.random.split(key)
+    policy = make_policy((normalizer_params, policy_params))
+    env_state, transitions = adv_step(
+        env, env_state, dynamics_params, policy, noise_scales, key, extra_fields=('truncation',)
+    )
 
+    normalizer_params = running_statistics.update(
+        normalizer_params,
+        transitions.observation,
+        pmap_axis_name=_PMAP_AXIS_NAME,
+    )
+    noise_scales = (1-env_state.done)* noise_scales + \
+          env_state.done* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
+    
+
+    simul_info ={
+      "simul/reward_mean" : transitions.reward.mean(),
+      "simul/reward_std" : transitions.reward.std(),
+      "simul/reward_max" : transitions.reward.max(),
+      "simul/reward_min" : transitions.reward.min(),
+      "simul/dynamics_params_mean" : dynamics_params.mean(),
+      "simul/dynamics_params_std" : dynamics_params.std(),
+
+    }
+    buffer_state = replay_buffer.insert(buffer_state, transitions)
+    return normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions
 def make_losses(
     flowtd3_network: flowtd3_networks.FlowTd3Networks,
     reward_scaling: float,
@@ -95,38 +167,61 @@ def make_losses(
     
   def flow_loss(
       flow_params: Params,
-      target_flow_params : Params,
-      policy_params: Params,
       normalizer_params: Any,
+      policy_params: Params,
       current_q_params: Params,
-      transitions: Any,
+      noise_scales : jnp.ndarray,
+      env_state,
+      buffer_state,
       dr_range_high,
       dr_range_low,
       lmbda_params:Params,
       alpha,
       key: jax.random.PRNGKey,
+      num_envs,
+      env,
+      replay_buffer,
+      make_policy,
+      std_min,
+      std_max,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
-    key1, key2 = jax.random.split(key)
+    key1, key2, key3 = jax.random.split(key,3)
     # If dr_low/dr_high are 1-D (shape: [D]) → scalar
-    data_log_prob = flow_network.apply(
+    dynamics_params, data_log_prob = flowtd3_network.flow_network.apply(
         flow_params,
-        mode='log_prob',
         low=dr_range_low,
         high=dr_range_high,
-        x=transitions.dynamics_params,      # <- pass the data here
+        mode='sample',
+        rng=key1,
+        n_samples=num_envs,
     )
     data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
-    _, current_logp = flow_network.apply(
-        flow_params,
-        mode='sample',
-        low=dr_range_low,
-        high=dr_range_high,
-        n_samples=1000,
-        rng=key1,
+    normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions = get_experience(
+        normalizer_params,
+        policy_params,
+        noise_scales,
+        env_state,
+        dynamics_params,
+        buffer_state,
+        key2,
+        env,
+        replay_buffer,
+        make_policy,
+        std_min,
+        std_max,
     )
+
+    # _, current_logp = flow_network.apply(
+    #     flow_params,
+    #     mode='sample',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     n_samples=1000,
+    #     rng=key1,
+    # )
     # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
-    kl_loss = current_logp.mean()
+    # kl_loss = current_logp.mean()
     # Get next action and log prob from policy for adversarial observation
     next_action = policy_network.apply(
         normalizer_params, policy_params, transitions.next_observation
@@ -141,24 +236,27 @@ def make_losses(
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
     truncation = transitions.extras['state_extras']['truncation']
     advantage = transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q
-    advantage *= jnp.expand_dims(1 - truncation, -1)
+    advantage *= 1-truncation
+    
     value_loss = (data_log_prob *advantage).mean()
-    target_samples, target_log_prob = flow_network.apply(
-        target_flow_params,
-        mode='sample',
-        low=dr_range_low,
-        high=dr_range_high,
-        n_samples=1000,     # <- pass the data here
-        rng=key2
-    )
-    current_log_prob = flow_network.apply(
-        flow_params,
-        mode='log_prob',
-        low=dr_range_low,
-        high=dr_range_high,
-        x=target_samples,    # <- pass the data here
-    )
-    proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
-    return lmbda_params* value_loss +  0*kl_loss +  0*proximal_loss, (next_q_adv, value_loss, kl_loss)
+    
+    # target_samples, target_log_prob = flow_network.apply(
+    #     target_flow_params,
+    #     mode='sample',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     n_samples=1000,     # <- pass the data here
+    #     rng=key2
+    # )
+    # current_log_prob = flow_network.apply(
+    #     flow_params,
+    #     mode='log_prob',
+    #     low=dr_range_low,
+    #     high=dr_range_high,
+    #     x=target_samples,    # <- pass the data here
+    # )
+    # proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
+    kl_loss=0
+    return lmbda_params* value_loss , (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
 

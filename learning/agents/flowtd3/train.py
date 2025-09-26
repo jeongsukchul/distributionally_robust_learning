@@ -253,7 +253,7 @@ def train(
   policy_optimizer = optax.adam(learning_rate=learning_rate)
   q_optimizer = optax.adam(learning_rate=learning_rate)    
   flow_optimizer = optax.chain(
-    optax.clip_by_global_norm(1.0),
+    optax.clip_by_global_norm(100.0),
     optax.adam(learning_rate=flow_lr)  # Flow network optimizer
   )
   dummy_params = jnp.zeros((len(dr_range_low),))  # Dummy dynamics parameters

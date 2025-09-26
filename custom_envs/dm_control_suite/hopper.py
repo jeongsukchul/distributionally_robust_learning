@@ -129,7 +129,7 @@ class Hopper(mjx_env.MjxEnv):
     ])
     privileged_state = jp.concatenate([
       state,
-      self.mjx_model.body_mass[1],
+      self.mjx_model.body_mass[1:2],
 
     ])
     return {

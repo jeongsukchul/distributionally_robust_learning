@@ -177,7 +177,7 @@ def brax_td3_config(env_name: str) -> config_dict.ConfigDict:
   ):
     std_min=0.1
     rl_config.num_timesteps = 30_000_000
-  if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup"):
+  if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup","HopperHop"):
     rl_config.network_factory = config_dict.create(
       q_network_layer_norm=True,
       policy_obs_key="state",

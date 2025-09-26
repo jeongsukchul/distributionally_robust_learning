@@ -122,11 +122,20 @@ class Hopper(mjx_env.MjxEnv):
 
   def _get_obs(self, data: mjx.Data, info: dict[str, Any]) -> jax.Array:
     del info  # Unused.
-    return jp.concatenate([
+    state =  jp.concatenate([
         data.qpos[1:],
         data.qvel,
         self._touch(data),
     ])
+    privileged_state = jp.concatenate([
+      state,
+      self.mjx_model.body_mass[1],
+
+    ])
+    return {
+        "state": state,
+        "privileged_state": privileged_state,
+    }
 
   def _hop_reward(
       self,

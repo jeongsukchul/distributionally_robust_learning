@@ -394,7 +394,7 @@ def render_flow_pdf_1d_subplots(
         try:
             import wandb
             wandb.log(
-                {f"all_dims_1d_pdf(step : {training_step})": wandb.Image(fig)},
+                {f"all_dims_1d_pdf": wandb.Image(fig)},
                 step=int(training_step),
             )
         except Exception as e:
@@ -458,7 +458,7 @@ def render_flow_pdf_2d_subplots(
         try:
             import wandb
             wandb.log(
-                {f"all_pairs_2d_pdf(step : {training_step})": wandb.Image(fig)},
+                {f"2d_pdf": wandb.Image(fig)},
                 step=int(training_step),
             )
         except Exception as e:

@@ -105,6 +105,8 @@ def make_losses(
     reward_scaling: float,
     discounting: float,
     action_size: int,
+    use_advantage: bool = True,
+    use_normalization: bool = True,
 ):
   """Creates the td3 losses."""
 
@@ -170,94 +172,75 @@ def make_losses(
       normalizer_params: Any,
       policy_params: Params,
       current_q_params: Params,
-      noise_scales : jnp.ndarray,
-      env_state,
-      buffer_state,
+      dynamics_params: jnp.ndarray,
+      transitions: Any,
+    #   noise_scales : jnp.ndarray,
+    #   env_state,
+    #   buffer_state,
       dr_range_high,
       dr_range_low,
       lmbda_params:Params,
-      alpha,
       key: jax.random.PRNGKey,
-      num_envs,
-      env,
-      replay_buffer,
-      make_policy,
-      std_min,
-      std_max,
+    #   num_envs,
+    #   env,
+    #  render_flow_pdf_2d_subplots  make_policy,
+    # render_flow_pdf_2d_subplots  std_min,
+    #   std_max,
   ):
     """Loss for training the flow network to generate adversarial dynamics parameters."""
-    key1, key2, key3 = jax.random.split(key,3)
     # If dr_low/dr_high are 1-D (shape: [D]) → scalar
-    dynamics_params, data_log_prob = flowtd3_network.flow_network.apply(
+    data_log_prob = flowtd3_network.flow_network.apply(
         flow_params,
         low=dr_range_low,
         high=dr_range_high,
-        mode='sample',
-        rng=key1,
-        n_samples=num_envs,
+        mode='log_prob',
+        x=dynamics_params,
     )
     data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
-    normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions = get_experience(
-        normalizer_params,
-        policy_params,
-        noise_scales,
-        env_state,
-        dynamics_params,
-        buffer_state,
-        key2,
-        env,
-        replay_buffer,
-        make_policy,
-        std_min,
-        std_max,
-    )
-
-    # _, current_logp = flow_network.apply(
-    #     flow_params,
-    #     mode='sample',
-    #     low=dr_range_low,
-    #     high=dr_range_high,
-    #     n_samples=1000,
-    #     rng=key1,
+    # normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions = get_experience(
+    #     normalizer_params,
+    #     policy_params,
+    #     noise_scales,
+    #     env_state,
+    #     dynamics_params,
+    #     buffer_state,
+    #     key2,
+    #     env,
+    #     replay_buffer,
+    #     make_policy,
+    #     std_min,
+    #     std_max,
     # )
-    # kl_loss = volume*(jnp.exp(current_logp)*current_logp).mean()
-    # kl_loss = current_logp.mean()
+
+    _, current_logp = flow_network.apply(
+        flow_params,
+        mode='sample',
+        low=dr_range_low,
+        high=dr_range_high,
+        rng=key,
+        n_samples=10000,
+    )
+    kl_loss = current_logp.mean()
     # Get next action and log prob from policy for adversarial observation
     next_action = policy_network.apply(
         normalizer_params, policy_params, transitions.next_observation
     )
-
     # Get Q-value for adversarial next state-action pair
     next_q_adv = q_network.apply(normalizer_params, current_q_params, transitions.next_observation, next_action).min(-1)
-    
-    normalized_next_v_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
+    # next_q_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
     current_q = q_network.apply(normalizer_params, current_q_params, transitions.observation, transitions.action).min(-1)
-    normalized_current_q = (jax.lax.stop_gradient(1/current_q.mean())) * current_q
+    # normalized_current_q = (jax.lax.stop_gradient(1/current_q.mean())) * current_q
     # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
     truncation = transitions.extras['state_extras']['truncation']
-    advantage = transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q
+    advantage = transitions.reward + transitions.discount* next_q_adv - current_q
+    if use_normalization:
+        advantage = (jax.lax.stop_gradient(1/advantage.mean())) * advantage
     advantage *= 1-truncation
-    print("log prob", jnp.isnan(data_log_prob))
-    print("advantage mean", jnp.isnan(advantage.mean()))
-    value_loss = (data_log_prob *advantage).mean()
-    print("value loss", jnp.isnan(value_loss))
-    # target_samples, target_log_prob = flow_network.apply(
-    #     target_flow_params,
-    #     mode='sample',
-    #     low=dr_range_low,
-    #     high=dr_range_high,
-    #     n_samples=1000,     # <- pass the data here
-    #     rng=key2
-    # )
-    # current_log_prob = flow_network.apply(
-    #     flow_params,
-    #     mode='log_prob',
-    #     low=dr_range_low,
-    #     high=dr_range_high,
-    #     x=target_samples,    # <- pass the data here
-    # )
-    # proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
-    kl_loss=0
-    return lmbda_params* value_loss , (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)
+    if use_advantage:
+        value_loss = (data_log_prob * advantage).mean()
+    else: 
+        value_loss = (data_log_prob * next_q_adv).mean()
+    # return lmbda_params* value_loss + kl_loss, (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)
+    return lmbda_params*value_loss + kl_loss, (value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
 

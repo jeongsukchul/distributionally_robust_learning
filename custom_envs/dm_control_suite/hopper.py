@@ -216,14 +216,14 @@ class Hopper(mjx_env.MjxEnv):
   def dr_range(self) -> dict:
 
     low = jp.array(
-        # [0.3] +                             #floor_friction_min 
+        [0.3] +                             #floor_friction_min 
         # [0.] * (self.mjx_model.nv - 3) +   # dof_friction_min
         # [-0.3] * 3 +                          #com_offset_min
         # [0.1] * (self.mjx_model.nbody - 1)) #body_mass_min
         [0.1]
     )
     high = jp.array(
-        # [2.0] +                             #floor_friction_max
+        [2.0] +                             #floor_friction_max
         # [1.] * (self.mjx_model.nv - 3) +   #dof_friction_max
         # [0.3] * 3 +                          #com_offset_max
         # [15.0] * (self.mjx_model.nbody - 1)) #body_mass_max
@@ -257,7 +257,10 @@ def domain_randomize(model: mjx.Model, dr_range, params=None, rng:jax.Array=None
     #   idx+=1
     # idx += model.nbody-1
     # assert idx == len(params)
-    body_mass = model.body_mass.at[TORSO_BODY_ID].set(model.body_mass[TORSO_BODY_ID] * params[0])
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[0])
+    body_ipos = model.body_ipos
+    dof_frictionloss=model.dof_frictionloss
+    body_mass = model.body_mass.at[TORSO_BODY_ID].set(model.body_mass[TORSO_BODY_ID] * params[1])
     return (
       geom_friction,
       body_ipos,
@@ -283,6 +286,9 @@ def domain_randomize(model: mjx.Model, dr_range, params=None, rng:jax.Array=None
 
     # idx += model.nbody-1
     # assert idx == len(rng_params)
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[0])
+    body_ipos = model.body_ipos
+    dof_frictionloss=model.dof_frictionloss
     body_mass = model.body_mass.at[TORSO_BODY_ID].set(model.body_mass[TORSO_BODY_ID] * rng_params[0])
     return (
       geom_friction,
@@ -345,6 +351,9 @@ def domain_randomize_eval(model: mjx.Model, dr_range, params=None, rng:jax.Array
     #   body_mass = body_mass.at[i].set(model.body_mass[i] * params[idx])
     #   idx+=1
     # assert idx == len(params)
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[0])
+    body_ipos = model.body_ipos
+    dof_frictionloss=model.dof_frictionloss
     body_mass = model.body_mass.at[TORSO_BODY_ID].set(model.body_mass[TORSO_BODY_ID] * params[0])
     return (
       geom_friction,
@@ -380,6 +389,9 @@ def domain_randomize_eval(model: mjx.Model, dr_range, params=None, rng:jax.Array
     #   body_mass = body_mass.at[i].set(model.body_mass[i] * rng_params[idx])
     #   idx+=1
     # assert idx == len(dr_low)
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[0])
+    body_ipos = model.body_ipos
+    dof_frictionloss=model.dof_frictionloss
     body_mass = model.body_mass.at[TORSO_BODY_ID].set(model.body_mass[TORSO_BODY_ID] * rng_params[0])
 
     return (

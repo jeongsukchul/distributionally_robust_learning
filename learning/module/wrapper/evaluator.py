@@ -124,7 +124,46 @@ def adv_step(
       next_observation= nstate.obs,
       extras={'policy_extras': policy_extras, 'state_extras': state_extras},
       )
-
+def mpc_step(
+  env: Env,
+  env_state: State,
+  prev_plan : jnp.ndarray,
+  policy: Policy,
+  key: PRNGKey,
+  extra_fields: Sequence[str] = (),
+):
+  actions, policy_extras = policy(env_state.obs['state'], prev_plan, key)
+  nstate = env.step(env_state, actions)
+  state_extras = {x: nstate.info[x] for x in extra_fields}
+  return nstate, policy_extras['plan'], Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+      observation=env_state.obs,
+      action=actions,
+      reward=nstate.reward,
+      discount=1 - nstate.done,
+      next_observation= nstate.obs,
+      extras={'policy_extras': policy_extras, 'state_extras': state_extras},
+      )
+def mpc_adv_step(
+  env: Env,
+  env_state: State,
+  prev_plan : jnp.ndarray,
+  dynamics_params: jnp.ndarray,
+  policy: Policy,
+  key: PRNGKey,
+  extra_fields: Sequence[str] = (),
+):
+  actions, policy_extras = policy(env_state.obs['state'], prev_plan, key)
+  nstate = env.step(env_state, actions, dynamics_params)
+  state_extras = {x: nstate.info[x] for x in extra_fields}
+  return nstate, policy_extras['plan'], TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
+      observation=env_state.obs,
+      dynamics_params=dynamics_params,
+      action=actions,
+      reward=nstate.reward,
+      discount=1 - nstate.done,
+      next_observation= nstate.obs,
+      extras={'policy_extras': policy_extras, 'state_extras': state_extras},
+      )
 def generate_unroll(
     env: Env,
     env_state: State,
@@ -132,9 +171,18 @@ def generate_unroll(
     key: PRNGKey,
     unroll_length: int,
     extra_fields: Sequence[str] = (),
+    use_mpc:bool=False,
+    dummy_plan:jnp.ndarray = jnp.zeros(1),
 ) -> Tuple[State, Transition]:
   """Collect trajectories of given unroll_length."""
-
+  @jax.jit
+  def m(carry, unused_t):
+    state, prev_plan, current_key = carry
+    current_key, next_key = jax.random.split(current_key)
+    nstate, current_plan, transition  = mpc_step(
+        env, state, prev_plan, policy, current_key, extra_fields=extra_fields
+    )
+    return (nstate, current_plan, next_key), transition
   @jax.jit
   def f(carry, unused_t):
     state, current_key = carry
@@ -143,10 +191,14 @@ def generate_unroll(
         env, state, policy, current_key, extra_fields=extra_fields
     )
     return (nstate, next_key), transition
-
-  (final_state, _), data = jax.lax.scan(
-      f, (env_state, key), (), length=unroll_length
-  )
+  if use_mpc:
+    (final_state, _, _), data = jax.lax.scan(
+        m, (env_state,dummy_plan, key), (), length=unroll_length
+    )
+  else:
+    (final_state, _), data = jax.lax.scan(
+        f, (env_state, key), (), length=unroll_length
+    )
   return final_state, data
 
 
@@ -158,9 +210,18 @@ def generate_adv_unroll(
     key: PRNGKey,
     unroll_length: int,
     extra_fields: Sequence[str] = (),
+    use_mpc: bool=False, 
+    dummy_plan : jnp.ndarray = jnp.zeros(1),
 ) -> Tuple[State, Transition]:
   """Collect trajectories of given unroll_length."""
-
+  @jax.jit
+  def m(carry, unused_t):
+    state, prev_plan, current_key = carry
+    current_key, next_key = jax.random.split(current_key)
+    nstate, current_plan, transition  = mpc_adv_step(
+        env, state, prev_plan, dynamics_params, policy, current_key, extra_fields=extra_fields
+    )
+    return (nstate, current_plan, next_key), transition
   @jax.jit
   def f(carry, unused_t):
     state, current_key = carry
@@ -169,11 +230,16 @@ def generate_adv_unroll(
         env, state, dynamics_params, policy, current_key, extra_fields=extra_fields
     )
     return (nstate, next_key), transition
-
-  (final_state, _), data = jax.lax.scan(
-      f, (env_state, key), (), length=unroll_length
-  )
+  if use_mpc:
+    (final_state, _, _), data = jax.lax.scan(
+        m, (env_state,dummy_plan, key), (), length=unroll_length
+    )
+  else:
+    (final_state, _), data = jax.lax.scan(
+        f, (env_state, key), (), length=unroll_length
+    )
   return final_state, data
+
 
 # TODO: Consider moving this to its own file.
 class Evaluator:
@@ -185,6 +251,8 @@ class Evaluator:
       episode_length: int,
       action_repeat: int,
       key: PRNGKey,
+      use_mpc: bool=False,
+      dummy_plan:jnp.ndarray = jnp.zeros(1),
   ):
     """Init.
 
@@ -212,6 +280,8 @@ class Evaluator:
           eval_policy_fn(policy_params),
           key,
           unroll_length=episode_length // action_repeat,
+          use_mpc=use_mpc,
+          dummy_plan=dummy_plan,
       )[0]
 
     self._generate_eval_unroll = jax.jit(generate_eval_unroll) #jax.jit
@@ -232,14 +302,21 @@ class Evaluator:
     epoch_eval_time = time.time() - t
     metrics = {}
     iqm_fn = functools.partial(scipy.stats.trim_mean, proportiontocut=0.25, axis=None) 
-    for fn in [np.mean, np.std, iqm_fn]:
-      suffix = '_std' if fn == np.std else '_iqm' if fn == iqm_fn else ''
-      metrics.update({
-          f'eval/episode_{name}{suffix}': (
-              fn(value) if aggregate_episodes else value
-          )
-          for name, value in eval_metrics.episode_metrics.items()
-      })
+    # for fn in [np.mean, np.std, iqm_fn]:
+    #   suffix = '_std' if fn == np.std else '_iqm' if fn == iqm_fn else ''
+    #   metrics.update({
+    #       f'eval/episode_{name}{suffix}': (
+    #           fn(value) if aggregate_episodes else value
+    #       )
+    #       for name, value in eval_metrics.episode_metrics.items()
+    #   })
+    metrics['eval/episode_reward_mean'] = np.mean(eval_metrics.episode_metrics['reward'])
+    metrics['eval/episode_reward_p25'] = np.percentile(eval_metrics.episode_metrics['reward'],25)
+    metrics['eval/episode_reward_p75'] = np.percentile(eval_metrics.episode_metrics['reward'],75)
+    metrics['eval/episode_reward_std'] = np.std(eval_metrics.episode_metrics['reward'])
+    metrics['eval/episode_reward_min'] = np.min(eval_metrics.episode_metrics['reward'])
+    metrics['eval/episode_reward_max'] = np.max(eval_metrics.episode_metrics['reward'])
+    metrics['eval/episode_reward_iqm'] = scipy.stats.trim_mean(eval_metrics.episode_metrics['reward'], proportiontocut=0.25, axis=None)
     metrics['eval/avg_episode_length'] = np.mean(eval_metrics.episode_steps)
     metrics['eval/std_episode_length'] = np.std(eval_metrics.episode_steps)
     metrics['eval/epoch_eval_time'] = epoch_eval_time
@@ -264,6 +341,8 @@ class AdvEvaluator:
       episode_length: int,
       action_repeat: int,
       key: PRNGKey,
+      use_mpc: bool = False,
+      dummy_plan:jnp.ndarray = jnp.zeros(1),
   ):
     """Init.
 
@@ -292,6 +371,8 @@ class AdvEvaluator:
           eval_policy_fn(policy_params),
           key,
           unroll_length=episode_length // action_repeat,
+          use_mpc=use_mpc,
+          dummy_plan=dummy_plan,
       )[0]
 
     self._generate_eval_unroll = jax.jit(generate_eval_unroll) #jax.jit

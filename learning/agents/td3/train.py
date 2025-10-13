@@ -46,7 +46,8 @@ from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics, Transition
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
-from learning.module.wrapper.drhard_wrapper import wrap_for_dr_training          #changed with td3
+from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training          #changed with td3
+from learning.module.wrapper.dr_wrapper import wrap_for_dr_training          #changed with td3
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 
 
@@ -122,7 +123,7 @@ def train(
     episode_length: int,
     action_repeat: int = 1,
     num_envs: int = 1,
-    num_eval_envs: int = 128,
+    num_eval_envs: int = 1024,
     learning_rate: float = 1e-4,
     discounting: float = 0.9,
     seed: int = 0,
@@ -147,6 +148,8 @@ def train(
     dr_train_ratio = 1.0,
     std_max=0.4,
     std_min=0.05,
+    policy_noise=0.2,
+    noise_clip=0.5,
     custom_wrapper=False,
     adv_wrapper=False,
 ):
@@ -244,12 +247,7 @@ def train(
         action_repeat=action_repeat,
         randomization_fn=training_randomization_fn,
     )
-  # env = wrap_for_adv_training(
-  #     env,
-  #     episode_length=episode_length,
-  #     action_repeat=action_repeat,
-  #     randomization_fn=randomization_fn,
-  # )
+
   obs_shape = env.observation_size
 #   if isinstance(obs_size, Dict):
 #     obs_size = jax.tree_util.tree_map(lambda x: x.shape[2:], env_state.obs)
@@ -305,8 +303,6 @@ def train(
       carry: Tuple[TrainingState, PRNGKey], transitions: Transition
   ) -> Tuple[Tuple[TrainingState, PRNGKey], Metrics]:
     training_state, key = carry
-    noise_clip=0.5
-    policy_noise = 0.2
     key, key_critic, key_actor,key_noise = jax.random.split(key, 4)
     noise = jax.random.normal(key_noise, shape=transitions.action.shape) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)
@@ -390,7 +386,7 @@ def train(
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
     if randomization_fn is not None and custom_wrapper:
       if adv_wrapper:
-        dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_low)), minval=dr_low, maxval=dr_high)
+        dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs//jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
         params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
         nstate = env.step(env_state, actions, params)
       else:

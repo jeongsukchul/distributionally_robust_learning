@@ -24,7 +24,7 @@ from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
 from mujoco_playground._src.locomotion.g1 import g1_constants as consts
-
+import jax.numpy as jnp
 
 def get_assets() -> Dict[str, bytes]:
   assets = {}
@@ -117,3 +117,22 @@ class G1Env(mjx_env.MjxEnv):
   @property
   def mjx_model(self) -> mjx.Model:
     return self._mjx_model
+  @property
+  def dr_range(self) -> jax.Array:
+    low = jnp.array(
+      [0.4] +                       #pair_friction (1)
+      [0.5] *(self.mjx_model.nv-6) +  #dof_friction (29)
+      [1.0] *(self.mjx_model.nv-6) +  #dof_armature (29)
+      [0.9] *(self.mjx_model.nbody) +  #line mass scale (31)
+      [-1.0]  +  #torso mass offset (1)
+      [-0.05] *(self.mjx_model.nv-6)  #qpos offset (29)
+    )
+    high = jnp.array(
+      [1.0] +                       #pair_friction (1)
+      [2.0] *(self.mjx_model.nv-6) +  #dof_friction (29)
+      [1.05] *(self.mjx_model.nv-6) +  #dof_armature (29)
+      [1.1] *(self.mjx_model.nbody) +  #line mass scale (31)
+      [1.0]  +                        #torso mass offset (1)
+      [0.05] *(self.mjx_model.nv-6)  #qpos offset (29)
+    )
+    return low, high

@@ -164,20 +164,27 @@ class Run(mjx_env.MjxEnv):
   def dr_range(self) -> dict:
 
     low = jp.array(
-        [0.3] +                             #floor_friction_min 
-        [0.] * (self.mjx_model.nv - 3) +   # dof_friction_min
-        [-0.3] * 3 +                          #com_offset_min
-        [0.1] * (self.mjx_model.nbody - 1)) #body_mass_min
+        [0.1] +                             #floor_friction_min 
+        [0.1] 
+        #[0.1] 
+      )
+        # [0.] * (self.mjx_model.nv - 3) +   # dof_friction_min
+        # [-0.3] * 3 +                          #com_offset_min
+        # [0.1] * (self.mjx_model.nbody - 1)) #body_mass_min
     high = jp.array(
-        [2.0] +                             #floor_friction_max
-        [1.] * (self.mjx_model.nv - 3) +   #dof_friction_max
-        [0.3] * 3 +                          #com_offset_max
-        [15.0] * (self.mjx_model.nbody - 1)) #body_mass_max
+        [4.0] +                             #floor_friction_max
+        [7.0]
+        # [3.0] 
+      )
+        # [1.] * (self.mjx_model.nv - 3) +   #dof_friction_max
+        # [0.3] * 3 +                          #com_offset_max
+        # [15.0] * (self.mjx_model.nbody - 1)) #body_mass_max
     return low, high
 FLOOR_GEOM_ID = 0
 TORSO_BODY_ID = 1
+BTHIGH_BODY_ID = 2
 
-def domain_randomize(model: mjx.Model, dr_range, params=None, rng:jax.Array=None, done=None):
+def domain_randomize(model: mjx.Model, dr_range, params=None, rng:jax.Array=None):
   if rng is not None:
     dr_low, dr_high = dr_range
     dist = functools.partial(jax.random.uniform, shape=(len(dr_low)), minval=dr_low, maxval=dr_high)
@@ -187,83 +194,99 @@ def domain_randomize(model: mjx.Model, dr_range, params=None, rng:jax.Array=None
     idx = 0
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
     idx += 1
-    dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
-    idx += model.nv-3
-    offset = jp.array([params[idx], params[idx+1], params[idx+2]])
-    idx += 3
-    body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-        model.body_ipos[TORSO_BODY_ID] + offset
-      )
-    body_mass = jp.ones((model.nbody,))
-    body_mass =model.body_mass.at[1:].set(model.body_mass[1:] * params[idx:idx + model.nbody-1])
+    body_mass = model.body_mass.at[TORSO_BODY_ID].set(params[idx])
+    idx+=1
+    # body_mass = model.body_mass.at[BTHIGH_BODY_ID].set(params[idx])
+    # idx+=1
+    # geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
+    # idx+=1
+    # dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
+    # idx += model.nv-3
+    # offset = jp.array([params[idx], params[idx+1], params[idx+2]])
+    # idx += 3
+    # body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
+    #     model.body_ipos[TORSO_BODY_ID] + offset
+    #   )
+    # body_mass = jp.ones((model.nbody,))
+    # body_mass =model.body_mass.at[1:].set(model.body_mass[1:] * params[idx:idx + model.nbody-1])
     # for i in range(1, model.nbody):
     #   body_mass = model.body_mass.at[i].set(model.body_mass[i] * params[idx])
     #   idx+=1
-    idx += model.nbody-1
+    # idx += model.nbody-1
     assert idx == len(params)
     return (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
+      # dof_frictionloss,
     )
   @jax.vmap
-  def rand_dynamics(rng, done):
+  def rand_dynamics(rng):
     # floor friction
     rng_params = dist(rng)
     idx = 0
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(rng_params[idx])
     idx += 1
-    dof_frictionloss = model.dof_frictionloss.at[3:].set(rng_params[idx:idx+ model.nv-3])
-    idx += model.nv-3
-    offset = jp.array([rng_params[idx], rng_params[idx+1], rng_params[idx+2]])
-    idx += 3
-    body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-        model.body_ipos[TORSO_BODY_ID] + offset
-      )
-    body_mass = jp.ones((model.nbody,))
-    body_mass =model.body_mass.at[1:].set(model.body_mass[1:] * rng_params[idx:idx + model.nbody-1])
-    # for i in range(1, model.nbody):
-    #   body_mass = model.body_mass.at[i].set(model.body_mass[i] * params[idx])
-    #   idx+=1
-    idx += model.nbody-1
+    body_mass = model.body_mass.at[TORSO_BODY_ID].set(rng_params[idx])
+    idx+=1
+    # body_mass = model.body_mass.at[BTHIGH_BODY_ID].set(rng_params[idx])
+    # idx+=1
+    # idx = 0
+    # geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(rng_params[idx])
+    # idx += 1
+    # dof_frictionloss = model.dof_frictionloss.at[3:].set(model.dof_frictionloss[3:] *rng_params[idx:idx+ model.nv-3])
+    # idx += model.nv-3
+    # offset = jp.array([rng_params[idx], rng_params[idx+1], rng_params[idx+2]])
+    # idx += 3
+    # body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
+    #     model.body_ipos[TORSO_BODY_ID] + offset
+    #   )
+    # body_mass = jp.ones((model.nbody,))
+    # body_mass =model.body_mass.at[1:].set(model.body_mass[1:] * rng_params[idx:idx + model.nbody-1])
+    # # for i in range(1, model.nbody):
+    # #   body_mass = model.body_mass.at[i].set(model.body_mass[i] * params[idx])
+    # #   idx+=1
+    # idx += model.nbody-1
     assert idx == len(rng_params)
     return (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
+      # dof_frictionloss,
     )
   
   if rng is None and params is not None:
 
-    (geom_friction, body_ipos, body_mass, dof_frictionloss) = shift_dynamics(params)
+    (geom_friction, 
+    #  body_ipos, 
+     body_mass, 
+    #  dof_frictionloss
+    )= shift_dynamics(params)
   elif rng is not None and params is None:
     # params = jax.random.uniform(key=jax.random.PRNGKey(0), shape=(rng.shape[0], len(dr_low)), minval=dr_low, maxval=dr_high)
     # rng = jax.random.split(jax.random.PRNGKey(0), rng.shape[0])
     # print("params", params)
-    if done is None:
-      done = jp.zeros(rng.shape[0])
+
     (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
-    ) = rand_dynamics(rng, done)
+      # dof_frictionloss,
+    ) = rand_dynamics(rng)
   else:
     raise ValueError("rng and params wrong!")
   in_axes = jax.tree_util.tree_map(lambda x: None, model)
   in_axes = in_axes.tree_replace({
       "geom_friction": 0,
-      "body_ipos": 0,
+      # "body_ipos": 0,
       "body_mass": 0,
-      "dof_frictionloss": 0,
+      # "dof_frictionloss": 0,
   })
   model = model.tree_replace({
       "geom_friction": geom_friction,
-      "body_ipos": body_ipos,
+      # "body_ipos": body_ipos,
       "body_mass": body_mass,
-      "dof_frictionloss": dof_frictionloss,
+      # "dof_frictionloss": dof_frictionloss,
   })
 
   return model, in_axes
@@ -276,58 +299,72 @@ def domain_randomize_eval(model: mjx.Model, dr_range, params=None, rng:jax.Array
     idx = 0
     geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
     idx += 1
-    dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
-    idx += model.nv-3
-    offset = jp.array([params[idx], params[idx+1], params[idx+2]])
-    idx += 3
-    body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-        model.body_ipos[TORSO_BODY_ID] + offset
-      )
-    body_mass = jp.ones((model.nbody,))
-    body_mass =body_mass.at[0].set(model.body_mass[0])
-    for i in range(1, model.nbody):
-      body_mass = body_mass.at[i].set(model.body_mass[i] * params[idx])
-      idx+=1
+    body_mass = model.body_mass.at[TORSO_BODY_ID].set(params[idx])
+    idx+=1
+    # body_mass = model.body_mass.at[BTHIGH_BODY_ID].set(params[idx])
+    # idx+=1
+    # idx = 0
+    # geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(params[idx])
+    # idx += 1
+    # dof_frictionloss = model.dof_frictionloss.at[3:].set(params[idx:idx+ model.nv-3])
+    # idx += model.nv-3
+    # offset = jp.array([params[idx], params[idx+1], params[idx+2]])
+    # idx += 3
+    # body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
+    #     model.body_ipos[TORSO_BODY_ID] + offset
+    #   )
+    # body_mass = jp.ones((model.nbody,))
+    # body_mass =body_mass.at[0].set(model.body_mass[0])
+    # for i in range(1, model.nbody):
+    #   body_mass = body_mass.at[i].set(model.body_mass[i] * params[idx])
+    #   idx+=1
     assert idx == len(params)
     return (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
+      # dof_frictionloss,
     )
   def rand_dynamics(rng):
     # floor friction
     rng_params = dist(rng)
-    idx=0
-    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
-      rng_params[idx]
-    )
+    idx = 0
+    geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(rng_params[idx])
+    idx += 1
+    body_mass = model.body_mass.at[TORSO_BODY_ID].set(rng_params[idx])
     idx+=1
-    # static friction
-    dof_frictionloss = jp.zeros((model.nv-3,))
-    for i in range(model.nv-3):
-      dof_frictionloss = model.dof_frictionloss.at[3+i].set(rng_params[idx])
-      idx+=1
-    # com pos offset
-    dpos = jp.zeros((3,))
-    for i in range(3):
-      dpos = dpos.at[idx].set(rng_params[idx])
-      idx+=1
-    body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
-        model.body_ipos[TORSO_BODY_ID] + dpos
-    )
-    # link mass 
-    body_mass = jp.ones((model.nbody,))
-    body_mass =body_mass.at[0].set(model.body_mass[0])
-    for i in range(1, model.nbody):
-      body_mass = body_mass.at[i].set(model.body_mass[i] * rng_params[idx])
-      idx+=1
+    # body_mass = model.body_mass.at[BTHIGH_BODY_ID].set(rng_params[idx])
+    # idx+=1
+    # idx=0
+    # geom_friction = model.geom_friction.at[FLOOR_GEOM_ID, 0].set(
+    #   rng_params[idx]
+    # )
+    # idx+=1
+    # # static friction
+    # dof_frictionloss = jp.zeros((model.nv-3,))
+    # for i in range(model.nv-3):
+    #   dof_frictionloss = model.dof_frictionloss.at[3+i].set(rng_params[idx])
+    #   idx+=1
+    # # com pos offset
+    # dpos = jp.zeros((3,))
+    # for i in range(3):
+    #   dpos = dpos.at[idx].set(rng_params[idx])
+    #   idx+=1
+    # body_ipos = model.body_ipos.at[TORSO_BODY_ID].set(
+    #     model.body_ipos[TORSO_BODY_ID] + dpos
+    # )
+    # # link mass 
+    # body_mass = jp.ones((model.nbody,))
+    # body_mass =body_mass.at[0].set(model.body_mass[0])
+    # for i in range(1, model.nbody):
+    #   body_mass = body_mass.at[i].set(model.body_mass[i] * rng_params[idx])
+    #   idx+=1
     assert idx == len(dr_low)
     return (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
+      # dof_frictionloss,
     )
   
   if rng is None and params is not None:
@@ -339,24 +376,24 @@ def domain_randomize_eval(model: mjx.Model, dr_range, params=None, rng:jax.Array
     # print("params", params)
     (
       geom_friction,
-      body_ipos,
+      # body_ipos,
       body_mass,
-      dof_frictionloss,
+      # dof_frictionloss,
     ) = rand_dynamics(rng)
   else:
     raise ValueError("rng and params wrong!")
   in_axes = jax.tree_util.tree_map(lambda x: None, model)
   in_axes = in_axes.tree_replace({
       "geom_friction": 0,
-      "body_ipos": 0,
+      # "body_ipos": 0,
       "body_mass": 0,
-      "dof_frictionloss": 0,
+      # "dof_frictionloss": 0,
   })
   model = model.tree_replace({
       "geom_friction": geom_friction,
-      "body_ipos": body_ipos,
+      # "body_ipos": body_ipos,
       "body_mass": body_mass,
-      "dof_frictionloss": dof_frictionloss,
+      # "dof_frictionloss": dof_frictionloss,
   })
 
   return model, in_axes

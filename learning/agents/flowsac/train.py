@@ -169,7 +169,7 @@ def train(
     wrap_eval_env_fn: Optional[Callable[[Any], Any]] = None,
     action_repeat: int = 1,
     num_envs: int = 1,
-    num_eval_envs: int = 128,
+    num_eval_envs: int = 1024,
     learning_rate: float = 1e-4,
     discounting: float = 0.9,
     seed: int = 0,

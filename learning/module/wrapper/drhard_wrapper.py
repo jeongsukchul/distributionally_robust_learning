@@ -7,7 +7,7 @@ from brax.envs.base import Wrapper, Env, State
 from brax.base import System
 import functools
 
-def wrap_for_dr_training(
+def wrap_for_hard_dr_training(
     env: mjx_env.MjxEnv,
     n_nominals : int,
     n_envs : int,

@@ -22,9 +22,9 @@ import jax.numpy as jp
 from ml_collections import config_dict
 import mujoco
 from mujoco import mjx
-
+import jax
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.locomotion.go1 import go1_constants as consts
+from custom_envs.locomotion.go1 import go1_constants as consts
 
 
 def get_assets() -> Dict[str, bytes]:
@@ -120,3 +120,24 @@ class Go1Env(mjx_env.MjxEnv):
   @property
   def mjx_model(self) -> mjx.Model:
     return self._mjx_model
+  @property
+  def dr_range(self) -> jp.ndarray:
+    low = jp.array(
+        [0.4] +                             #floor_friction_min (1)
+        [0.9] * (self.mjx_model.nv-6) +   # dof_friction_min (12)
+        [1.0] * (self.mjx_model.nv-6) +    # dof armature (12)
+        [-0.05] * 3 +                          #com_offset_min(3)
+        [0.9] * (self.mjx_model.nbody) + # body link mass scale min(14)
+        [-1.0] +                          # torso link mass offset min(1)
+        [-0.05] * (self.mjx_model.nv-6)   # q pos offset (12)
+      ) 
+    high = jp.array(
+        [1.0] +                             #floor_friction_max(1)
+        [1.1] * (self.mjx_model.nv-6)+   #dof_friction_max(12)
+        [1.05] * (self.mjx_model.nv-6) +    # dof armature (12)
+        [0.05] * 3 +                          #com_offset_max(3)
+        [1.1] * (self.mjx_model.nbody) + # body link mass scale max(14)
+        [1.0]  +                   # torso link mass offset max(1)
+        [0.05] * (self.mjx_model.nv-6)   # q pos offset (12)
+        ) 
+    return low, high

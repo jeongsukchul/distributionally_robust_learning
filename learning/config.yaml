@@ -15,7 +15,7 @@ eval_freq: 50000
 
 eval_with_training_env : false #added
 #policy
-policy : wdsac
+policy : td3
 asymmetric_critic: false
 
 #dynamics shift
@@ -23,7 +23,7 @@ randomization: true
 # shift_dynamics_type: stochastic 
 eval_randomization: true
 # logging
-wandb_project: wdsac-exp
+wandb_project: test-algorithms
 wandb_entity: tjrcjf410-seoul-national-university
 wandb_silent: false
 use_wandb: true
@@ -78,3 +78,9 @@ dr_train_ratio : 1.0
 
 #simba
 simba : false
+
+#tdmpc
+horizon: 3
+
+#m2td3
+omega_distance_threshold: 0.1

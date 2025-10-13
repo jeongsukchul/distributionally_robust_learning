@@ -14,7 +14,7 @@
 
 """Brax training gradient utility functions."""
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence, Union
 
 import jax
 import optax
@@ -33,6 +33,19 @@ def loss_and_pgrad(
 
   return g if pmap_axis_name is None else h
 
+def multi_loss_and_pgrad(
+    loss_fn,
+    pmap_axis_name,
+    argnums,
+    has_aux=False,
+):
+  g = jax.value_and_grad(loss_fn, argnums=argnums, has_aux=has_aux)
+
+  def h(*args, **kwargs):
+    value, grad = g(*args, **kwargs)
+    return value, jax.lax.pmean(grad, axis_name=pmap_axis_name)
+
+  return g if pmap_axis_name is None else h
 def global_l2_norm(tree):
     # Works for any PyTree of arrays (params, grads, …)
     leaves = jax.tree_util.tree_leaves(tree)
@@ -67,5 +80,96 @@ def gradient_update_fn(
     params_update, optimizer_state = optimizer.update(grads, optimizer_state)
     params = optax.apply_updates(args[0], params_update)
     return value, global_l2_norm(grads), params, optimizer_state
+
+  return f
+
+PyTree = any
+
+def _global_l2_norm_multi(grad_list: Sequence[PyTree]) -> jnp.ndarray:
+  # leaves = []
+  # for g in grad_list:
+  #   leaves.extend(jax.tree_util.tree_leaves(g))
+  # print("grad list", len(grad_list))
+  return [jnp.sqrt(sum(jnp.vdot(x, x) for x in jax.tree_util.tree_leaves(g))) for g in grad_list]
+
+def multi_gradient_update_fn(
+    loss_fn: Callable[..., float],
+    optimizers: Union[optax.GradientTransformation, Sequence[optax.GradientTransformation]],
+    pmap_axis_name: Optional[str],
+    argnums: Union[int, Sequence[int]],
+    has_aux: bool = False,
+):
+  """Create an update fn for loss_fn with grads wrt multiple param args.
+
+  Args:
+    loss_fn: Callable(params_0, ..., *others) -> loss (and optional aux).
+    optimizers: Single optax optimizer or a sequence aligned with `argnums`.
+    pmap_axis_name: If not None, grads are reduced via lax.pmean over this axis.
+    argnums: Single int or sequence of ints indicating which *positional* args
+      are treated as parameters to differentiate and update.
+    has_aux: Whether loss_fn returns (loss, aux).
+
+  Returns:
+    f(*args, optimizer_states) -> (value_or_(value,aux), global_grad_norm, new_params_list, new_optimizer_states)
+      - `optimizer_states` must be a single state (if single optimizer given and single argnum)
+        or a sequence aligned with `argnums` (and `optimizers` if a sequence was given).
+      - `new_params_list` is a tuple of updated param PyTrees aligned with `argnums`.
+  """
+  # Normalize argnums to a tuple
+  if isinstance(argnums, int):
+    argnums = (argnums,)
+  else:
+    argnums = tuple(argnums)
+
+  # Normalize optimizers to a list aligned with argnums
+  if isinstance(optimizers, optax.GradientTransformation):
+    optimizers = [optimizers] * len(argnums)
+  else:
+    assert len(optimizers) == len(argnums), "`optimizers` must align with `argnums`"
+
+  # Build value+grad function across multiple argnums
+  g = jax.value_and_grad(loss_fn, argnums=argnums, has_aux=has_aux)
+
+  def loss_and_pgrad_multi(*args, **kwargs):
+    value, grads = g(*args, **kwargs)  # grads is a PyTree or tuple of PyTrees aligned with argnums
+    if pmap_axis_name is not None:
+      # pmean each grad PyTree across devices
+      if len(argnums) == 1:
+        grads = jax.lax.pmean(grads, axis_name=pmap_axis_name)
+      else:
+        grads = tuple(jax.lax.pmean(g_i, axis_name=pmap_axis_name) for g_i in grads)
+    return value, grads
+
+  def f(*args, optimizer_states):
+    # Normalize optimizer_states to a tuple aligned with argnums
+    if len(argnums) == 1 and not isinstance(optimizer_states, (tuple, list)):
+      optimizer_states = (optimizer_states,)
+    else:
+      optimizer_states = tuple(optimizer_states)
+      assert len(optimizer_states) == len(argnums), "`optimizer_states` must align with `argnums`"
+
+    value, grads = loss_and_pgrad_multi(*args)
+
+    # Ensure grads is a tuple aligned with argnums
+    if len(argnums) == 1:
+      grads = (grads,)
+
+    # Compute global grad L2 norm across all param sets
+    global_norm = _global_l2_norm_multi(grads)
+
+    # Apply updates per (param, grad, optimizer)
+    args_list = list(args)
+    new_params_list = []
+    new_opt_states = []
+
+    for i, (arg_idx, opt, state, grad) in enumerate(zip(argnums, optimizers, optimizer_states, grads)):
+      updates, new_state = opt.update(grad, state)
+      new_params = optax.apply_updates(args_list[arg_idx], updates)
+      args_list[arg_idx] = new_params
+      new_params_list.append(new_params)
+      new_opt_states.append(new_state)
+
+    # Return same value shape as loss_fn: loss or (loss, aux)
+    return value, global_norm, tuple(new_params_list), tuple(new_opt_states)
 
   return f

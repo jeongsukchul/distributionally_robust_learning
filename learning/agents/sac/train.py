@@ -38,6 +38,7 @@ from agents.sac import networks as sac_networks
 from brax.training.types import Params
 from brax.training.types import PRNGKey
 from brax.envs.base import Wrapper
+from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training
 from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
@@ -123,7 +124,7 @@ def train(
     episode_length: int,
     action_repeat: int = 1,
     num_envs: int = 1,
-    num_eval_envs: int = 128,
+    num_eval_envs: int = 1024,
     learning_rate: float = 1e-4,
     discounting: float = 0.9,
     seed: int = 0,

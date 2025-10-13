@@ -61,33 +61,7 @@ def make_inference_fn(td3_networks: WDTD3Networks):
     else:
         return stochastic_policy
   return make_policy
-# def make_lmbda_networks(
-#     obs_size: types.ObservationSize,
-#     action_size: int,
-#     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-#     hidden_layer_sizes: Sequence[int] = (32, 32),
-#     activation: ActivationFn = linen.relu,
-#     batch_size : int, 
-# ):
-#   class LmbdaModule(linen.Module):
-#     @linen.compact
-#     def __call__(self, obs: jnp.ndarray, actions: jnp.ndarray):
-#       hidden = jnp.concatenate([obs,actions], axis=-1)
-#       return MLP(
-#         layer_sizes=list(hidden_layer_sizes) + [1],
-#         activation=activation,
-#         kernel_init=jax.nn.initializers.lecun_uniform(),
-#         )(hidden)
-#   lmbda_module = LmbdaModule()
-#   def apply(processor_params, lmbda_params, obs, actions):
-#     obs = preprocess_observations_fn(obs, processor_params)
-#     return jnp.squeeze(lmbda_module.apply(lmbda_params, obs, actions), axis=-1)
-  
-#   dummy_obs = jnp.zeros((1,obs_size))
-#   dummy_action = jnp.zeros((1, action_size))
-#   return networks.FeedForwardNetwork(
-#       init=lambda key: lmbda_module.init(key, dummy_obs, dummy_action), apply=apply
-#   )
+
 def make_wdtd3_networks(
     observation_size: int,
     action_size: int,

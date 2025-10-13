@@ -38,7 +38,7 @@ from module.buffer import DynamicBatchQueue  # noqa: E402
 from agents.wdtd3 import checkpoint
 from agents.wdtd3 import losses as wdtd3_losses
 from agents.wdtd3 import networks as wdtd3_networks
-from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
+from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
 from learning.module.wrapper.evaluator import Evaluator
 
@@ -137,7 +137,7 @@ def train(
     episode_length: int,
     action_repeat: int = 1,
     num_envs: int = 1,
-    num_eval_envs: int = 128,
+    num_eval_envs: int = 1024,
     learning_rate: float = 1e-4,
     discounting: float = 0.9,
     seed: int = 0,
@@ -169,6 +169,8 @@ def train(
     dr_train_ratio: float = 1.0,
     std_max=0.4,
     std_min=0.05,
+    policy_noise=0.2,
+    noise_clip=0.5,
 ):
   """WDTD3 training (multi-GPU)."""
   process_id = jax.process_index()
@@ -218,7 +220,7 @@ def train(
   )
 
   # Important: n_envs is PER-DEVICE here
-  env = wrap_for_dr_training(
+  env = wrap_for_hard_dr_training(
       env,
       n_nominals=n_nominals,
       n_envs=num_envs_per_device,
@@ -291,8 +293,6 @@ def train(
         carry: Tuple[TrainingState, PRNGKey], transitions: DRTransition
     ):
     training_state, key = carry
-    noise_clip=0.5
-    policy_noise = 0.2
     key, key_lmbda, key_critic, key_actor, key_noise = jax.random.split(key, 5)
     noise = jax.random.normal(key_noise, shape=(transitions.action.shape[0], n_nominals, transitions.action.shape[-1])) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)

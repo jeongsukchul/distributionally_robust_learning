@@ -62,9 +62,11 @@ def make_losses(
     )
     next_action = jnp.clip(next_action + noise, -1.0, 1.0)
     next_q = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1) * transitions.discount
+    print("transitions.next_observation", transitions.next_observation)
+
     def penalized_v(i):
-        obs_i = jnp.expand_dims(transitions.next_observation[:, i, :], axis=1)  # shape: (batch_size, 1, obs_dim)
-        diff = obs_i - transitions.next_observation  # shape: (batch_size, n_nominals, obs_dim)
+        obs_i = jax.tree_util.tree_map(lambda x: jnp.expand_dims(x[:, i, :], axis=1), transitions.next_observation)  # shape: (batch_size, 1, obs_dim)
+        diff = obs_i["state"] - transitions.next_observation["state"]  # shape: (batch_size, n_nominals, obs_dim)
         penalty = jnp.mean(jnp.square(diff), axis=(1, 2))  # shape: (batch_size,)
         return next_q[:, i] + lmbda * penalty  # shape: (batch_size,)
 

@@ -39,6 +39,10 @@ from agents.flowsac import train as flowsac
 from agents.flowsac import networks as flowsac_networks
 from agents.flowtd3 import train as flowtd3
 from agents.flowtd3 import networks as flowtd3_networks
+from agents.m2td3 import train as m2td3
+from agents.m2td3 import networks as m2td3_networks
+from agents.tdmpc import train as tdmpc
+from agents.tdmpc import networks as tdmpc_networks
 from etils import epath
 from flax import struct
 from flax.training import orbax_utils
@@ -53,7 +57,7 @@ from mujoco import mjx
 import numpy as np
 from orbax import checkpoint as ocp
 import wandb
-from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_rambo_config, brax_wdsac_config, brax_td3_config
+from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_td3_config, brax_tdmpc_config
 from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
 import hydra
 from custom_envs import registry, dm_control_suite, locomotion
@@ -111,6 +115,10 @@ CAMERAS = {
     "WalkerStand": "side",
     "Go1Handstand": "side",
     "Go1JoystickRoughTerrain": "track",
+    "G1InplaceGaitTracking" : "track",
+    "G1JoystickGaitTracking" : "track",
+    "T1JoystickFlatTerrain" :"track",
+    "T1JoystickRoughTerrain" :"track",
 }
 camera_name = CAMERAS[env_name]
 
@@ -150,8 +158,6 @@ def progress_fn(num_steps, metrics, use_wandb=True):
 
 
 def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
-    if cfg.randomization:
-        randomization_fn = functools.partial(randomization_fn, params= env.dr_range if hasattr(env,'dr_range') else None)
 
     print("training with ppo")
     if cfg.task in dm_control_suite._envs:
@@ -159,7 +165,7 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
     elif cfg.task in locomotion._envs:
         ppo_params = locomotion_ppo_config(cfg.task)
     if cfg.randomization:
-        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.hard_dr={cfg.custom_wrapper}"
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.domain_randomized"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     if cfg.use_wandb:
@@ -293,6 +299,51 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         custom_wrapper = cfg.custom_wrapper,
         seed=cfg.seed,
         adv_wrapper = cfg.adv_wrapper
+    )
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+    )
+    return make_inference_fn, params, metrics
+def train_m2td3(cfg:dict, randomization_fn, env, eval_env=None):
+    if cfg.task in dm_control_suite._envs:
+        m2td3_params = brax_td3_config(cfg.task)
+    elif cfg.task in locomotion._envs:
+        m2td3_params = locomotion_td3_config(cfg.task)
+    m2td3_params.omega_distance_threshold = 0.1
+    for param in m2td3_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            m2td3_params[param] = getattr(cfg, param)
+    print("omega_distance_threshold:", m2td3_params.omega_distance_threshold)
+    m2td3_training_params = dict(m2td3_params)
+    wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.dist={m2td3_params.omega_distance_threshold}"
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name, 
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+
+    network_factory = m2td3_networks.make_m2td3_networks
+    if "network_factory" in m2td3_params:
+        del m2td3_training_params["network_factory"]
+        if not cfg.asymmetric_critic:
+            m2td3_params.network_factory.value_obs_key = "state"
+        network_factory = functools.partial(
+            m2td3_networks.make_m2td3_networks,
+            **m2td3_params.network_factory
+        )
+    
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        m2td3.train, **dict(m2td3_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        dr_train_ratio = cfg.dr_train_ratio,
+        seed=cfg.seed,
     )
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
@@ -456,6 +507,56 @@ def train_wdtd3(cfg:dict, randomization_fn, env):
         environment=env,
     )
     return make_inference_fn, params, metrics
+def train_tdmpc(cfg:dict, randomization_fn, env, eval_env=None):
+    if cfg.task in dm_control_suite._envs:
+        tdmpc_params = brax_tdmpc_config(cfg.task)
+    # elif cfg.task in locomotion._envs:
+        # tdmpc_params = locomotion_tdmpc_config(cfg.task)
+    for param in tdmpc_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            tdmpc_params[param] = getattr(cfg, param)
+    tdmpc_training_params = dict(tdmpc_params)
+    if cfg.randomization:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.\
+            hard_dr={cfg.custom_wrapper}"
+        if cfg.custom_wrapper and cfg.adv_wrapper:
+            wandb_name+=f".adv_wrapper={cfg.adv_wrapper}"#dr_train_ratio={cfg.dr_train_ratio}"
+    else:
+        wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
+
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+
+    network_factory = tdmpc_networks.make_tdmpc_networks
+    if "network_factory" in tdmpc_params:
+        del tdmpc_training_params["network_factory"]
+        network_factory = functools.partial(
+            tdmpc_networks.make_tdmpc_networks,
+            **tdmpc_params.network_factory
+        )
+    
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        tdmpc.train, **dict(tdmpc_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        dr_train_ratio = cfg.dr_train_ratio,
+        custom_wrapper = cfg.custom_wrapper,
+        seed=cfg.seed,
+        adv_wrapper = cfg.adv_wrapper
+    )
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+    )
+    return make_inference_fn, params, metrics
 @hydra.main(config_name="config", config_path=".", version_base=None)
 def train(cfg: dict):
     
@@ -506,6 +607,10 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_flowtd3(cfg, randomization_fn, env)
     elif cfg.policy == "wdtd3":
         make_inference_fn, params, metrics = train_wdtd3(cfg, randomization_fn, env)
+    elif cfg.policy == "m2td3":
+        make_inference_fn, params, metrics = train_m2td3(cfg, randomization_fn, env)
+    elif cfg.policy == "tdmpc":
+        make_inference_fn, params, metrics = train_tdmpc(cfg, randomization_fn, env)
     else:
         print("no policy!")
 
@@ -543,12 +648,14 @@ def train(cfg: dict):
         for i in range(n_episodes): #10 episodes
             state = jit_reset(rngs[i])
             rollout = [state]
+            rewards = 0
             for _ in range(env_cfg.episode_length):
                 act_rng, rng = jax.random.split(rng)
                 action, info = jit_inference_fn(state.obs, act_rng)
                 state = jit_step(state, action)
                 rollout.append(state)
-                reward_list.append(state.reward)
+                rewards += state.reward
+            reward_list.append(rewards)
             
         frames = eval_env.render(rollout, camera=CAMERAS[cfg.task],)
         frames = np.stack(frames).transpose(0, 3, 1, 2)

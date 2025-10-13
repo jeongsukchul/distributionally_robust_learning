@@ -114,9 +114,8 @@ def _maybe_wrap_env(
     # all devices gets the same randomization rng
     randomization_rng = jax.random.split(key_env, randomization_batch_size)
     v_randomization_fn = functools.partial(
-        randomization_fn, rng=randomization_rng, dr_range= ev.dr_range
+        randomization_fn, rng=randomization_rng, dr_range=env.dr_range
     )
-
   env = wrap_for_brax_training(
       env,
       episode_length=episode_length,
@@ -222,7 +221,7 @@ def train(
     # eval
     num_evals: int = 1,
     eval_env: Optional[envs.Env] = None,
-    num_eval_envs: int = 128,
+    num_eval_envs: int = 1024,
     deterministic_eval: bool = False,
     # training metrics
     log_training_metrics: bool = False,
@@ -641,13 +640,11 @@ def train(
 
   eval_env = _maybe_wrap_env(
       eval_env or copy.deepcopy(environment),
-      wrap_env,
       num_eval_envs,
       episode_length,
       action_repeat,
       device_count=1,  # eval on the host only
       key_env=eval_key,
-      wrap_env_fn=wrap_eval_env_fn,
       randomization_fn=randomization_fn,
   )
   evaluator = Evaluator(

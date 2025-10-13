@@ -22,23 +22,23 @@ from ml_collections import config_dict
 from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.locomotion.barkour import joystick as barkour_joystick
-from mujoco_playground._src.locomotion.berkeley_humanoid import joystick as berkeley_humanoid_joystick
-from mujoco_playground._src.locomotion.berkeley_humanoid import randomize as berkeley_humanoid_randomize
-from mujoco_playground._src.locomotion.g1 import joystick as g1_joystick
-from mujoco_playground._src.locomotion.g1 import randomize as g1_randomize
+from custom_envs.locomotion.barkour import joystick as barkour_joystick
+from custom_envs.locomotion.berkeley_humanoid import joystick as berkeley_humanoid_joystick
+from custom_envs.locomotion.berkeley_humanoid import randomize as berkeley_humanoid_randomize
+from custom_envs.locomotion.g1 import joystick as g1_joystick
+from custom_envs.locomotion.g1 import randomize as g1_randomize
 from custom_envs.locomotion.go1 import getup as go1_getup
 from custom_envs.locomotion.go1 import handstand as go1_handstand
 from custom_envs.locomotion.go1 import joystick as go1_joystick
 from custom_envs.locomotion.go1 import randomize as go1_randomize
-from mujoco_playground._src.locomotion.h1 import inplace_gait_tracking as h1_inplace_gait_tracking
-from mujoco_playground._src.locomotion.h1 import joystick_gait_tracking as h1_joystick_gait_tracking
-from mujoco_playground._src.locomotion.op3 import joystick as op3_joystick
-from mujoco_playground._src.locomotion.spot import getup as spot_getup
-from mujoco_playground._src.locomotion.spot import joystick as spot_joystick
-from mujoco_playground._src.locomotion.spot import joystick_gait_tracking as spot_joystick_gait_tracking
-from mujoco_playground._src.locomotion.t1 import joystick as t1_joystick
-from mujoco_playground._src.locomotion.t1 import randomize as t1_randomize
+from custom_envs.locomotion.h1 import inplace_gait_tracking as h1_inplace_gait_tracking
+from custom_envs.locomotion.h1 import joystick_gait_tracking as h1_joystick_gait_tracking
+from custom_envs.locomotion.op3 import joystick as op3_joystick
+from custom_envs.locomotion.spot import getup as spot_getup
+from custom_envs.locomotion.spot import joystick as spot_joystick
+from custom_envs.locomotion.spot import joystick_gait_tracking as spot_joystick_gait_tracking
+from custom_envs.locomotion.t1 import joystick as t1_joystick
+from custom_envs.locomotion.t1 import randomize as t1_randomize
 
 _envs = {
     "BarkourJoystick": barkour_joystick.Joystick,
@@ -131,15 +131,15 @@ _randomizer_eval = {
     # "BerkeleyHumanoidJoystickRoughTerrain": (
     #     berkeley_humanoid_randomize.domain_randomize_eval
     # ),
-    # "G1JoystickFlatTerrain": g1_randomize.domain_randomize_eval,
-    # "G1JoystickRoughTerrain": g1_randomize.domain_randomize_eval,
+    "G1JoystickFlatTerrain": g1_randomize.domain_randomize_eval,
+    "G1JoystickRoughTerrain": g1_randomize.domain_randomize_eval,
     "Go1JoystickFlatTerrain": go1_randomize.domain_randomize_eval,
     "Go1JoystickRoughTerrain": go1_randomize.domain_randomize_eval,
     "Go1Getup": go1_randomize.domain_randomize_eval,
     "Go1Handstand": go1_randomize.domain_randomize_eval,
     "Go1Footstand": go1_randomize.domain_randomize_eval,
-    # "T1JoystickFlatTerrain": t1_randomize.domain_randomize_eval,
-    # "T1JoystickRoughTerrain": t1_randomize.domain_randomize_eval,
+    "T1JoystickFlatTerrain": t1_randomize.domain_randomize_eval,
+    "T1JoystickRoughTerrain": t1_randomize.domain_randomize_eval,
 }
 
 def __getattr__(name):

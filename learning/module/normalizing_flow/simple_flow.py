@@ -98,7 +98,7 @@ class MetaBlock(nn.Module):
 
         self.l = InvertiblePLU(features=self.in_channels)
 
-        in_half = self.in_channels // 2
+        in_half = (self.in_channels) // 2 
         # t-network: inputs are x_cond only (no y)
         self.t = nn.Sequential([
             nn.Dense(self.channels, kernel_init=kernel_init,
@@ -401,3 +401,181 @@ def render_flow_pdf_1d_subplots(
             print(f"[render_flow_pdf_1d_subplots] W&B log failed: {e}")
 
     return fig, axes
+import functools, math, numpy as np
+import jax, jax.numpy as jnp
+import matplotlib.pyplot as plt
+
+def render_flow_pdf_2d_subplots(
+    flow_network, params, low, high,
+    rng=None, resolution=256,
+    normalize=True,
+    suptitle="Flow PDF — 2D marginals via MC",
+    use_wandb=None, training_step=0,
+    add_colorbar=False,
+):
+
+    # ---- constants on device
+    low  = jnp.asarray(low,  jnp.float32)
+    high = jnp.asarray(high, jnp.float32)
+    if rng is None:
+        rng = jax.random.PRNGKey(0)
+    rng, sub = jax.random.split(rng)
+
+    def _log_prob(points):
+        return flow_network.apply(params, mode="log_prob", x=points, low=low, high=high)
+
+    x = jnp.linspace(low[0], high[0], resolution, dtype=jnp.float32)  # (R,)
+    y = jnp.linspace(low[1], high[1], resolution, dtype=jnp.float32)  # (R,)
+    XX, YY = jnp.meshgrid(x, y, indexing="xy")               # (R, R)
+
+    grid_flat_i = XX.reshape(-1)  # (R*R,)
+    grid_flat_j = YY.reshape(-1)  # (R*R,)
+
+    X = jnp.zeros((resolution*resolution, 2))
+    X = X.at[:, 0].set(grid_flat_i)
+    X = X.at[:, 1].set(grid_flat_j)
+    logp =_log_prob(X).reshape(resolution, resolution)  # (R, R)
+
+    # stabilize + exp
+    logp_shift = logp - jnp.max(logp)
+    pdf = jnp.exp(logp_shift)  # unnormalized marginal on the box
+
+    if normalize:
+        dx = (high[0] - low[0]) / (resolution - 1)
+        dy = (high[1] - low[1]) / (resoluion - 1)
+        mass = jnp.sum(pdf) * dx * dy
+        pdf = jnp.where(mass > 0, pdf / mass, pdf)
+   
+    # ---- plotting
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.pcolormesh(x,y,pdf,shading="auto")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+    if suptitle:
+        fig.suptitle(suptitle, y=0.99, fontsize=10)
+
+    if use_wandb is not None:
+        try:
+            import wandb
+            wandb.log(
+                {f"all_pairs_2d_pdf(step : {training_step})": wandb.Image(fig)},
+                step=int(training_step),
+            )
+        except Exception as e:
+            print(f"[render_flow_pdf_2d_subplots] W&B log failed: {e}")
+
+    return fig, None
+
+# def render_flow_pdf_2d_subplots(
+#     flow_network, params, ndim, low, high,
+#     pairs=None,                      # list of (i,j); defaults to all i<j
+#     rng=None, resolution=256, other_samples=256,
+#     normalize=True, ncols=3,
+#     suptitle="Flow PDF — 2D marginals via MC",
+#     use_wandb=None, training_step=0,
+#     add_colorbar=False,
+# ):
+#     """
+#     Estimates 2D marginals p(x[i], x[j]) by Monte-Carlo integration over the other dims.
+#       - JIT compiled per (pair, resolution)
+#       - Works in log-space; robust normalization
+#       - Avoids tight_layout for speed
+#     Cost ~ O(other_samples * resolution^2 * num_pairs)
+#     """
+#     # ---- constants on device
+#     low  = jnp.asarray(low,  jnp.float32)
+#     high = jnp.asarray(high, jnp.float32)
+#     if rng is None:
+#         rng = jax.random.PRNGKey(0)
+#     rng, sub = jax.random.split(rng)
+
+#     def _log_prob(points):
+#         return flow_network.apply(params, mode="log_prob", x=points, low=low, high=high)
+
+#     # Monte-Carlo contexts for remaining dims
+#     U = jax.random.uniform(sub, (other_samples, ndim), dtype=jnp.float32)
+#     others = low + (high - low) * U  # (M, D)
+
+#     # default to all unique pairs i<j
+#     if pairs is None:
+#         pairs = [(i, j) for i in range(ndim) for j in range(i+1, ndim)]
+#     nplots = len(pairs)
+
+#     # JIT per (i, j, res)
+#     @functools.lru_cache(maxsize=None)
+#     def _compiled_for_pair(i_int, j_int, res_int):
+#         i, j = int(i_int), int(j_int)
+#         R = int(res_int)
+
+#         @jax.jit
+#         def _compute(others_in):
+#             xi = jnp.linspace(low[i], high[i], R, dtype=jnp.float32)  # (R,)
+#             xj = jnp.linspace(low[j], high[j], R, dtype=jnp.float32)  # (R,)
+#             XX, YY = jnp.meshgrid(xi, xj, indexing="xy")               # (R, R)
+
+#             grid_flat_i = XX.reshape(-1)  # (R*R,)
+#             grid_flat_j = YY.reshape(-1)  # (R*R,)
+
+#             def eval_for_context(ctx):
+#                 # (R*R, D) all set to ctx, then overwrite dims i,j with grid
+#                 X = jnp.broadcast_to(ctx, (R*R, ndim))
+#                 X = X.at[:, i].set(grid_flat_i)
+#                 X = X.at[:, j].set(grid_flat_j)
+#                 return _log_prob(X).reshape(R, R)  # (R, R)
+
+#             lps = jax.vmap(eval_for_context)(others_in)  # (M, R, R)
+#             logp = jax.scipy.special.logsumexp(lps, axis=0) - jnp.log(lps.shape[0])  # (R,R)
+
+#             # stabilize + exp
+#             logp_shift = logp - jnp.max(logp)
+#             pdf = jnp.exp(logp_shift)  # unnormalized marginal on the box
+
+#             if normalize:
+#                 dx = (high[i] - low[i]) / (R - 1)
+#                 dy = (high[j] - low[j]) / (R - 1)
+#                 mass = jnp.sum(pdf) * dx * dy
+#                 pdf = jnp.where(mass > 0, pdf / mass, pdf)
+
+#             return xi, xj, pdf
+
+#         return _compute
+
+#     # ---- plotting
+#     ncols = max(1, ncols)
+#     nrows = math.ceil(nplots / ncols)
+#     fig, axes = plt.subplots(nrows=nrows, ncols=ncols,
+#                              figsize=(4.6*ncols, 4.0*nrows), dpi=100)
+#     axes = axes.flatten().tolist() if isinstance(axes, np.ndarray) else [axes]
+
+#     for k, (i, j) in enumerate(pairs):
+#         ax = axes[k]
+#         compute_ij = _compiled_for_pair(i, j, resolution)
+#         xi, xj, pdf = compute_ij(others)
+
+#         xi = np.asarray(xi); xj = np.asarray(xj); pdf = np.asarray(pdf)
+#         im = ax.pcolormesh(xi, xj, pdf, shading="auto")
+#         ax.set_title(f"dim ({i},{j})", pad=2)
+#         ax.set_xlabel(f"x[{i}]"); ax.set_ylabel(f"x[{j}]")
+#         if add_colorbar:
+#             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+
+#     # remove unused axes
+#     for k in range(nplots, nrows * ncols):
+#         fig.delaxes(axes[k])
+
+#     if suptitle:
+#         fig.suptitle(suptitle, y=0.99, fontsize=10)
+#     fig.subplots_adjust(wspace=0.28, hspace=0.32, top=0.93)
+
+#     if use_wandb is not None:
+#         try:
+#             import wandb
+#             wandb.log(
+#                 {f"all_pairs_2d_pdf(step : {training_step})": wandb.Image(fig)},
+#                 step=int(training_step),
+#             )
+#         except Exception as e:
+#             print(f"[render_flow_pdf_2d_subplots] W&B log failed: {e}")
+
+#     return fig, axes

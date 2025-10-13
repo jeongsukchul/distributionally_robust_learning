@@ -23,9 +23,9 @@ import mujoco
 from mujoco import mjx
 
 from mujoco_playground._src import mjx_env
-from mujoco_playground._src.locomotion.t1 import t1_constants as consts
+from custom_envs.locomotion.t1 import t1_constants as consts
 
-
+import jax.numpy as jnp
 def get_assets() -> Dict[str, bytes]:
   assets = {}
   mjx_env.update_assets(assets, consts.ROOT_PATH / "xmls", "*.xml")
@@ -111,3 +111,28 @@ class T1Env(mjx_env.MjxEnv):
   @property
   def mjx_model(self) -> mjx.Model:
     return self._mjx_model
+  @property
+  def dr_range(self) -> jax.Array:
+    low = jnp.array(
+        [0.2] +                             #floor_friction_min (1)
+        [0.9] * (self.mjx_model.nv-6) +   # dof_friction_min (23)
+        [1.0] * (self.mjx_model.nv-6) +    # dof armature (23)
+        [0.98] * (self.mjx_model.nbody) + # body link mass scale min(25)
+        [-1.0] +                          # torso link mass offset min(1)
+        [-0.05] * (self.mjx_model.nv-6)+   # q pos offset (23)
+        [0.9] * (self.mjx_model.nv-6)+   # joint stiffeness (23)
+        [0.9] * (self.mjx_model.nv-6) +  # joint damping (23)
+        [0.5] * 4   # joint damping ankle (4)
+      ) 
+    high = jnp.array(
+        [.6] +                             #floor_friction_max(1)
+        [1.1] * (self.mjx_model.nv-6)+   #dof_friction_max(23)
+        [1.05] * (self.mjx_model.nv-6) +    # dof armature (23)
+        [1.02] * (self.mjx_model.nbody ) + # body link mass scale max(25)
+        [1.0]  +                   # torso link mass offset max(1)
+        [0.05] * (self.mjx_model.nv-6) +  # q pos offset (23)
+        [1.1] * (self.mjx_model.nv-6)  + # joint stiffeness (23)
+        [1.1] * (self.mjx_model.nv-6)  + # joint damping (23)
+        [2.0] * 4   # joint damping ankle (4)
+        ) 
+    return low, high

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """flowtd3 networks."""
-
 from typing import Sequence, Tuple
 
 from brax.training import distribution

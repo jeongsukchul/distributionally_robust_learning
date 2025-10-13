@@ -166,12 +166,12 @@ def make_losses(
     min_q = jnp.min(q_action, axis=-1)
     return -jnp.mean(min_q)
 
-  def fab_loss(
-    flow_params: Params,
-    normalizer_params: Any,
-    policy_params: Params,
-    
-  )
+#   def fab_loss(
+#     flow_params: Params,
+#     normalizer_params: Any,
+#     policy_params: Params,
+
+#   )
   def flow_loss(
       flow_params: Params,
       normalizer_params: Any,

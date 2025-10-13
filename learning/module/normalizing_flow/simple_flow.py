@@ -419,7 +419,6 @@ def render_flow_pdf_2d_subplots(
     high = jnp.asarray(high, jnp.float32)
     if rng is None:
         rng = jax.random.PRNGKey(0)
-    rng, sub = jax.random.split(rng)
 
     def _log_prob(points):
         return flow_network.apply(params, mode="log_prob", x=points, low=low, high=high)
@@ -442,14 +441,14 @@ def render_flow_pdf_2d_subplots(
 
     if normalize:
         dx = (high[0] - low[0]) / (resolution - 1)
-        dy = (high[1] - low[1]) / (resoluion - 1)
+        dy = (high[1] - low[1]) / (resolution - 1)
         mass = jnp.sum(pdf) * dx * dy
         pdf = jnp.where(mass > 0, pdf / mass, pdf)
    
     # ---- plotting
     fig = plt.figure()
     ax = fig.add_subplot()
-    ax.pcolormesh(x,y,pdf,shading="auto")
+    im=ax.pcolormesh(x,y,pdf,shading="auto")
     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
     if suptitle:

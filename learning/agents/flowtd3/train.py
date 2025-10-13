@@ -794,6 +794,14 @@ def train(
             network_factory=network_factory,
         )
         checkpoint.save(checkpoint_logdir, current_step, params, ckpt_config)
+      fig = render_flow_pdf_2d_subplots(
+        flowtd3_network.flow_network,
+            _unpmap(training_state.flow_params),
+          low=dr_range_low,
+          high=dr_range_high,
+          training_step=current_step,
+          use_wandb=use_wandb,
+      )
       fig = render_flow_pdf_1d_subplots(
         flowtd3_network.flow_network,
             _unpmap(training_state.flow_params),

@@ -39,6 +39,8 @@ from agents.flowsac import train as flowsac
 from agents.flowsac import networks as flowsac_networks
 from agents.flowtd3 import train as flowtd3
 from agents.flowtd3 import networks as flowtd3_networks
+from agents.gmmtd3 import train as gmmtd3
+from agents.gmmtd3 import networks as gmmtd3_networks
 from agents.m2td3 import train as m2td3
 from agents.m2td3 import networks as m2td3_networks
 from agents.tdmpc import train as tdmpc
@@ -59,8 +61,9 @@ from orbax import checkpoint as ocp
 import wandb
 from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_td3_config, brax_tdmpc_config
 from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
+from learning.configs.manipulation_training_config import manipulation_ppo_config, manipulation_td3_config
 import hydra
-from custom_envs import registry, dm_control_suite, locomotion
+from custom_envs import registry, dm_control_suite, locomotion, manipulation
 from brax import envs
 from helper import parse_cfg
 from helper import Logger
@@ -119,6 +122,8 @@ CAMERAS = {
     "G1JoystickGaitTracking" : "track",
     "T1JoystickFlatTerrain" :"track",
     "T1JoystickRoughTerrain" :"track",
+    "LeapCubeRotateZAxis" :"track",
+    "LeapCubeReorient" :"track",
 }
 camera_name = CAMERAS[env_name]
 
@@ -164,10 +169,13 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
         ppo_params = brax_ppo_config(cfg.task)
     elif cfg.task in locomotion._envs:
         ppo_params = locomotion_ppo_config(cfg.task)
+    elif cfg.task in manipulation._envs:
+        ppo_params = manipulation_ppo_config(cfg.task)
     if cfg.randomization:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.domain_randomized"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -217,6 +225,7 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
     wandb_name += f"simba={cfg.simba}"
+    wandb_name += cfg.comment
     wandb_name 
     if cfg.use_wandb:
         wandb.init(
@@ -261,6 +270,8 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         td3_params = brax_td3_config(cfg.task)
     elif cfg.task in locomotion._envs:
         td3_params = locomotion_td3_config(cfg.task)
+    elif cfg.task in manipulation._envs:
+        td3_params = manipulation_td3_config(cfg.task)
     td3_training_params = dict(td3_params)
     if cfg.randomization:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.\
@@ -269,6 +280,7 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
             wandb_name+=f".adv_wrapper={cfg.adv_wrapper}"#dr_train_ratio={cfg.dr_train_ratio}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -316,6 +328,7 @@ def train_m2td3(cfg:dict, randomization_fn, env, eval_env=None):
     print("omega_distance_threshold:", m2td3_params.omega_distance_threshold)
     m2td3_training_params = dict(m2td3_params)
     wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.dist={m2td3_params.omega_distance_threshold}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -367,6 +380,7 @@ def train_flowsac(cfg:dict, randomization_fn, env, eval_env=None):
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
                 .init_lmbda={flowsac_params.init_lmbda}.flow_lr={flowsac_params.flow_lr}.dr_flow={cfg.dr_flow}.simba={cfg.simba}\
                     .eval_param={cfg.eval_with_training_env}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -420,6 +434,7 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}\
                 .init_lmbda={flowtd3_params.init_lmbda}.flow_lr={flowtd3_params.flow_lr} \
                     .eval_param={cfg.eval_with_training_env}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -455,6 +470,52 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
         environment=env,
     )
     return make_inference_fn, params, metrics
+def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
+    if cfg.task in dm_control_suite._envs:
+        gmmtd3_params = brax_td3_config(cfg.task)
+    elif cfg.task in locomotion._envs:
+        gmmtd3_params = locomotion_td3_config(cfg.task)
+    for param in gmmtd3_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            gmmtd3_params[param] = getattr(cfg, param)
+
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}"
+    wandb_name += cfg.comment
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project, 
+            entity=cfg.wandb_entity, 
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+    gmmtd3_training_params = dict(gmmtd3_params)
+    if "network_factory" in gmmtd3_params:
+        if not cfg.asymmetric_critic:
+            gmmtd3_params.network_factory.value_obs_key = "state"
+        del gmmtd3_training_params["network_factory"]
+        network_factory = functools.partial(
+            gmmtd3_networks.make_gmmtd3_networks,
+            **gmmtd3_params.network_factory,
+        )
+        
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(  
+        gmmtd3.train, **dict(gmmtd3_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        use_wandb=cfg.use_wandb,
+        dr_train_ratio = cfg.dr_train_ratio,
+        seed=cfg.seed,
+        eval_with_training_env = cfg.eval_with_training_env,
+    )
+
+    make_inference_fn, params, metrics = train_fn(        
+        environment=env,
+    )
+    return make_inference_fn, params, metrics
 def train_wdtd3(cfg:dict, randomization_fn, env):
     if cfg.task in dm_control_suite._envs:
         wdtd3_params = brax_td3_config(cfg.task)
@@ -474,6 +535,7 @@ def train_wdtd3(cfg:dict, randomization_fn, env):
         .nominals={wdtd3_params.n_nominals}.single_lambda={wdtd3_params.single_lambda}.asym={cfg.asymmetric_critic}\
             distance_type={wdtd3_params.distance_type}.length={wdtd3_params.lambda_update_steps}\
                 .lmbda_lr={wdtd3_params.lmbda_lr}.init_lmbda={wdtd3_params.init_lmbda}"
+    wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
             project=cfg.wandb_project, 
@@ -523,6 +585,7 @@ def train_tdmpc(cfg:dict, randomization_fn, env, eval_env=None):
             wandb_name+=f".adv_wrapper={cfg.adv_wrapper}"#dr_train_ratio={cfg.dr_train_ratio}"
     else:
         wandb_name = f"{cfg.task}.{cfg.policy}.{cfg.seed}.asym={cfg.asymmetric_critic}.eval_rand={cfg.eval_randomization}"
+    wandb_name += cfg.comment
 
     if cfg.use_wandb:
         wandb.init(
@@ -605,6 +668,8 @@ def train(cfg: dict):
         make_inference_fn, params, metrics = train_flowsac(cfg, randomization_fn, env)
     elif cfg.policy == "flowtd3":
         make_inference_fn, params, metrics = train_flowtd3(cfg, randomization_fn, env)
+    elif cfg.policy == "gmmtd3":
+        make_inference_fn, params, metrics = train_gmmtd3(cfg, randomization_fn, env)
     elif cfg.policy == "wdtd3":
         make_inference_fn, params, metrics = train_wdtd3(cfg, randomization_fn, env)
     elif cfg.policy == "m2td3":
@@ -635,7 +700,7 @@ def train(cfg: dict):
             randomization_fn=randomizer_eval,
         )
     else:
-        eval_env = registry.load(cfg.task, config=env_cfg),
+        eval_env = registry.load(cfg.task, config=env_cfg)
     if cfg.save_video and cfg.use_wandb:
         n_episodes = 100
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))

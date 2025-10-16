@@ -9,9 +9,13 @@ from typing import Callable
 
 from learning.module.sampling.base import TransitionOperator, LogProbFn, create_point, Point, get_intermediate_log_prob
 from learning.module.sampling.resampling import log_effective_sample_size, optionally_resample
-from learning.module.utils.jax_util import broadcasted_where
 from learning.module.sampling.point_is_valid import PointIsValidFn, default_point_is_valid_fn
-
+def broadcasted_where(valid_samples: chex.Array, a1: chex.Array, a2: chex.Array) -> chex.Array:
+    chex.assert_equal_shape((a1, a2))
+    # broadcast over shape suffix of a1 and a2.
+    for i in range(a1.ndim - valid_samples.ndim):
+        valid_samples = jnp.expand_dims(valid_samples, axis=-1)
+    return jnp.where(valid_samples, a1, a2)
 
 class SMCState(NamedTuple):
     """State of the SMC sampler."""

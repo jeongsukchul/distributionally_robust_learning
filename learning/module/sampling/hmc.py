@@ -223,7 +223,7 @@ def build_blackjax_hmc(
         inverse_mass_matrix = jnp.ones(dim)
         return HMCState(key, inverse_mass_matrix, step_size=jnp.array(init_step_size))
 
-    def step(point: Point,
+    def apply(point: Point,
              transition_operator_state: HMCState,
              beta: chex.Array,
              alpha: float,
@@ -276,4 +276,4 @@ def build_blackjax_hmc(
         transition_operator_state = transition_operator_state._replace(key=key)
         return point, transition_operator_state, info
 
-    return TransitionOperator(init, step)
+    return TransitionOperator(init, apply)

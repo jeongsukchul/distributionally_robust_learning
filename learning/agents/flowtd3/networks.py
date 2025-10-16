@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """flowtd3 networks."""
-from typing import Sequence, Tuple
+from typing import Any, Sequence, Tuple
 
 from brax.training import distribution
 from module import networks
@@ -24,6 +24,26 @@ from flax import linen
 import jax.numpy as jnp
 import jax
 from learning.module.normalizing_flow.simple_flow import make_realnvp_flow_networks
+from learning.module.sampling.point_is_valid import default_point_is_valid_fn
+from learning.module.sampling.hmc import build_blackjax_hmc
+from learning.module.sampling.smc import build_smc
+from omegaconf import OmegaConf
+
+# hmc_cfg = OmegaConf({
+#     'n_outer_steps': 1,
+#     'n_inner_steps': 10,
+#     'init_step_size': 0.1,
+#     'target_p_accept': 0.8,
+#     'tune_step_size': True,
+# }
+# )
+# smc_cfg = OmegaConf({
+#     'use_resampling': False,
+#     'n_intermediate_distributions': 12,
+#     'spacing_type': 'linear',
+#     'transition_operator': 'hmc',
+#     'point_is_valid_fn': default_point_is_valid_fn,
+# })
 
 @flax.struct.dataclass
 class FlowTd3Networks:
@@ -31,6 +51,12 @@ class FlowTd3Networks:
   q_network: networks.FeedForwardNetwork
   flow_network: networks.FeedForwardNetwork
 
+@flax.struct.dataclass
+class FabTd3Networks:
+  policy_network: networks.FeedForwardNetwork
+  q_network: networks.FeedForwardNetwork
+  flow_network: networks.FeedForwardNetwork
+  smc: Any
 def make_inference_fn(flowtd3_networks: FlowTd3Networks):
   """Creates params and inference function for the td3 agent."""
 
@@ -69,6 +95,7 @@ def make_flowtd3_networks(
     q_network_layer_norm: bool = False,
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
+    fab_online : bool = False,
 ) -> FlowTd3Networks:
   """Make td3 networks."""
 
@@ -92,8 +119,30 @@ def make_flowtd3_networks(
   )
   flow_network = make_realnvp_flow_networks(
     in_channels=dynamics_param_size)
+  
+
+  # if fab_online:
+  #   transition_operator = build_blackjax_hmc(
+  #       dim=dynamics_param_size,
+  #       n_outer_steps=hmc_cfg.n_outer_steps,
+  #       init_step_size=hmc_cfg.init_step_size,
+  #       target_p_accept=hmc_cfg.target_p_accept,
+  #       adapt_step_size=hmc_cfg.tune_step_size,
+  #       n_inner_steps=hmc_cfg.n_inner_steps)
+  #   smc =build_smc(transition_operator=transition_operator,
+  #           n_intermediate_distributions=smc_cfg.n_intermediate_distributions,
+  #           spacing_type=smc_cfg.spacing_type, alpha=2.0,
+  #           use_resampling=smc_cfg.use_resampling, point_is_valid_fn=smc_cfg.point_is_valid_fn)
+  #   return FabTd3Networks(
+  #     policy_network=policy_network,
+  #     q_network=q_network,
+  #     flow_network=flow_network,
+  #     smc=smc,
+  # )
+
   return FlowTd3Networks(
       policy_network=policy_network,
       q_network=q_network,
       flow_network=flow_network,
   )
+  

@@ -1,8 +1,16 @@
 from asyncio import Protocol
-from typing import Callable, NamedTuple, Optional, Union
+from typing import Callable, Dict, NamedTuple, Optional, Union, Tuple
 import chex
 from blackjax.types import Array, ArrayLikeTree, ArrayTree, PRNGKey
 import jax.numpy as jnp
+import jax
+class Point(NamedTuple):
+    """State of the MCMC chain, specifically designed for FAB."""
+    x: chex.Array
+    log_q: chex.Array
+    log_p: chex.Array
+    grad_log_q: Optional[chex.Array] = None
+    grad_log_p: Optional[chex.Array] = None
 
 class IntegratorState(NamedTuple):
     position: ArrayTree
@@ -24,6 +32,17 @@ class IntegratorState(NamedTuple):
                                               beta=self.beta, alpha=self.alpha)
 
 LogProbFn = Callable[[chex.Array], chex.Array]
+
+def create_point(x: chex.Array, log_q_fn: LogProbFn, log_p_fn: LogProbFn,
+                 with_grad: bool = True) -> Point:
+    """Create an instance of a `Point` which contains the necessary info on a point for MCMC."""
+    chex.assert_rank(x, 1)
+    if with_grad:
+        log_q, grad_log_q = jax.value_and_grad(log_q_fn)(x)
+        log_p, grad_log_p = jax.value_and_grad(log_p_fn)(x)
+        return Point(x=x, log_p=log_p, log_q=log_q, grad_log_p=grad_log_p, grad_log_q=grad_log_q)
+    else:
+        return Point(x=x, log_q=log_q_fn(x), log_p=log_p_fn(x))
 
 
 def get_intermediate_log_prob(
@@ -50,13 +69,6 @@ def get_grad_intermediate_log_prob(
     return ((1-beta) + beta*(1-alpha)) * grad_log_q + beta*alpha*grad_log_p
 
 
-class Point(NamedTuple):
-    """State of the MCMC chain, specifically designed for FAB."""
-    x: chex.Array
-    log_q: chex.Array
-    log_p: chex.Array
-    grad_log_q: Optional[chex.Array] = None
-    grad_log_p: Optional[chex.Array] = None
 
 TransitionOperatorState = chex.ArrayTree
 
@@ -82,7 +94,7 @@ class TransitionOperator(NamedTuple):
 class AISForwardFn(Protocol):
     def __call__(self, sample_q_fn: Callable[[chex.PRNGKey], chex.Array],
                  log_q_fn: LogProbFn, log_p_fn: LogProbFn,
-                 ais_state: chex.Array) -> [chex.Array, chex.Array, chex.ArrayTree, Dict]:
+                 ais_state: chex.Array) -> Tuple[chex.Array, chex.Array, chex.ArrayTree, Dict]:
         """
 
         Args:
@@ -97,6 +109,7 @@ class AISForwardFn(Protocol):
             ais_state: Updated AIS state.
             info: Dict with additional information.
         """
+
 
 class PointIsValidFn(Protocol):
     def __call__(self, point: Point) -> bool:
@@ -115,7 +128,7 @@ def default_point_is_valid_fn(point: Point) -> bool:
 
 def point_is_valid_if_in_bounds_fn(point: Point,
                                    min_bounds: Union[chex.Array, float],
-                                   max_bounds: [chex.Array, float]) -> bool:
+                                   max_bounds: Tuple[chex.Array, float]) -> bool:
     """Returns True if a point is within the provided bounds. Must be wrapped with a partial to be
     used as a `PointIsValidFn`."""
     chex.assert_rank(point.x, 1)

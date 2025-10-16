@@ -16,7 +16,7 @@ eval_freq: 50000
 eval_with_training_env : false #added
 #policy
 policy : td3
-asymmetric_critic: false
+asymmetric_critic: true
 
 #dynamics shift
 randomization: true
@@ -28,6 +28,7 @@ wandb_entity: tjrcjf410-seoul-national-university
 wandb_silent: false
 use_wandb: true
 save_csv: true
+comment: ''
 
 # misc
 save_video: true

@@ -82,7 +82,22 @@ class TrainingState:
   flow_params : Params
   target_flow_params : Params
   noise_scales: jnp.ndarray
+class TrainingStateSMC:
+  """Contains training state for the learner."""
 
+  policy_optimizer_state: optax.OptState
+  policy_params: Params
+  q_optimizer_state: optax.OptState
+  q_params: Params
+  target_q_params: Params
+  gradient_steps: types.UInt64
+  env_steps: types.UInt64
+  normalizer_params: running_statistics.RunningStatisticsState
+  flow_optimizer_state : optax.OptState
+  flow_params : Params
+  target_flow_params : Params
+  noise_scales: jnp.ndarray
+  smc_state: Params
 def _unpmap(v):
   return jax.tree_util.tree_map(lambda x: x[0], v)
 
@@ -98,6 +113,7 @@ def _init_training_state(
     num_envs : int,
     std_max: float =0.4,
     std_min : float =0.05,
+    fab_online: bool = False,
 ) -> TrainingState:
   """Inits the training state and replicates it over devices."""
   key_policy, key_q, key_noise, key_flow = jax.random.split(key,4 )
@@ -114,6 +130,24 @@ def _init_training_state(
     #   specs.Array((obs_size,), jnp.dtype('float32'))
     obs_size if isinstance(obs_size, dict) else specs.Array((obs_size,), jnp.dtype('float32'))
   )
+  if fab_online:
+    smc_state = flowtd3_network.init(jax.random.PRNGKey(0))
+    training_state= TrainingStateSMC(
+      policy_optimizer_state=policy_optimizer_state,
+      policy_params=policy_params,
+      q_optimizer_state=q_optimizer_state,
+      q_params=q_params,
+      target_q_params=q_params,
+      gradient_steps=types.UInt64(hi=0, lo=0),
+      env_steps=types.UInt64(hi=0, lo=0),
+      normalizer_params=normalizer_params,
+      flow_optimizer_state=flow_optimizer_state,
+      flow_params=flow_params,
+      target_flow_params=target_flow_params,
+      noise_scales= jax.random.normal(key_noise, (num_envs, )) *(std_max - std_min) + std_min,
+      smc_state=smc_state,
+  )
+
   training_state = TrainingState(
       policy_optimizer_state=policy_optimizer_state,
       policy_params=policy_params,
@@ -177,6 +211,7 @@ def train(
     use_wandb=False,
     use_norm:bool=True,
     use_advantage:bool= True,
+    fab_online: bool = False,
 ):
   """flowtd3 training."""
   process_id = jax.process_index()
@@ -287,6 +322,7 @@ def train(
       reward_scaling=reward_scaling,
       discounting=discounting,
       action_size=action_size,
+      dynamics_param_size=len(dr_range_low),
       use_normalization=use_norm,
       use_advantage=use_advantage,
   )
@@ -538,7 +574,7 @@ def train(
     )
 
     metrics['buffer_current_size'] = replay_buffer.size(buffer_state)
-    # metrics.update(simul_info)
+    metrics.update(simul_info)
     metrics.update(flow_metric)
     return training_state, env_state, buffer_state, metrics
 
@@ -674,6 +710,7 @@ def train(
       num_envs=num_envs,
       std_max=std_max,
       std_min=std_min,
+      fab_online=fab_online,
   )
   del global_key
   dynamics_params, _ = flowtd3_network.flow_network.apply(

@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""flowtd3 networks."""
+"""gmmtd3 networks."""
 
 from typing import Sequence, Tuple
 
 from brax.training import distribution
+from learning.module.gmmvi.network import create_gmm_network_and_state
 from module import networks
 from brax.training import types
 from brax.training.types import PRNGKey
@@ -24,15 +25,14 @@ import flax
 from flax import linen
 import jax.numpy as jnp
 import jax
-from learning.module.normalizing_flow.simple_flow import make_realnvp_flow_networks
 
 @flax.struct.dataclass
-class FlowTd3Networks:
+class GMMTd3Networks:
   policy_network: networks.FeedForwardNetwork
   q_network: networks.FeedForwardNetwork
-  flow_network: networks.FeedForwardNetwork
+  gmm_network: networks.FeedForwardNetwork
 
-def make_inference_fn(flowtd3_networks: FlowTd3Networks):
+def make_inference_fn(gmmtd3_networks: GMMTd3Networks):
   """Creates params and inference function for the td3 agent."""
 
   def make_policy(
@@ -43,14 +43,14 @@ def make_inference_fn(flowtd3_networks: FlowTd3Networks):
         observations: types.Observation,
         key: PRNGKey = None,
     ) -> Tuple[types.Action, types.Extra]:
-      return flowtd3_networks.policy_network.apply(*params, observations), None
+      return gmmtd3_networks.policy_network.apply(*params, observations), None
 
     def stochastic_policy(
         observations: types.Observation,
         noise_scales: jnp.ndarray,
         key: PRNGKey,
     ):  
-        act = flowtd3_networks.policy_network.apply(*params, observations)
+        act = gmmtd3_networks.policy_network.apply(*params, observations)
         noise = jax.random.normal(key, shape=act.shape) * noise_scales[..., None]
         return act + noise, None
     if deterministic:
@@ -59,10 +59,12 @@ def make_inference_fn(flowtd3_networks: FlowTd3Networks):
         return stochastic_policy
 
   return make_policy
-def make_flowtd3_networks(
+def make_gmmtd3_networks(
     observation_size: int,
     action_size: int,
     dynamics_param_size : int,
+    num_envs :int, 
+    init_key :jax.random.PRNGKey,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
     hidden_layer_sizes: Sequence[int] = (256, 256),
     activation: networks.ActivationFn = linen.relu,
@@ -70,7 +72,7 @@ def make_flowtd3_networks(
     q_network_layer_norm: bool = False,
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
-) -> FlowTd3Networks:
+) -> GMMTd3Networks:
   """Make td3 networks."""
 
   policy_network = networks.make_deterministic_policy_network(
@@ -91,10 +93,9 @@ def make_flowtd3_networks(
       layer_norm=q_network_layer_norm,
       obs_key = value_obs_key,
   )
-  flow_network = make_realnvp_flow_networks(
-    in_channels=dynamics_param_size)
-  return FlowTd3Networks(
+  init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, init_key)
+  return GMMTd3Networks(
       policy_network=policy_network,
       q_network=q_network,
-      flow_network=flow_network,
-  )
+      gmm_network=gmm_network,
+  ), init_gmmvi_state

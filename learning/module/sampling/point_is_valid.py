@@ -4,7 +4,7 @@ from typing import Protocol, Union
 import chex
 import jax.numpy as jnp
 
-from algorithms.fab.sampling.base import Point
+from learning.module.sampling.base import Point
 
 class PointIsValidFn(Protocol):
     def __call__(self, point: Point) -> bool:

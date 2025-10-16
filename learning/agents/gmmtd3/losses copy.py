@@ -20,7 +20,7 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 from typing import Any
 
 from brax.training import types
-from agents.flowtd3 import networks as flowtd3_networks
+from agents.gmmtd3 import networks as gmmtd3_networks
 from brax.training.types import Params
 from brax.training.types import PRNGKey
 import jax
@@ -29,7 +29,7 @@ import jax.numpy as jnp
 
 
 def make_losses(
-    flowtd3_network: flowtd3_networks.FlowTd3Networks,
+    gmmtd3_network: gmmtd3_networks.GMMTd3Networks,
     reward_scaling: float,
     discounting: float,
     action_size: int,
@@ -37,9 +37,9 @@ def make_losses(
   """Creates the td3 losses."""
 
   target_entropy = -0.5 * action_size
-  policy_network = flowtd3_network.policy_network
-  q_network = flowtd3_network.q_network
-  flow_network = flowtd3_network.flow_network
+  policy_network = gmmtd3_network.policy_network
+  q_network = gmmtd3_network.q_network
+  gmm_network = gmmtd3_network.gmm_network
   def critic_loss(
       q_params: Params,
       policy_params: Params,
@@ -93,9 +93,9 @@ def make_losses(
     return -jnp.mean(min_q)
 
     
-  def flow_loss(
-      flow_params: Params,
-      target_flow_params : Params,
+  def gmm_loss(
+      gmm_params: Params,
+      target_gmm_params : Params,
       policy_params: Params,
       normalizer_params: Any,
       current_q_params: Params,
@@ -106,19 +106,19 @@ def make_losses(
       alpha,
       key: jax.random.PRNGKey,
   ):
-    """Loss for training the flow network to generate adversarial dynamics parameters."""
+    """Loss for training the gmm network to generate adversarial dynamics parameters."""
     key1, key2 = jax.random.split(key)
     # If dr_low/dr_high are 1-D (shape: [D]) → scalar
-    data_log_prob = flow_network.apply(
-        flow_params,
+    data_log_prob = gmm_network.apply(
+        gmm_params,
         mode='log_prob',
         low=dr_range_low,
         high=dr_range_high,
         x=transitions.dynamics_params,      # <- pass the data here
     )
     data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
-    _, current_logp = flow_network.apply(
-        flow_params,
+    _, current_logp = gmm_network.apply(
+        gmm_params,
         mode='sample',
         low=dr_range_low,
         high=dr_range_high,
@@ -143,16 +143,16 @@ def make_losses(
     advantage = transitions.reward + transitions.discount* normalized_next_v_adv - normalized_current_q
     advantage *= jnp.expand_dims(1 - truncation, -1)
     value_loss = (data_log_prob *advantage).mean()
-    target_samples, target_log_prob = flow_network.apply(
-        target_flow_params,
+    target_samples, target_log_prob = gmm_network.apply(
+        target_gmm_params,
         mode='sample',
         low=dr_range_low,
         high=dr_range_high,
         n_samples=1000,     # <- pass the data here
         rng=key2
     )
-    current_log_prob = flow_network.apply(
-        flow_params,
+    current_log_prob = gmm_network.apply(
+        gmm_params,
         mode='log_prob',
         low=dr_range_low,
         high=dr_range_high,
@@ -160,5 +160,5 @@ def make_losses(
     )
     proximal_loss = (target_log_prob - current_log_prob).mean() #KL loss with forward KLD, 
     return lmbda_params* value_loss +  0*kl_loss +  0*proximal_loss, (next_q_adv, value_loss, kl_loss)
-  return critic_loss, actor_loss, flow_loss
+  return critic_loss, actor_loss, gmm_loss
 

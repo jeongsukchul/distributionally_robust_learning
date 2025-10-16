@@ -48,9 +48,11 @@ class GMM40(Target):
             x = x[None,]
 
         log_prob = self.distribution.log_prob(x)
-
+        
         if not batched:
             log_prob = jnp.squeeze(log_prob, axis=0)
+        log_prob = jnp.where(jnp.logical_or(x[:,0] > self._plot_bound, x[:,0] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
+        log_prob = jnp.where(jnp.logical_or(x[:,1] > self._plot_bound, x[:,1] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
 
         return log_prob
 
@@ -74,7 +76,14 @@ class GMM40(Target):
             plot_marginal_pair(samples[:, :2], ax, bounds=(-self._plot_bound, self._plot_bound))
             # jnp.save(project_path(f'samples/gmm40_samples'), samples)
         if self.dim == 2:
-            plot_contours_2D(self.log_prob, ax, bound=self._plot_bound, levels=50)
+            x, y = jnp.meshgrid(jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100), jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100))
+            grid = jnp.c_[x.ravel(), y.ravel()]
+            pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
+            pdf_values = jnp.reshape(pdf_values, x.shape)
+            ctf = plt.contourf(x, y, pdf_values, levels=50, cmap='viridis')
+            cbar = fig.colorbar(ctf)
+            # plot_contours_2D(self.log_prob, ax, bound=self._plot_bound*1.2, levels=50)
+
         plt.xticks([])
         plt.yticks([])
         # import os

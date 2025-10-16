@@ -101,7 +101,6 @@ def make_losses(
   def gmm_update(
         gmmvi_state,
         transitions,
-        mapping, 
   ):
     new_sample_db_state, samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
         gmm_network.sample_selector.save_samples_and_select(gmmvi_state.model_state,
@@ -109,7 +108,7 @@ def make_losses(
                                     transitions.dynamics_params,
                                     transitions.new_target_lnpdfs,
                                     transitions.new_target_lnpdf_grads,
-                                    mapping,
+                                    transitions.mapping,
                                     transitions.num_reused_samples)
     new_component_stepsizes = gmm_network.component_stepsize_fn(gmmvi_state.model_state)
     new_model_state = gmm_network.model.update_stepsizes(gmmvi_state.model_state, new_component_stepsizes)

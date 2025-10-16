@@ -90,13 +90,14 @@ def create_gmm_network_and_state(
     sample_selector = setup_fixed_sample_selector(sample_db,
                                                     model,
                                                     batch_size,
-                                                    cfg.ratio_reused_samples_to_desired)
+                                                    cfg.ratio_reused_samples_to_desired,
+                                                    cfg.max_components)
     # 'R' Adaptive Component Stepsize update
     component_stepsize_fn = functools.partial(update_component_stepsize_adaptive, 
                                                 MIN_STEPSIZE=cfg.min_stepsize,               
                                                 MAX_STEPSIZE=cfg.max_stepsize,
                                                 STEPSIZE_INC_FACTOR=cfg.stepsize_inc_factor,
-                                                STEPSIZE_DEC_FACTOR=cfg.stepsize_dec_factor)
+                                                STEPSIZE_DEC_FACTOR=cfg.stepsize_dec_factor,)
     # 'U' Direct Update
     weight_update_fn = setup_weight_update_fn(model,
                                             cfg.temperature,

@@ -233,25 +233,27 @@ def setup_sample_from_components_shuffle_fn(sample_from_component_fn: Callable):
 
         return jnp.transpose(jnp.expand_dims(gmm_state.means[index], axis=-1)
                              + gmm_state.chol_covs[index] @ jax.random.normal(key=seed, shape=(2, num_samples)))
-    def sample_from_components_shuffle(gmm_state: GMMState, samples_per_component: chex.Array,
+    @jax.jit
+    def sample_from_components_shuffle(gmm_state: GMMState, mapping : jnp.ndarray,
                                           seed: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:
         
-        # mapping = jnp.repeat(jnp.arange(gmm_state.num_components), samples_per_component)
-        samples = []
+        # Make per-sample keys
+            keys = jax.random.split(seed, mapping.shape[0])
 
-        for i in range(gmm_state.num_components):
-            if samples_per_component[i] == 0:
-                continue
-            seed_i = jax.random.fold_in(seed, i)
-            samples.append(sample_from_component_fn(gmm_state, i, int(samples_per_component[i]), seed_i))
+            def sample_one(key, comp_idx):
+                # sample a single point from component `comp_idx`
+                # Ensure sample_from_component_fn returns shape (N, D)
+                x = sample_from_component_fn(gmm_state, comp_idx, 1, key)
+                return x[0]  # (D,)
 
-        samples = jnp.vstack(samples)
-        return samples, None #mapping
+            samples = jax.vmap(sample_one)(keys, mapping)  # (TOTAL_SAMPLES, D)
+            return samples, None
 
     return sample_from_components_shuffle
 
 
 def setup_sample_from_components_no_shuffle_fn(sample_from_component_fn: Callable):
+    
 
     def sample_from_components_no_shuffle(gmm_state: GMMState, DESIRED_SAMPLES, num_components,
                                           seed: chex.PRNGKey) -> Tuple[chex.Array, chex.Array]:

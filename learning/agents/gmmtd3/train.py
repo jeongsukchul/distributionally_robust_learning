@@ -19,6 +19,8 @@ See: https://arxiv.org/pdf/1812.05905.pdf
 
 import functools
 import struct
+
+import wandb
 from learning.module.gmmvi.network import GMMTrainingState
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
@@ -69,6 +71,7 @@ class TransitionwithGMMParams(NamedTuple):
   mapping : jax.Array
   target_pdf: jax.Array
   target_pdf_grad: jax.Array
+  num_reused_samples: int
   extras: FrozenDict[str, Any]  # recommended
 @flax.struct.dataclass
 class TrainingState:
@@ -226,7 +229,6 @@ def train(
     dr_range_low, dr_range_high = dr_range_mid - dr_range/2 * dr_train_ratio, dr_range_mid + dr_range/2 * dr_train_ratio
     volume = jnp.prod(jnp.maximum(dr_range_high - dr_range_low, 0.0))
     print("volume : ", volume)
-    print("dr parpameters", len(dr_range_low))
     print(dr_range)
   else:
     # Fallback configuration if environment doesn't have dr_range
@@ -270,6 +272,7 @@ def train(
       mapping=0,
       target_pdf=0.,
       target_pdf_grad=dummy_params,
+      num_reused_samples=0.,
       extras={'state_extras': {'truncation': 0.0}, 'policy_extras': {}},
   )
   max_replay_size = max(max_replay_size // device_count, env.episode_length * num_envs // device_count)
@@ -356,9 +359,9 @@ def train(
   def adv_step(
     env: Env,
     env_state: State,
+    gmm_training_state: GMMTrainingState,
     normalizer_params,
     q_params,
-    gmm_module_state: GMMTrainingState,
     policy: Policy,
     noise_scales : jnp.ndarray,
     key: PRNGKey,
@@ -366,8 +369,8 @@ def train(
   ):
     param_key, key = jax.random.split(key)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    dynamics_params, mapping, num_reused_samples = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_module_state.model_state,
-                                        gmm_module_state.sample_db_state,
+    dynamics_params, mapping, num_reused_samples = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
+                                        gmm_training_state.sample_db_state,
                                       param_key)
     # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
     def target_log_fn(samples):
@@ -390,13 +393,15 @@ def train(
         mapping=mapping,
         target_pdf=q_values,
         target_pdf_grad= q_value_grad,
+        num_reused_samples=num_reused_samples,
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
+      q_params : Params,
       noise_scales: jnp.ndarray,
-      gmm_module_state : GMMTrainingState,
+      gmm_training_state : GMMTrainingState,
       env_state: envs.State,
       buffer_state: ReplayBufferState,
       key: PRNGKey,
@@ -408,7 +413,7 @@ def train(
     noise_key, key = jax.random.split(key)
     policy = make_policy((normalizer_params, policy_params))
     env_state, transitions = adv_step(
-        env, env_state, gmm_module_state, policy, noise_scales, key, extra_fields=('truncation',)
+        env, env_state, gmm_training_state, normalizer_params, q_params, policy, noise_scales, key, extra_fields=('truncation',)
     )
 
     normalizer_params = running_statistics.update(
@@ -443,61 +448,23 @@ def train(
       ReplayBufferState,
       Metrics,
   ]:
-    experience_key, param_key, training_key, gmm_key = jax.random.split(key, 4)
-    # dynamics_params, logp = gmmtd3_network.gmm_network.apply(
-    #     training_state.gmm_params,
-    #     low=dr_range_low,
-    #     high=dr_range_high,
-    #     mode='sample',
-    #     rng=param_key,
-    #     n_samples=num_envs // jax.process_count() // local_devices_to_use,
-    # )
-    # dynamics_params = jax.lax.stop_gradient(dynamics_params)
-    # normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
-    #     training_state.normalizer_params,
-    #     training_state.policy_params,
-    #     training_state.noise_scales,
-    #     env_state,
-    #     dynamics_params,
-    #     buffer_state,
-    #     experience_key,
-    # )
-
-    (gmm_loss, (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)), gmm_grads, gmm_params, gmm_optimizer_state = gmm_update(
-        training_state.gmm_params,
+    experience_key, training_key = jax.random.split(key)
+    normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
         training_state.q_params,
         training_state.noise_scales,
+        training_state.gmm_training_state,
         env_state,
         buffer_state,
-        dr_range_high,
-        dr_range_low,
-        init_lmbda,
-        alpha,
-        gmm_key,  # Reuse key_actor for gmm update
-        num_envs // jax.process_count() // local_devices_to_use,
-        env,
-        replay_buffer,
-        make_policy,
-        std_min,
-        std_max,
-        optimizer_state=training_state.gmm_optimizer_state,
+        experience_key,
     )
-    print("simul info reward", simul_info["simul/reward_mean"])
-    print("dynamics_param", simul_info["simul/dynamics_params_mean"])
-    print("grad norm", gmm_grads)
     training_state = training_state.replace(
         normalizer_params=normalizer_params,
         noise_scales = noise_scales,
         env_steps=training_state.env_steps + env_steps_per_actor_step,
     )
-    gmm_metric={}
-    gmm_metric['gmm_loss'] = gmm_loss
-    gmm_metric['value_loss'] = value_loss
-    gmm_metric['kl_loss'] = kl_loss
-    gmm_metric['gmm_grad_norm'] = gmm_grads
-    training_state = training_state.replace(gmm_params = gmm_params, gmm_optimizer_state=gmm_optimizer_state)
+    new_gmm_training_state = gmm_update(training_state.gmm_training_state, simul_transitions)
     buffer_state, transitions = replay_buffer.sample(buffer_state)
     # Change the front dimension of transitions so 'update_step' is called
     # grad_updates_per_step times by the scan.
@@ -508,11 +475,9 @@ def train(
     (training_state, _), metrics = jax.lax.scan(
         sgd_step, (training_state, training_key), transitions
     )
-
     metrics['buffer_current_size'] = replay_buffer.size(buffer_state)
     metrics.update(simul_info)
-    metrics.update(gmm_metric)
-    return training_state, env_state, buffer_state, metrics
+    return training_state.replace(gmm_training_state=new_gmm_training_state), env_state, buffer_state, metrics
 
   def prefill_replay_buffer(
       training_state: TrainingState,
@@ -527,10 +492,10 @@ def train(
       new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
+          training_state.q_params,
           training_state.noise_scales,
-          training_state.gmm_module_state,
+          training_state.gmm_training_state,
           env_state,
-          params,
           buffer_state,
           key,
       )
@@ -647,7 +612,7 @@ def train(
   del global_key
 
   # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-  dynamics_params = jax.random.uniform(param_key, shape=(num_envs//jax.process_count(), dynamics_param_size), minval=dr_range_low, highval=dr_range_high)
+  dynamics_params = jax.random.uniform(param_key, shape=(num_envs//jax.process_count(), dynamics_param_size), minval=dr_range_low, maxval=dr_range_high)
   env_state = jax.pmap(env.reset)(env_keys, dynamics_params[None,...])
   if restore_checkpoint_path is not None:
     params = checkpoint.load(restore_checkpoint_path)
@@ -756,15 +721,17 @@ def train(
             network_factory=network_factory,
         )
         checkpoint.save(checkpoint_logdir, current_step, params, ckpt_config)
+      sample_key, local_key = jax.random.split(local_key)
+      samples = gmmtd3_network.gmm_network.model.sample(training_state.gmm_training_state.model_state.gmm_state, seed, 1000)[0]
       fig = gmm_utils.visualise(
-        gmmtd3_network.gmm_network,
-            _unpmap(training_state.gmm_params),
-          ndim=dr_range_low.shape[0],
-          low=dr_range_low,
-          high=dr_range_high,
-          training_step=current_step,
-          use_wandb=use_wandb,
+        env.dr_range,
+        samples
       )
+      if use_wandb:
+        wandb.log(
+                {f"all_dims_1d_pdf": wandb.Image(fig)},
+                step=int(current_step),
+            )
       # Run evals.
       if eval_with_training_env:
         param_key, local_key = jax.random.split(local_key)

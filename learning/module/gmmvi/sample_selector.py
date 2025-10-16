@@ -15,9 +15,8 @@ class SampleSelector(NamedTuple):
     select_samples: Callable
     save_samples_and_select: Callable
 
-
 def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
-                                TOTAL_SAMPLES, RATIO_REUSED_SAMPLES_TO_DESIRED):
+                                TOTAL_SAMPLES, RATIO_REUSED_SAMPLES_TO_DESIRED, MAX_COMPONENTS):
 
     # @functools.partial(jax.jit, static_argnames=['num_components'])
     def _sample_desired_samples(gmm_wrapper_state: GMMWrapperState,
@@ -27,15 +26,17 @@ def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
         #                                                                      num_components,
         #                                                                      seed)
         seed ,mapping_seed = jax.random.split(seed)
-        mapping = jax.random.choice(
+        mapping = jax.random.randint(
             mapping_seed,
-            num_components,
             shape=(TOTAL_SAMPLES,),
-        ).sort()
-        each_samples = jnp.zeros((num_components,)).at[mapping].add(1) 
+            minval=0,
+            maxval=gmm_wrapper_state.gmm_state.num_components,   # can be a tracer
+            dtype=jnp.int32,
+        )
+        mapping = jnp.sort(mapping)
         new_samples, _ = gmm_wrapper.sample_from_components_shuffle(gmm_wrapper_state.gmm_state,
-                                                                             each_samples,
-                                                                            #  num_components,
+                                                                            #  each_samples_full, #MAX_COMPONENTS
+                                                                             mapping,
                                                                              seed)
         # new_target_grads, new_target_lnpdfs = get_target_grads(new_samples)
         return new_samples, mapping#, new_target_lnpdfs, new_target_grads, mapping
@@ -48,8 +49,7 @@ def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
         num_reused_samples = jnp.minimum(jnp.shape(sampledb_state.samples)[0], num_samples_to_reuse)
 
         # Get additional samples to ensure a desired effective sample size for every component
-
-        new_samples, mapping = _sample_desired_samples(gmm_wrapper_state, seed, int(gmm_wrapper_state.gmm_state.num_components))
+        new_samples, mapping = _sample_desired_samples(gmm_wrapper_state, seed, gmm_wrapper_state.gmm_state.num_components)
 
         return new_samples, mapping, num_reused_samples
     def save_samples_and_select(gmm_wrapper_state: GMMWrapperState, sampledb_state: SampleDBState, \
@@ -61,7 +61,7 @@ def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
                                                gmm_wrapper_state.gmm_state.chol_covs, new_target_lnpdfs,
                                                new_target_grads, mapping)
         old_samples_pdf, samples, mapping, target_lnpdfs, target_grads = sample_db.get_newest_samples(
-            sampledb_state, int(num_reused_samples + num_new_samples))
+            sampledb_state, num_reused_samples + num_new_samples)
 
         return sampledb_state, samples, mapping, old_samples_pdf, target_lnpdfs, target_grads
 

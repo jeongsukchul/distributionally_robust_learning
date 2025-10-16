@@ -267,7 +267,6 @@ def train(
     dr_range_low, dr_range_high = dr_range_mid - dr_range/2 * dr_train_ratio, dr_range_mid + dr_range/2 * dr_train_ratio
     volume = jnp.prod(jnp.maximum(dr_range_high - dr_range_low, 0.0))
     print("volume : ", volume)
-    print("dr parpameters", len(dr_range_low))
     print(dr_range)
   else:
     # Fallback configuration if environment doesn't have dr_range

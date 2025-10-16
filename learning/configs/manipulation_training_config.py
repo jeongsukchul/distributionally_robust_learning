@@ -16,7 +16,8 @@
 
 from ml_collections import config_dict
 
-from mujoco_playground._src import dm_control_suite, locomotion
+# from mujoco_playground._src import dm_control_suite, locomotion
+from custom_envs import dm_control_suite, manipulation, locomotion
 from module.termination_fn import get_termination_fn
 
 def manipulation_ppo_config(env_name: str) -> config_dict.ConfigDict:
@@ -159,7 +160,7 @@ def manipulation_ppo_config(env_name: str) -> config_dict.ConfigDict:
 def manipulation_td3_config(env_name: str) -> config_dict.ConfigDict:
   """Returns tuned Brax SAC config for the given environment."""
   
-  env_config = locomotion.get_default_config(env_name)
+  env_config = manipulation.get_default_config(env_name)
 
   rl_config = config_dict.create(
       num_timesteps=20_000_000,

@@ -292,7 +292,7 @@ def brax_tdmpc_config(env_name: str) -> config_dict.ConfigDict:
   env_config = dm_control_suite.get_default_config(env_name)
 
   rl_config = config_dict.create(
-      num_timesteps=5_000_000,
+      num_timesteps=2_000_000,
       batch_size = 256,
       num_envs= 128,
       num_eval_envs=128,

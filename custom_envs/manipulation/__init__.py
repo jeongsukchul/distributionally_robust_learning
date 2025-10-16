@@ -61,9 +61,9 @@ _randomizer = {
     "LeapCubeReorient": leap_cube_reorient.domain_randomize,
 }
 
-_randomizer = {
-    "LeapCubeRotateZAxis": leap_rotate_z.domain_randomize_Eval,
-    "LeapCubeReorient": leap_cube_reorient.domain_randomize_eval,
+_randomizer_eval = {
+    "LeapCubeRotateZAxis": leap_rotate_z.domain_randomize,
+    "LeapCubeReorient": leap_cube_reorient.domain_randomize,
 }
 
 def __getattr__(name):

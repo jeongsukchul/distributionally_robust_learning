@@ -137,7 +137,7 @@ def train(
     discounting: float = 0.9,
     seed: int = 0,
     batch_size: int = 256,
-    num_evals: int = 1,
+    num_evals: int = 10,
     normalize_observations: bool = False,
     max_devices_per_host: Optional[int] = None,
     reward_scaling: float = 1.0,
@@ -785,7 +785,8 @@ def train(
       # Run evals.
       metrics = evaluator.run_evaluation(
           _unpmap(
-              (training_state.normalizer_params, training_state.encoder_params, training_state.policy_params)
+              (training_state.normalizer_params, training_state.encoder_params, training_state.dynamics_params, \
+             training_state.reward_params, training_state.policy_params, training_state.q_params)
           ),
           training_metrics,
       )

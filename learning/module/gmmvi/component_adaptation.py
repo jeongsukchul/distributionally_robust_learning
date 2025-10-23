@@ -72,7 +72,7 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
         key, subkey = jax.random.split(seed)
         samples, target_lnpdfs = sample_db.get_random_sample(sample_db_state, NUM_DATABASE_SAMPLES, subkey)
         prior_samples = jnp.zeros((0, DIM), jnp.float32)
-        key, subkey = jax.random.split(key)
+        # key, subkey = jax.random.split(key)
         # if NUM_PRIOR_SAMPLES > 0:
         #     prior_samples = _sample_from_prior(NUM_PRIOR_SAMPLES, subkey)
         #     sample_db_state = sample_db.update_num_samples_written(sample_db_state, (
@@ -113,8 +113,8 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
                                          )
 
     @jax.jit
-    def _add_new_component(component_adaption_state: ComponentAdaptationState, sample_db_state: SampleDBState,
-                           gmm_wrapper_state: GMMWrapperState, key):
+    def _add_new_component(gmm_wrapper_state: GMMWrapperState, component_adaption_state: ComponentAdaptationState, \
+                           sample_db_state: SampleDBState, key):
         key, subkey = jax.random.split(key)
         component_adaption_state, sample_db_state, samples, target_lnpdfs, prior_samples = _select_samples_for_adding_heuristic(
             component_adaption_state, sample_db_state, subkey)
@@ -126,8 +126,7 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
         return _add_at_best_location(component_adaption_state, gmm_wrapper_state, samples, target_lnpdfs,
                                      subkey), component_adaption_state, sample_db_state
 
-    def _delete_bad_components(components_adaption_state: ComponentAdaptationState,
-                               gmm_wrapper_state: GMMWrapperState):
+    def _delete_bad_components(gmm_wrapper_state: GMMWrapperState, component_adaption_state: ComponentAdaptationState):
         # estimate the relative improvement for every component with respect to
         # the improvement it would need to catch up (assuming linear improvement) with the best component
         current_smoothed_reward = jnp.mean(gmm_wrapper_state.reward_history[:, -jnp.size(KERNEL):] * jnp.reshape(KERNEL, [1, -1]), axis=1)
@@ -153,24 +152,54 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
         for idx in jnp.sort(bad_component_indices, descending=True):
             gmm_wrapper_state = gmm_wrapper.remove_component(gmm_wrapper_state, idx)
 
-        components_adaption_state = ComponentAdaptationState(
+        component_adaption_state = ComponentAdaptationState(
             reward_improvements=reward_improvements,
-            num_calls_to_add_heuristic=components_adaption_state.num_calls_to_add_heuristic,
+            num_calls_to_add_heuristic=component_adaption_state.num_calls_to_add_heuristic,
         )
 
-        return gmm_wrapper_state, components_adaption_state
+        return gmm_wrapper_state, component_adaption_state
+    
+    def _as_scalar_bool(x):
+        # Accepts size-1 or scalar; returns shape ()
+        x = jnp.asarray(x, dtype=jnp.bool_)
+        return jnp.reshape(x, ())   # requires size = 1 statically
+    # def adapt_number_of_components(component_adaption_state: ComponentAdaptationState,
+    #                                sample_db_state: SampleDBState,
+    #                                gmm_wrapper_state: GMMWrapperState,
+    #                                iteration, seed):
+    #     # do_delete = _as_scalar_bool(iteration >DEL_ITERS)
+    #     add_iter = (iteration>1) &(jnp.remainder(iteration, ADD_ITERS)==0) & (gmm_wrapper_state.gmm_state.num_components < MAX_COMPONENTS)
+    #     add_iter = _as_scalar_bool(add_iter)
+    #     def delete_bad(args):
+    #         gs, cs = args
+    #         return _delete_bad_components(gs,cs)
+    #     def add_new(args):
+    #         gs, cs, ss, s = args
+    #         return _add_new_component(gs,cs,ss,s)
+    #     # gmm_wrapper_state, component_adaption_state = jax.lax.cond(do_delete, delete_bad, \
+    #     #                                                            lambda *args : args, operand=(gmm_wrapper_state, component_adaption_state))
+    #     # dummy_func = lambda args: args[:-1]
+    #     # gmm_wrapper_state, component_adaption_state, sample_db_state = jax.lax.cond(add_iter,
+    #     #                         add_new, dummy_func,
+    #     #                         operand=(gmm_wrapper_state, component_adaption_state, sample_db_state, seed))
+    #     # if iteration > DEL_ITERS:
+    #     #     gmm_wrapper_state, component_adaption_state = _delete_bad_components(component_adaption_state, gmm_wrapper_state)
+    #     if iteration > 1 and iteration % ADD_ITERS == 0:
+    #         if gmm_wrapper_state.gmm_state.num_components < MAX_COMPONENTS:
+    #             gmm_wrapper_state, component_adaption_state, sample_db_state = _add_new_component(gmm_wrapper_state, component_adaption_state,
+    #                                                                              sample_db_state, seed)
 
+    #     return gmm_wrapper_state, component_adaption_state, sample_db_state
     def adapt_number_of_components(component_adaption_state: ComponentAdaptationState,
                                    sample_db_state: SampleDBState,
                                    gmm_wrapper_state: GMMWrapperState,
                                    iteration, seed):
-        if iteration > DEL_ITERS:
-            gmm_wrapper_state, component_adaption_state = _delete_bad_components(component_adaption_state, gmm_wrapper_state)
-        if iteration > 1 and iteration % ADD_ITERS == 0:
-            if gmm_wrapper_state.gmm_state.num_components < MAX_COMPONENTS:
-                gmm_wrapper_state, component_adaption_state, sample_db_state = _add_new_component(component_adaption_state, sample_db_state,
-                                                                                 gmm_wrapper_state, seed)
+        # if iteration > DEL_ITERS:
+        #     gmm_wrapper_state, component_adaption_state = _delete_bad_components(component_adaption_state, gmm_wrapper_state)
+        # if iteration > 1 and iteration % ADD_ITERS == 0:
+        #     if gmm_wrapper_state.gmm_state.num_components < MAX_COMPONENTS:
+        #         gmm_wrapper_state, component_adaption_state, sample_db_state = _add_new_component(gmm_wrapper_state, component_adaption_state, \
+        #                                                                                           sample_db_state, seed)
 
         return gmm_wrapper_state, component_adaption_state, sample_db_state
-
     return init_vips_component_adaption_state(), adapt_number_of_components

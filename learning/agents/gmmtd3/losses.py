@@ -99,25 +99,17 @@ def make_losses(
 
     
   def gmm_update(
-        gmmvi_state,
-        transitions,
+        gmmvi_state, key
   ):
-    new_sample_db_state, samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
-        gmm_network.sample_selector.save_samples_and_select(gmmvi_state.model_state,
-                                    gmmvi_state.sample_db_state,
-                                    transitions.dynamics_params,
-                                    transitions.new_target_lnpdfs,
-                                    transitions.new_target_lnpdf_grads,
-                                    transitions.mapping,
-                                    transitions.num_reused_samples)
+    samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
+        gmm_network.sample_selector.select_train_datas(gmmvi_state.sample_db_state)
     new_component_stepsizes = gmm_network.component_stepsize_fn(gmmvi_state.model_state)
     new_model_state = gmm_network.model.update_stepsizes(gmmvi_state.model_state, new_component_stepsizes)
     expected_hessian_neg, expected_grad_neg = gmm_network.ng_estimator(new_model_state,
                                                             samples,
                                                             sample_dist_densities,
                                                             target_lnpdfs,
-                                                            target_lnpdf_grads,
-                                                            int(gmmvi_state.model_state.gmm_state.num_components))
+                                                            target_lnpdf_grads)
     new_model_state = gmm_network.component_updater(new_model_state,
                                     expected_hessian_neg,
                                     expected_grad_neg,
@@ -127,13 +119,12 @@ def make_losses(
     new_model_state = gmm_network.weight_updater(new_model_state, samples, sample_dist_densities, target_lnpdfs,
                                                     gmmvi_state.weight_stepsize)
     new_num_updates = gmmvi_state.num_updates + 1
-    key, subkey = jax.random.split(key)
     new_model_state, new_component_adapter_state, new_sample_db_state = \
         gmm_network.component_adapter(gmmvi_state.component_adaptation_state,
                                                     new_sample_db_state,
                                                     new_model_state,
                                                     new_num_updates,
-                                                    subkey)
+                                                    key)
 
     return GMMTrainingState(temperature=gmmvi_state.temperature,
                         model_state=new_model_state,

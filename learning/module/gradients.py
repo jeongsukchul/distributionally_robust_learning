@@ -33,6 +33,31 @@ def loss_and_pgrad(
 
   return g if pmap_axis_name is None else h
 
+def loss_and_forward_pgrad(
+    loss_fn: Callable[..., float],
+    pmap_axis_name: Optional[str],
+    has_aux: bool = False,
+):
+  @jax.custom_jvp
+  def f_wrapped(p):
+      return loss_fn(p)
+
+  @f_wrapped.defjvp
+  def f_wrapped_jvp(primals, tangents):
+      (p,), (tp,) = primals, tangents
+      # Forward-mode through env (works with dynamic loops)
+      val, dval = jax.jvp(loss_fn, (p,), (tp,))
+      return val, dval
+  @jax.jit
+  def value_and_grad(p):
+      return jax.value_and_grad(f_wrapped, has_aux=has_aux)(p)
+  g = value_and_grad
+
+  def h(*args, **kwargs):
+    value, grad = g(*args, **kwargs)
+    return value, jax.lax.pmean(grad, axis_name=pmap_axis_name)
+
+  return g if pmap_axis_name is None else h
 def multi_loss_and_pgrad(
     loss_fn,
     pmap_axis_name,

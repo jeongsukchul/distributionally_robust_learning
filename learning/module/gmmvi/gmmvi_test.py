@@ -50,7 +50,7 @@ def setup_gmmvi(config, seed):
                                    config["model_initialization"]["prior_mean"],
                                    config["model_initialization"]["prior_scale"],
                                    config["model_initialization"]["use_diagonal_covs"],
-                                   config["model_initialization"]["init_std"] ** 2)
+                                   config["model_initialization"]["prior_scale"] ** 2)
 
     if "initial_l2_regularizer" in config["ng_estimator_config"]:
         initial_l2_regularizer = config["ng_estimator_config"]['initial_l2_regularizer']
@@ -76,7 +76,7 @@ def setup_gmmvi(config, seed):
                     model,
                     dim,
                     config["model_initialization"]["prior_mean"],
-                    config["model_initialization"]["init_std"] ** 2,
+                    config["model_initialization"]["prior_scale"] ** 2,
                     config["model_initialization"]["use_diagonal_covs"],
                     config["num_component_adapter_config"]["del_iters"],
                     config["num_component_adapter_config"]["add_iters"],

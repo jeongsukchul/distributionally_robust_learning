@@ -71,7 +71,8 @@ class TransitionwithGMMParams(NamedTuple):
   mapping : jax.Array
   target_pdf: jax.Array
   target_pdf_grad: jax.Array
-  num_reused_samples: int
+  model_grad_norm : jax.Array
+  value_grad_norm : jax.Array
   extras: FrozenDict[str, Any]  # recommended
 @flax.struct.dataclass
 class TrainingState:
@@ -162,6 +163,9 @@ def train(
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
+    v_randomization_fn: Optional[
+        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
+    ] = None,
     eval_randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
@@ -240,6 +244,8 @@ def train(
       episode_length=episode_length,
       action_repeat=action_repeat,
       randomization_fn=functools.partial(randomization_fn,dr_range=training_dr_range),
+      param_size = dynamics_param_size,
+      get_grad=True,
   )  # pytype: disable=wrong-keyword-args
   normalize_fn = lambda x, y: x
   if normalize_observations:
@@ -248,6 +254,7 @@ def train(
       observation_size=obs_shape,
       action_size=action_size,
       dynamics_param_size = dynamics_param_size,
+      batch_size= batch_size,
       num_envs = num_envs//jax.process_count(),
       init_key = init_key,
       preprocess_observations_fn=normalize_fn,
@@ -260,6 +267,7 @@ def train(
 
   dummy_params = jnp.zeros((dynamics_param_size,))  # Dummy dynamics parameters
   dummy_obs = { key: jnp.zeros(obs_shape[key]) for key in obs_shape } if isinstance(obs_shape, dict) else jnp.zeros((obs_shape,))
+  # dummy_model_grad = { key: jnp.zeros(obs_shape[key] + (dynamics_param_size,)) for key in obs_shape } if isinstance(obs_shape, dict) else jnp.zeros((obs_shape,))
   print("dummy_obs", dummy_obs)
   dummy_action = jnp.zeros((action_size,))
   dummy_transition = TransitionwithGMMParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
@@ -272,7 +280,8 @@ def train(
       mapping=0,
       target_pdf=0.,
       target_pdf_grad=dummy_params,
-      num_reused_samples=0.,
+      model_grad_norm = 0,
+      value_grad_norm = 0,
       extras={'state_extras': {'truncation': 0.0}, 'policy_extras': {}},
   )
   max_replay_size = max(max_replay_size // device_count, env.episode_length * num_envs // device_count)
@@ -322,6 +331,7 @@ def train(
         key_actor,
         optimizer_state=training_state.policy_optimizer_state,
     )
+    new_gmm_training_state = gmm_update(training_state.gmm_training_state, key_gmm)
 
     new_target_q_params = jax.tree_util.tree_map(
         lambda x, y: x * (1 - tau) + y * tau,
@@ -346,9 +356,7 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
-        # gmm_optimizer_state=gmm_optimizer_state,
-        # gmm_params=gmm_params,
-        # target_gmm_params = new_target_gmm_params,
+        gmm_training_state = new_gmm_training_state,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,
@@ -368,21 +376,22 @@ def train(
     extra_fields: Sequence[str] = (),
   ):
     param_key, key = jax.random.split(key)
-    actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    dynamics_params, mapping, num_reused_samples = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
-                                        gmm_training_state.sample_db_state,
+    # actions, policy_extras = policy(env_state.obs, noise_scales, key)
+    dynamics_params, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
                                       param_key)
+    dynamics_params = jnp.clip(dynamics_params, dr_range_low, dr_range_high)
+    actions, policy_extras = policy(env_state.obs, noise_scales, key)
+    nstate = env.step(env_state, actions, dynamics_params)
+    model_grad = nstate.info['grad']
+    state_extras = {x: nstate.info[x] for x in extra_fields} 
     # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
-    def target_log_fn(samples):
-      samples = jnp.clip(samples, dr_range_low, dr_range_high)
-      nstate = env.step(env_state, actions, samples)
-      state_extras = {x: nstate.info[x] for x in extra_fields} 
-      q_values = gmmtd3_network.q_network.apply(normalizer_params, q_params, nstate.obs, actions)
-      return q_values, (nstate, state_extras)
-    step_fn = gradients.loss_and_pgrad(target_log_fn, has_aux=True)
-    (q_values, (nstate, state_extras)), q_value_grad = step_fn(dynamics_params)
-    
-    # dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+    def target_log_fn(obs):
+      q_values = gmmtd3_network.q_network.apply(normalizer_params, q_params, obs, actions).mean(-1)
+      return q_values.mean(), (nstate, state_extras, q_values)
+    q_value_grad_fn = jax.grad(target_log_fn, has_aux=True)
+    q_value_grad, (nstate, state_extras, q_values) = q_value_grad_fn(nstate.obs)
+    target_grad = jax.tree_util.tree_map(lambda x,y: jnp.einsum('bxy,bx->by', x, y), model_grad, q_value_grad) #, model_grad @ q_value_grad
+
     return nstate, TransitionwithGMMParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
@@ -392,8 +401,9 @@ def train(
         dynamics_params=dynamics_params,
         mapping=mapping,
         target_pdf=q_values,
-        target_pdf_grad= q_value_grad,
-        num_reused_samples=num_reused_samples,
+        target_pdf_grad= target_grad['state'],
+        model_grad_norm = jnp.linalg.norm(model_grad['state'], axis=(1,2)),
+        value_grad_norm = jnp.linalg.norm(q_value_grad['state'], axis=-1),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
   def get_experience(
@@ -415,6 +425,21 @@ def train(
     env_state, transitions = adv_step(
         env, env_state, gmm_training_state, normalizer_params, q_params, policy, noise_scales, key, extra_fields=('truncation',)
     )
+    print("sample db state info: samples ", gmm_training_state.sample_db_state.samples.shape)
+    print("sample db state info: samples(new) ", transitions.dynamics_params.shape)
+    print("sample db state info: targetpdf", gmm_training_state.sample_db_state.target_lnpdfs.shape)
+    print("sample db state info: targetpdf(new)", transitions.target_pdf.shape)
+    print("sample db state info: targetgrad", gmm_training_state.sample_db_state.target_grads.shape)
+    print("sample db state info: targetgrad(new)", transitions.target_pdf_grad.shape)
+    print("sample db state info: means", gmm_training_state.sample_db_state.means.shape)
+    print("sample db state info: inv_chols", gmm_training_state.sample_db_state.inv_chols.shape)
+    print("sample db state info: chols", gmm_training_state.sample_db_state.chols.shape)
+    print("sample db state info: map", gmm_training_state.sample_db_state.mapping.shape)
+    print("sample db state info: map(new)", transitions.mapping.shape)
+    new_sample_db_state = gmmtd3_network.gmm_network.sample_selector.save_samples(gmm_training_state.model_state, \
+                    gmm_training_state.sample_db_state, transitions.dynamics_params, transitions.target_pdf, \
+                      transitions.target_pdf_grad, transitions.mapping)
+    gmm_training_state = gmm_training_state._replace(sample_db_state=new_sample_db_state)
 
     normalizer_params = running_statistics.update(
         normalizer_params,
@@ -432,10 +457,14 @@ def train(
       "simul/reward_min" : transitions.reward.min(),
       "simul/dynamics_params_mean" : transitions.dynamics_params.mean(),
       "simul/dynamics_params_std" :transitions.dynamics_params.std(),
-
+      "simul/model_grad_norm_mean" : transitions.model_grad_norm.mean(),
+      "simul/model_grad_norm_std" : transitions.model_grad_norm.std(),
+      "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
+      "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
     }
+    print("transitions", transitions)
     buffer_state = replay_buffer.insert(buffer_state, transitions)
-    return normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions
+    return normalizer_params, noise_scales, gmm_training_state, env_state, buffer_state, simul_info, transitions
 
   def training_step(
       training_state: TrainingState,
@@ -449,7 +478,7 @@ def train(
       Metrics,
   ]:
     experience_key, training_key = jax.random.split(key)
-    normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+    normalizer_params, noise_scales, new_gmm_training_state, env_state, buffer_state, simul_info, simul_transitions = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
         training_state.q_params,
@@ -462,9 +491,9 @@ def train(
     training_state = training_state.replace(
         normalizer_params=normalizer_params,
         noise_scales = noise_scales,
+        gmm_training_state = new_gmm_training_state,
         env_steps=training_state.env_steps + env_steps_per_actor_step,
     )
-    new_gmm_training_state = gmm_update(training_state.gmm_training_state, simul_transitions)
     buffer_state, transitions = replay_buffer.sample(buffer_state)
     # Change the front dimension of transitions so 'update_step' is called
     # grad_updates_per_step times by the scan.
@@ -477,7 +506,7 @@ def train(
     )
     metrics['buffer_current_size'] = replay_buffer.size(buffer_state)
     metrics.update(simul_info)
-    return training_state.replace(gmm_training_state=new_gmm_training_state), env_state, buffer_state, metrics
+    return training_state, env_state, buffer_state, metrics
 
   def prefill_replay_buffer(
       training_state: TrainingState,
@@ -489,7 +518,7 @@ def train(
     def f(carry, params):
       training_state, env_state, buffer_state, key = carry
       key, new_key = jax.random.split(key)
-      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+      new_normalizer_params, new_noise_scales, new_gmm_training_state, env_state, buffer_state, simul_info, simul_transitions = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
           training_state.q_params,
@@ -502,6 +531,7 @@ def train(
       new_training_state = training_state.replace(
           normalizer_params=new_normalizer_params,
           noise_scales = new_noise_scales,
+          gmm_training_state=new_gmm_training_state,
           env_steps=training_state.env_steps + env_steps_per_actor_step,
       )
       return (new_training_state, env_state, buffer_state, new_key), ()
@@ -592,7 +622,6 @@ def train(
   env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
   obs_shape = jax.tree_util.tree_map(
       lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
-
   )
 
   print("gmmtd3 OBS SHAPE2", obs_shape)
@@ -635,6 +664,7 @@ def train(
       episode_length=episode_length,
       action_repeat=action_repeat,
       randomization_fn=functools.partial(randomization_fn,dr_range=env.dr_range),
+      param_size = dynamics_param_size,
     )
     evaluator = AdvEvaluator(
         eval_env,
@@ -645,7 +675,7 @@ def train(
         key=eval_key,
     )
   else:
-    v_randomization_fn=functools.partial(randomization_fn, 
+    v_randomization_fn=functools.partial(eval_randomization_fn,
       rng=jax.random.split(randomization_key, num_eval_envs // jax.process_count()//local_devices_to_use), dr_range=env.dr_range
     )
 

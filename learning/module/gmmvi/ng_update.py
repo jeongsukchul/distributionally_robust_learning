@@ -55,23 +55,23 @@ def get_ng_update_fns(gmm_wrapper, DIM, DIAGONAL_COVS, USE_SELF_NORMALIZED_IMPOR
         expected_gradient = jnp.sum(weighted_gradients, 0)
         return expected_gradient, expected_hessian
 
-    @partial(jax.jit,static_argnames=['num_components'])
+    # @partial(jax.jit, static_argnames=['num_components'])
+    @jax.jit
     def get_expected_hessian_and_grad(gmm_wrapper_state,
                                 samples: chex.Array, background_densities: chex.Array,
-                                target_lnpdfs: chex.Array, target_lnpdfs_grads: chex.Array,
-                                num_components):
+                                target_lnpdfs: chex.Array, target_lnpdfs_grads: chex.Array,):
 
         
-        def _get_expected_gradient_and_hessian_for_comp(i, my_component_log_densities,
+        def _get_expected_gradient_and_hessian_for_comp(component_log_densities, component_means, component_chol_covs,
                                                         my_samples, my_background_densities, my_log_ratios_grad):
             if USE_SELF_NORMALIZED_IMPORTANCE_WEIGHTS:
                 expected_gradient, expected_hessian = \
-                    _get_expected_gradient_and_hessian_self_normalized_iw(gmm_wrapper_state.gmm_state.chol_covs[i], gmm_wrapper_state.gmm_state.means[i],
-                                                                            my_component_log_densities, my_samples, my_background_densities, my_log_ratios_grad)
+                    _get_expected_gradient_and_hessian_self_normalized_iw(component_chol_covs, component_means,
+                                                                            component_log_densities, my_samples, my_background_densities, my_log_ratios_grad)
             else:
                 expected_gradient, expected_hessian = \
-                    _get_expected_gradient_and_hessian_standard_iw(gmm_wrapper_state.gmm_state.chol_covs[i], gmm_wrapper_state.gmm_state.means[i],
-                                                                    my_component_log_densities, my_samples, my_background_densities, my_log_ratios_grad)
+                    _get_expected_gradient_and_hessian_standard_iw(component_chol_covs, component_means,
+                                                                    component_log_densities, my_samples, my_background_densities, my_log_ratios_grad)
             return expected_gradient, expected_hessian
 
         model_densities, model_densities_grad, component_log_densities = jax.vmap(Partial(gmm_wrapper.log_density_and_grad, gmm_wrapper_state.gmm_state))(samples)
@@ -82,8 +82,8 @@ def get_ng_update_fns(gmm_wrapper, DIM, DIAGONAL_COVS, USE_SELF_NORMALIZED_IMPOR
                 
 
         expected_gradient, expected_hessian = \
-            jax.vmap(_get_expected_gradient_and_hessian_for_comp, in_axes=(0, 0, None, None, None))\
-                (jnp.arange(num_components), component_log_densities,
+            jax.vmap(_get_expected_gradient_and_hessian_for_comp, in_axes=(0, 0, 0, None, None, None))\
+                (component_log_densities, gmm_wrapper_state.gmm_state.means, gmm_wrapper_state.gmm_state.chol_covs, 
                     samples, background_densities,
                     log_ratio_grads)
         return -expected_hessian, -expected_gradient

@@ -1,4 +1,5 @@
-from typing import List
+import itertools
+from typing import List, Optional, Tuple
 
 import chex
 import jax
@@ -6,11 +7,41 @@ import jax.numpy as jnp
 import distrax
 from matplotlib import pyplot as plt
 import wandb
-
+import numpy as np
 from targets.base_target import Target
-from algorithms.fab.utils.plot import plot_marginal_pair, plot_contours_2D
 from utils.path_utils import project_path
 import matplotlib
+def plot_contours_2D(log_prob_func,
+                     ax: Optional[plt.Axes] = None,
+                     bound: float = 3,
+                     levels: int = 20):
+    """Plot the contours of a 2D log prob function."""
+    if ax is None:
+        fig, ax = plt.subplots(1)
+    n_points = 100
+    x_points_dim1 = np.linspace(-bound, bound, n_points)
+    x_points_dim2 = np.linspace(-bound, bound, n_points)
+    x_points = np.array(list(itertools.product(x_points_dim1, x_points_dim2)))
+    log_probs = log_prob_func(x_points)
+    log_probs = jnp.clip(log_probs, a_min=-1000, a_max=None)
+    x1 = x_points[:, 0].reshape(n_points, n_points)
+    x2 = x_points[:, 1].reshape(n_points, n_points)
+    z = log_probs.reshape(n_points, n_points)
+    ct = ax.contour(x1, x2, z, levels=levels)
+    # ax.contourf(x1, x2, np.exp(z), levels = 20, cmap = 'viridis')
+
+
+
+def plot_marginal_pair(samples: chex.Array,
+                  ax: Optional[plt.Axes] = None,
+                  marginal_dims: Tuple[int, int] = (0, 1),
+                  bounds: Tuple[float, float] = (-5, 5),
+                  alpha: float = 0.5):
+    """Plot samples from marginal of distribution for a given pair of dimensions."""
+    if not ax:
+        fig, ax = plt.subplots(1)
+    samples = jnp.clip(samples, bounds[0], bounds[1])
+    ax.plot(samples[:, marginal_dims[0]], samples[:, marginal_dims[1]], "o", alpha=alpha)
 
 
 # matplotlib.use('agg')
@@ -50,11 +81,11 @@ class GMM40(Target):
         log_prob = self.distribution.log_prob(x)
         
         if not batched:
-            log_prob = jnp.squeeze(log_prob, axis=0)
+            log_prob = 10* jnp.squeeze(log_prob, axis=0)
         log_prob = jnp.where(jnp.logical_or(x[:,0] > self._plot_bound, x[:,0] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
         log_prob = jnp.where(jnp.logical_or(x[:,1] > self._plot_bound, x[:,1] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
 
-        return log_prob
+        return  log_prob
 
     def sample(self, seed: chex.PRNGKey, sample_shape: chex.Shape = ()) -> chex.Array:
         return self.distribution.sample(seed=seed, sample_shape=sample_shape)
@@ -68,10 +99,11 @@ class GMM40(Target):
         entropy = -jnp.sum(mode_dist * (jnp.log(mode_dist) / jnp.log(self.n_mixes)))
         return entropy
 
-    def visualise(self, samples: chex.Array = None, axes=None, show=False, prefix='') -> dict:
+    def visualise(self, samples: chex.Array = None, axes=None, model_log_prob_fn=None, show=False, prefix='') -> dict:
         plt.close()
-        fig = plt.figure()
-        ax = fig.add_subplot()
+        fig = plt.figure(figsize=(10,10))
+        ax = fig.add_subplot(311)
+        ax2 = fig.add_subplot(312)
         if samples is not None:
             plot_marginal_pair(samples[:, :2], ax, bounds=(-self._plot_bound, self._plot_bound))
             # jnp.save(project_path(f'samples/gmm40_samples'), samples)
@@ -80,10 +112,16 @@ class GMM40(Target):
             grid = jnp.c_[x.ravel(), y.ravel()]
             pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
             pdf_values = jnp.reshape(pdf_values, x.shape)
-            ctf = plt.contourf(x, y, pdf_values, levels=50, cmap='viridis')
-            cbar = fig.colorbar(ctf)
-            # plot_contours_2D(self.log_prob, ax, bound=self._plot_bound*1.2, levels=50)
-
+            # ctf = plt.contourf(x, y, pdf_values, levels=50, cmap='viridis')
+            # cbar = fig.colorbar(ctf)
+            plot_contours_2D(self.log_prob, ax, bound=self._plot_bound*1.2, levels=50)
+        if model_log_prob_fn is not None:
+            ax3 = fig.add_subplot(313)
+            grid = jnp.c_[x.ravel(), y.ravel()]
+            pdf_values = jax.vmap(jnp.exp)(model_log_prob_fn(sample=grid))
+            pdf_values = jnp.reshape(pdf_values, x.shape)
+            ctf = ax3.contourf(x, y, pdf_values, levels=20, cmap='viridis')
+            cbar = fig.colorbar(ctf, ax=ax3)
         plt.xticks([])
         plt.yticks([])
         # import os

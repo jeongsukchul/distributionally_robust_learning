@@ -14,21 +14,19 @@ import time
 class SampleSelector(NamedTuple):
     select_samples: Callable
     save_samples_and_select: Callable
+    save_samples: Callable
+    select_train_datas: Callable
 
 def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
-                                TOTAL_SAMPLES, RATIO_REUSED_SAMPLES_TO_DESIRED, MAX_COMPONENTS):
+                                SIMUL_SAMPLES, BATCH_SAMPLES):
 
     # @functools.partial(jax.jit, static_argnames=['num_components'])
     def _sample_desired_samples(gmm_wrapper_state: GMMWrapperState,
                                 seed: chex.Array, num_components) -> Tuple[chex.Array, chex.Array, chex.Array, chex.Array]:
-        # new_samples, mapping = gmm_wrapper.sample_from_components_no_shuffle(gmm_wrapper_state.gmm_state,
-        #                                                                      TOTAL_SAMPLES,
-        #                                                                      num_components,
-        #                                                                      seed)
         seed ,mapping_seed = jax.random.split(seed)
         mapping = jax.random.randint(
             mapping_seed,
-            shape=(TOTAL_SAMPLES,),
+            shape=(SIMUL_SAMPLES,),
             minval=0,
             maxval=gmm_wrapper_state.gmm_state.num_components,   # can be a tracer
             dtype=jnp.int32,
@@ -40,28 +38,45 @@ def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
                                                                              seed)
         # new_target_grads, new_target_lnpdfs = get_target_grads(new_samples)
         return new_samples, mapping#, new_target_lnpdfs, new_target_grads, mapping
-
-    def select_samples(gmm_wrapper_state: GMMWrapperState, sampledb_state: SampleDBState, seed: chex.PRNGKey):
+    # @functools.partial(jax.jit, static_argnums=(2,))
+    def _sample_fixed_samples(gmm_wrapper_state: GMMWrapperState,
+                                seed: chex.Array, num_components) -> Tuple[chex.Array, chex.Array, chex.Array, chex.Array]:
+        new_samples, mapping = gmm_wrapper.sample_from_components_no_shuffle(gmm_wrapper_state.gmm_state,
+                                                                             SIMUL_SAMPLES//num_components,
+                                                                             num_components,
+                                                                             seed)
+        # new_target_grads, new_target_lnpdfs = get_target_grads(new_samples)
+        return new_samples, mapping #new_target_lnpdfs, new_target_grads, mapping
+    def select_samples(gmm_wrapper_state: GMMWrapperState, seed: chex.PRNGKey):
         # Get old samples from the database
-        # num_samples_to_reuse = (jnp.floor(RATIO_REUSED_SAMPLES_TO_DESIRED * TOTAL_SAMPLES) *
+        # num_samples_to_reuse = (jnp.floor(RATIO_REUSED_SAMPLES_TO_DESIRED * SIMUL_SAMPLES) *
         #                         gmm_wrapper_state.gmm_state.num_components)
-        num_samples_to_reuse = jnp.floor(TOTAL_SAMPLES * RATIO_REUSED_SAMPLES_TO_DESIRED)
-        num_reused_samples = jnp.minimum(jnp.shape(sampledb_state.samples)[0], num_samples_to_reuse)
+        # num_samples_to_reuse = jnp.floor(SIMUL_SAMPLES * RATIO_REUSED_SAMPLES_TO_DESIRED)
+        # num_reused_samples = jnp.minimum(jnp.shape(sampledb_state.samples)[0], num_samples_to_reuse)
 
         # Get additional samples to ensure a desired effective sample size for every component
         new_samples, mapping = _sample_desired_samples(gmm_wrapper_state, seed, gmm_wrapper_state.gmm_state.num_components)
+        # new_samples, mapping = _sample_fixed_samples(gmm_wrapper_state, seed, gmm_wrapper_state.gmm_state.num_components)
 
-        return new_samples, mapping, num_reused_samples
+        return new_samples, mapping
+    def save_samples(gmm_wrapper_state: GMMWrapperState, sampledb_state: SampleDBState, 
+                     new_samples, new_target_lnpdfs, new_target_grads, mapping):
+        return sample_db.add_samples(sampledb_state, new_samples, gmm_wrapper_state.gmm_state.means,
+                    gmm_wrapper_state.gmm_state.chol_covs, new_target_lnpdfs,
+                    new_target_grads, mapping)
+    def select_train_datas(sampledb_state):
+        old_samples_pdf, samples, mapping, target_lnpdfs, target_grads = sample_db.get_newest_samples(
+            sampledb_state, BATCH_SAMPLES)
+        return samples, mapping, old_samples_pdf, target_lnpdfs, target_grads
     def save_samples_and_select(gmm_wrapper_state: GMMWrapperState, sampledb_state: SampleDBState, \
                         new_samples, new_target_lnpdfs, new_target_grads,
-                        mapping, num_reused_samples) :
-        # num_new_samples = TOTAL_SAMPLES*gmm_wrapper_state.gmm_state.num_components
-        num_new_samples = TOTAL_SAMPLES - num_reused_samples
+                        mapping) :
+        # num_new_samples = SIMUL_SAMPLES*gmm_wrapper_state.gmm_state.num_components
         sampledb_state = sample_db.add_samples(sampledb_state, new_samples, gmm_wrapper_state.gmm_state.means,
                                                gmm_wrapper_state.gmm_state.chol_covs, new_target_lnpdfs,
                                                new_target_grads, mapping)
         old_samples_pdf, samples, mapping, target_lnpdfs, target_grads = sample_db.get_newest_samples(
-            sampledb_state, num_reused_samples + num_new_samples)
+            sampledb_state, BATCH_SAMPLES)
 
         return sampledb_state, samples, mapping, old_samples_pdf, target_lnpdfs, target_grads
 
@@ -74,7 +89,7 @@ def setup_fixed_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper,
     #     target, gradient = jax.vmap(jax.value_and_grad(target_log_prob_fn))(samples)
     #     return gradient, target
 
-    return SampleSelector(select_samples=select_samples, save_samples_and_select=save_samples_and_select)
+    return SampleSelector(select_samples=select_samples, save_samples=save_samples, select_train_datas=select_train_datas, save_samples_and_select=save_samples_and_select)
 
 
 # def setup_vips_sample_selector(sample_db: SampleDB, gmm_wrapper: GMMWrapper, target_log_prob_fn: Callable,

@@ -64,6 +64,7 @@ def make_gmmtd3_networks(
     action_size: int,
     dynamics_param_size : int,
     num_envs :int, 
+    batch_size : int,
     init_key :jax.random.PRNGKey,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
     hidden_layer_sizes: Sequence[int] = (256, 256),
@@ -93,7 +94,7 @@ def make_gmmtd3_networks(
       layer_norm=q_network_layer_norm,
       obs_key = value_obs_key,
   )
-  init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, init_key)
+  init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, batch_size, init_key)
   return GMMTd3Networks(
       policy_network=policy_network,
       q_network=q_network,

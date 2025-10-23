@@ -42,6 +42,7 @@ class GMMNetwork(NamedTuple):
 
 def create_gmm_network_and_state(
     dim : int,
+    num_envs : int,
     batch_size : int,
     key : jax.random.PRNGKey
 ):  
@@ -53,7 +54,7 @@ def create_gmm_network_and_state(
                                 cfg.prior_mean,
                                 cfg.prior_scale,
                                 cfg.use_diagonal_convs,
-                                cfg.init_std)
+                                cfg.init_std**2)
     model = setup_gmm_wrapper(gmm,
                             cfg.initial_stepsize,
                             cfg.initial_l2_regularizer,
@@ -63,7 +64,8 @@ def create_gmm_network_and_state(
                             cfg.use_sample_database,
                             cfg.max_database_size,
                             cfg.use_diagonal_convs,
-                            batch_size)
+                            batch_size,
+                            num_envs)
     sample_db_state = sample_db.init_sampleDB_state()
 
     # 'S' ; Stein Estimator +  'T' : Trust Rgeion Component Updater
@@ -89,9 +91,8 @@ def create_gmm_network_and_state(
     # 'Q' Fixed Sample Selector we can't use other because target log prob is expensive
     sample_selector = setup_fixed_sample_selector(sample_db,
                                                     model,
-                                                    batch_size,
-                                                    cfg.ratio_reused_samples_to_desired,
-                                                    cfg.max_components)
+                                                    num_envs,
+                                                    batch_size)
     # 'R' Adaptive Component Stepsize update
     component_stepsize_fn = functools.partial(update_component_stepsize_adaptive, 
                                                 MIN_STEPSIZE=cfg.min_stepsize,               

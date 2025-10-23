@@ -172,7 +172,7 @@ def manipulation_td3_config(env_name: str) -> config_dict.ConfigDict:
       discounting=0.97,
       learning_rate=1e-3,
       num_envs=128,
-      batch_size=512,
+      batch_size=8196,
       grad_updates_per_step=8,
       max_replay_size=1048576 * 4,
       min_replay_size=8192, #8192,
@@ -181,7 +181,7 @@ def manipulation_td3_config(env_name: str) -> config_dict.ConfigDict:
       policy_noise=0.2, 
       noise_clip=0.5,
       network_factory=config_dict.create(
-          q_network_layer_norm=True,
+          q_network_layer_norm=False,
           hidden_layer_sizes=(256, 256, 256, 256, 256),
           policy_obs_key="privileged_state",
           value_obs_key="state",

@@ -58,21 +58,32 @@ class Funnel(Target):
         # use covariance matrix, not std
         return distrax.MultivariateNormalFullCovariance(self.mean_other, cov_other)
 
-    def visualise(self, samples: chex.Array = None, axes: List[plt.Axes] = None, show=False, prefix='') -> dict:
+    def visualise(self, samples: chex.Array = None, axes: List[plt.Axes] = None, model_log_prob_fn=None, show=False, prefix='') -> dict:
         plt.close()
         fig = plt.figure()
-        ax = fig.add_subplot()
+        ax1 = fig.add_subplot(121)
+        # ax2 = fig.add_subplot(122)
         x, y = jnp.meshgrid(jnp.linspace(-12, 7, 100), jnp.linspace(-6, 6, 100))
         grid = jnp.c_[x.ravel(), y.ravel()]
         pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
         pdf_values = jnp.reshape(pdf_values, x.shape)
-        ctf = plt.contourf(x, y, pdf_values, levels=20, cmap='viridis')
-        cbar = fig.colorbar(ctf)
+        ctf1 = ax1.contourf(x, y, pdf_values, levels=20, cmap='viridis')
+        # ctf2 = ax2.contourf(x, y, 1-pdf_values, levels=20, cmap='viridis')
+        fig.colorbar(ctf1, ax=ax1)
+        # fig.colorbar(ctf2, ax=ax2)
         if samples is not None:
             idx = jax.random.choice(jax.random.PRNGKey(0), samples.shape[0], (300,))
             sample_x = jnp.clip(samples[idx, 0],-12,7)
             sample_y = jnp.clip(samples[idx, 1],-6,6)
-            ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
+            ax1.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
+        if model_log_prob_fn is not None:
+            ax3 = fig.add_subplot(122)
+            grid = jnp.c_[x.ravel(), y.ravel()]
+            pdf_values = jax.vmap(jnp.exp)(model_log_prob_fn(sample=grid))
+            pdf_values = jnp.reshape(pdf_values, x.shape)
+            ctf = ax3.contourf(x, y, pdf_values, levels=20, cmap='viridis')
+            fig.colorbar(ctf, ax=ax3)
+
         # plt.xlabel('X')
         # plt.ylabel('Y')
         plt.xticks([])

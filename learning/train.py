@@ -499,19 +499,19 @@ def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
             gmmtd3_networks.make_gmmtd3_networks,
             **gmmtd3_params.network_factory,
         )
-        
+    randomizer = registry.get_domain_randomizer_eval(cfg.task)
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
     train_fn = functools.partial(  
         gmmtd3.train, **dict(gmmtd3_training_params),
         network_factory=network_factory,
         progress_fn=progress,
-        randomization_fn=randomization_fn,
+        eval_randomization_fn=randomization_fn,
+        randomization_fn=randomizer,
         use_wandb=cfg.use_wandb,
         dr_train_ratio = cfg.dr_train_ratio,
         seed=cfg.seed,
         eval_with_training_env = cfg.eval_with_training_env,
     )
-
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
     )

@@ -1,3 +1,4 @@
+from functools import partial
 from typing import NamedTuple, Callable
 import chex
 import jax.numpy as jnp
@@ -20,25 +21,24 @@ class SampleDB(NamedTuple):
     add_samples: Callable
     get_random_sample: Callable
     get_newest_samples: Callable
-    update_num_samples_written: Callable
 
 
-def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLES_PER_COMPONENT) -> SampleDB:
+def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, BATCH_SIZE, SAMPLE_SIZE) -> SampleDB:
     def init_sample_db_state():
         if DIAGONAL_COVS:
-            chols = jnp.zeros((0, DIM))
-            inv_chols = jnp.zeros((0, DIM))
+            chols = jnp.zeros((MAX_SAMPLES, DIM))
+            inv_chols = jnp.zeros((MAX_SAMPLES, DIM))
         else:
-            chols = jnp.zeros((0, DIM, DIM))
-            inv_chols = jnp.zeros((0, DIM, DIM))
+            chols = jnp.zeros((MAX_SAMPLES, DIM, DIM))
+            inv_chols = jnp.zeros((MAX_SAMPLES, DIM, DIM))
 
-        return SampleDBState(samples=jnp.zeros((0, DIM)),
-                             means=jnp.zeros((0, DIM)),
+        return SampleDBState(samples=jnp.zeros((MAX_SAMPLES, DIM)),
+                             means=jnp.zeros((MAX_SAMPLES, DIM)),
                              chols=chols,
                               inv_chols=inv_chols,
-                             target_lnpdfs=jnp.zeros(0),
-                             target_grads=jnp.zeros((0, DIM)),
-                             mapping=jnp.zeros(0, dtype=jnp.int32),
+                             target_lnpdfs=jnp.zeros(MAX_SAMPLES),
+                             target_grads=jnp.zeros((MAX_SAMPLES, DIM)),
+                             mapping=jnp.zeros(MAX_SAMPLES, dtype=jnp.int32),
                              num_samples_written=jnp.zeros((1,), dtype=jnp.int32),
                              )
 
@@ -57,22 +57,39 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
                                  inv_chols=sampledb_state.inv_chols[used_indices],
                                  )
 
-        if MAX_SAMPLES is not None and jnp.shape(new_samples)[0] + jnp.shape(sampledb_state.samples)[0] > MAX_SAMPLES:
-            sampledb_state = _remove_every_nth_sample(sampledb_state, 2)
+        # if MAX_SAMPLES is not None and jnp.shape(new_samples)[0] + jnp.shape(sampledb_state.samples)[0] > MAX_SAMPLES:
+        #     sampledb_state = _remove_every_nth_sample(sampledb_state, 2)
 
         num_samples_written = sampledb_state.num_samples_written + jnp.shape(new_samples)[0]
         if KEEP_SAMPLES:
-            mapping = jnp.concatenate((sampledb_state.mapping, new_mapping + jnp.shape(sampledb_state.chols)[0]))
-            means = jnp.concatenate((sampledb_state.means, new_means))
-            chols = jnp.concatenate((sampledb_state.chols, new_chols))
-            samples = jnp.concatenate((sampledb_state.samples, new_samples))
-            target_lnpdfs = jnp.concatenate((sampledb_state.target_lnpdfs, new_target_lnpdfs))
-            target_grads = jnp.concatenate((sampledb_state.target_grads, new_target_grads))
+            num_components = jnp.shape(new_means)[0]
+            mapping = jnp.roll(sampledb_state.mapping, SAMPLE_SIZE, axis=0)
+            mapping = mapping.at[:SAMPLE_SIZE].set(new_mapping) 
+            means = jnp.roll(sampledb_state.means, num_components, axis=0)
+            means = means.at[:num_components].set(new_means)
+            chols = jnp.roll(sampledb_state.chols, num_components, axis=0)
+            chols = chols.at[:num_components].set(new_chols)
+            samples = jnp.roll(sampledb_state.samples, SAMPLE_SIZE, axis=0)
+            samples = samples.at[:SAMPLE_SIZE].set(new_samples)
+            target_lnpdfs = jnp.roll(sampledb_state.target_lnpdfs, SAMPLE_SIZE, axis=0)
+            target_lnpdfs = target_lnpdfs.at[:SAMPLE_SIZE].set(new_target_lnpdfs)
+            target_grads = jnp.roll(sampledb_state.target_grads, SAMPLE_SIZE, axis=0)
+            target_grads = target_grads.at[:SAMPLE_SIZE].set(new_target_grads)
+            # mapping = jnp.concatenate((sampledb_state.mapping, new_mapping + jnp.shape(sampledb_state.chols)[0]))
+            # means = jnp.concatenate((sampledb_state.means, new_means))
+            # chols = jnp.concatenate((sampledb_state.chols, new_chols))
+            # samples = jnp.concatenate((sampledb_state.samples, new_samples))
+            # target_lnpdfs = jnp.concatenate((sampledb_state.target_lnpdfs, new_target_lnpdfs))
+            # target_grads = jnp.concatenate((sampledb_state.target_grads, new_target_grads))
 
             if DIAGONAL_COVS:
-                inv_chols = jnp.concatenate((sampledb_state.inv_chols, 1. / new_chols))
+                inv_chols = jnp.roll(sampledb_state.inv_chols, num_components, axis=0)
+                inv_chols = inv_chols.at[:num_components].set(1./new_chols)
+                # inv_chols = jnp.concatenate((sampledb_state.inv_chols, 1. / new_chols))
             else:
-                inv_chols = jnp.concatenate((sampledb_state.inv_chols, jnp.linalg.inv(new_chols)))
+                inv_chols = jnp.roll(sampledb_state.inv_chols, num_components, axis=0)
+                inv_chols = inv_chols.at[:num_components].set(jnp.linalg.inv(new_chols))
+                # inv_chols = jnp.concatenate((sampledb_state.inv_chols, jnp.linalg.inv(new_chols)))
         else:
             mapping = new_mapping
             means = new_means
@@ -109,7 +126,7 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
         else:
             constant_part = - 0.5 * DIM * jnp.log(2 * jnp.pi) - jnp.sum(jnp.log(jnp.diag(chol)))
             return constant_part - 0.5 * jnp.sum(jnp.square(inv_chol @ jnp.transpose(mean - x)), axis=0)
-
+    @partial(jax.jit, static_argnames=('N',))
     def get_newest_samples_deprecated(sampledb_state: SampleDBState, N):
         def _compute_log_pdfs(sampledb_state, component_id, sample):
             return jax.lax.cond(component_id == -1,
@@ -118,25 +135,20 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
                                                           sampledb_state.chols[component_id],
                                                           sampledb_state.inv_chols[component_id], sample))
 
-        if jnp.shape(sampledb_state.samples)[0] == 0 or N == 0:
-            return jnp.zeros(0), jnp.zeros((0, DIM)), jnp.zeros(0, dtype=jnp.int32), jnp.zeros(0), jnp.zeros((0, DIM))
-        else:
-            active_sample_index = jnp.maximum(0, jnp.shape(sampledb_state.samples)[0] - N)
-            active_sample = sampledb_state.samples[active_sample_index:]
-            active_target_lnpdfs = sampledb_state.target_lnpdfs[active_sample_index:]
-            active_target_grads = sampledb_state.target_grads[active_sample_index:]
-            active_mapping = sampledb_state.mapping[active_sample_index:]
-            @jax.jit
-            def compute_background_pdf():
-                active_components, count = jnp.unique(active_mapping, return_counts=True, size=sampledb_state.means.shape[0], fill_value=-1)
-                weights = count / jnp.sum(count)
-                return jax.nn.logsumexp(jax.vmap(_compute_log_pdfs, in_axes=(None, 0, None))(sampledb_state, active_components, active_sample) + jnp.expand_dims(jnp.log(weights), 1), axis=0)
-            log_pdfs = compute_background_pdf()
+        active_sample = sampledb_state.samples[:N]
+        active_target_lnpdfs = sampledb_state.target_lnpdfs[:N]
+        active_target_grads = sampledb_state.target_grads[:N]
+        active_mapping = sampledb_state.mapping[:N]
+        @jax.jit
+        def compute_background_pdf():
+            active_components, count = jnp.unique(active_mapping, return_counts=True, size=sampledb_state.means.shape[0], fill_value=-1)
+            weights = count / jnp.sum(count)
+            return jax.nn.logsumexp(jax.vmap(_compute_log_pdfs, in_axes=(None, 0, None))(sampledb_state, active_components, active_sample) + jnp.expand_dims(jnp.log(weights), 1), axis=0)
+        log_pdfs = compute_background_pdf()
 
-            return log_pdfs, active_sample, active_mapping, active_target_lnpdfs, active_target_grads
-
+        return log_pdfs, active_sample, active_mapping, active_target_lnpdfs, active_target_grads
     def get_newest_samples(sampledb_state: SampleDBState, N):
-        # use other implementation for original behavious, N % DESIRED_SAMPLES_PER_COMPONENT = 0 is needed to ensure uniform weights
+        # use other implementation for original behavious, N % SAMPLE_SIZE = 0 is needed to ensure uniform weights
 
         @jax.jit
         def _compute_log_pdfs(sampledb_state, component_id, sample):
@@ -144,7 +156,7 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
                                      sampledb_state.chols[component_id],
                                      sampledb_state.inv_chols[component_id], sample)
 
-        # chex.assert_equal(N % DESIRED_SAMPLES_PER_COMPONENT, 0)
+        # chex.assert_equal(N % SAMPLE_SIZE, 0)
         if jnp.shape(sampledb_state.samples)[0] == 0 or N == 0:
             return jnp.zeros(0), jnp.zeros((0, DIM)), jnp.zeros(0, dtype=jnp.int32), jnp.zeros(0), jnp.zeros((0, DIM))
         else:
@@ -153,7 +165,7 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
             active_target_lnpdfs = sampledb_state.target_lnpdfs[active_sample_index:]
             active_target_grads = sampledb_state.target_grads[active_sample_index:]
             active_mapping = sampledb_state.mapping[active_sample_index:]
-            num_active_comps = N // DESIRED_SAMPLES_PER_COMPONENT
+            num_active_comps = N // SAMPLE_SIZE
             active_components = jnp.arange(jnp.maximum(sampledb_state.means.shape[0] - num_active_comps, 0),
                                            sampledb_state.means.shape[0])
             weights_test = jnp.ones_like(active_components) / jnp.shape(active_components)[0]
@@ -168,19 +180,9 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, DIAGONAL_COVS, DESIRED_SAMPLE
             return log_pdfs, active_sample, active_mapping, active_target_lnpdfs, active_target_grads
 
 
-    def update_num_samples_written(sample_db_state: SampleDBState, num_samples_written):
-        return SampleDBState(samples=sample_db_state.samples,
-                             means=sample_db_state.means,
-                             chols=sample_db_state.chols,
-                             inv_chols=sample_db_state.inv_chols,
-                             target_lnpdfs=sample_db_state.target_lnpdfs,
-                             target_grads=sample_db_state.target_grads,
-                             mapping=sample_db_state.mapping,
-                             num_samples_written=num_samples_written)
 
     return SampleDB(init_sampleDB_state=init_sample_db_state,
                     add_samples=add_samples,
                     get_random_sample=get_random_sample,
                     get_newest_samples=get_newest_samples_deprecated,
-                    update_num_samples_written=update_num_samples_written
                     )

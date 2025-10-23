@@ -20,11 +20,13 @@ class TransitionwithParams(NamedTuple):
 
 def wrap_for_adv_training(
     env: mjx_env.MjxEnv,
+    param_size: int,
     episode_length: int = 1000,
     action_repeat: int = 1,
     randomization_fn: Optional[
         Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]]
     ] = None,
+    get_grad = False,
 ) -> Wrapper:
   """Common wrapper pattern for all brax training agents.
 
@@ -43,7 +45,7 @@ def wrap_for_adv_training(
     environment did not already have batch dimensions, it is additional Vmap
     wrapped.
   """
-  env = AdVmapWrapper(env, randomization_fn)
+  env = AdVmapWrapper(env, randomization_fn, param_size, get_grad)
   env = EpisodeWrapper(env, episode_length, action_repeat)
   env = BraxAutoResetWrapper(env)
   return env
@@ -54,9 +56,13 @@ class AdVmapWrapper(Wrapper):
       self,
       env: mjx_env.MjxEnv,
       randomization_fn: Callable[[System], Tuple[System, System]],
+      param_size: int,
+      get_grad = False,
   ):
     super().__init__(env)
     self.rand_fn = functools.partial(randomization_fn, model=self.mjx_model, rng=None)
+    self.get_grad=  get_grad
+    self.param_size = param_size
   def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
     env = self.env
     env.unwrapped._mjx_model = mjx_model
@@ -65,18 +71,33 @@ class AdVmapWrapper(Wrapper):
   def reset(self, rng: jax.Array) -> mjx_env.State:
     # state = jax.vmap(reset, in_axes=[self._in_axes, 0])(self._mjx_model_v, rng)
     state = jax.vmap(self.env.reset)(rng)
+    if self.get_grad:
+      state.info['grad']=jax.tree_util.tree_map(lambda x: jnp.zeros((x.shape + (self.param_size,))), state.obs)
     return state
 
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> State:
-    mjx_model_v, in_axes = self.rand_fn(params=params)
-    def step(mjx_model, s, a):
+    def step(params, s, a):
+      mjx_model, inaxes = self.rand_fn(params=params)
       env = self._env_fn(mjx_model=mjx_model)
       return env.step(s, a)
-
-    res = jax.vmap(step, in_axes=[in_axes, 0, 0])(
-        mjx_model_v, state, action
-    )
-    return res
+    
+    def step_and_grad(params, s, a):
+      ns = step(params, s, a)
+      grad = jax.jacfwd(lambda x,y,z : step(x,y,z).obs, argnums=0)(params, s, a)
+      print("gradsdf", grad)
+      ns.info['grad']= grad
+      return ns
+    if self.get_grad:
+      ns = jax.vmap(step_and_grad)(
+        params, state, action
+      )
+      print("grad", ns.info['grad'])
+      return ns
+    else:
+      return jax.vmap(step)(
+        params, state, action
+      )
+    
 class EpisodeWrapper(Wrapper):
   """Maintains episode step count and sets done at episode end."""
 

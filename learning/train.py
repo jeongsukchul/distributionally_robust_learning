@@ -122,8 +122,8 @@ CAMERAS = {
     "G1JoystickGaitTracking" : "track",
     "T1JoystickFlatTerrain" :"track",
     "T1JoystickRoughTerrain" :"track",
-    "LeapCubeRotateZAxis" :"track",
-    "LeapCubeReorient" :"track",
+    "LeapCubeRotateZAxis" :"side",
+    "LeapCubeReorient" :"side",
 }
 camera_name = CAMERAS[env_name]
 

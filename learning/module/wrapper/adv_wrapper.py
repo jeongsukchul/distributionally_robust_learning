@@ -26,6 +26,8 @@ def wrap_for_adv_training(
     randomization_fn: Optional[
         Callable[[mjx.Model], Tuple[mjx.Model, mjx.Model]]
     ] = None,
+    dr_range_low: jnp.ndarray = None,
+    dr_range_high: jnp.ndarray = None,
     get_grad = False,
 ) -> Wrapper:
   """Common wrapper pattern for all brax training agents.
@@ -45,7 +47,7 @@ def wrap_for_adv_training(
     environment did not already have batch dimensions, it is additional Vmap
     wrapped.
   """
-  env = AdVmapWrapper(env, randomization_fn, param_size, get_grad)
+  env = AdVmapWrapper(env, randomization_fn, param_size, dr_range_low, dr_range_high, get_grad)
   env = EpisodeWrapper(env, episode_length, action_repeat)
   env = BraxAutoResetWrapper(env)
   return env
@@ -57,12 +59,16 @@ class AdVmapWrapper(Wrapper):
       env: mjx_env.MjxEnv,
       randomization_fn: Callable[[System], Tuple[System, System]],
       param_size: int,
+      dr_range_low: jnp.ndarray = None,
+      dr_range_high: jnp.ndarray = None,
       get_grad = False,
   ):
     super().__init__(env)
     self.rand_fn = functools.partial(randomization_fn, model=self.mjx_model, rng=None)
     self.get_grad=  get_grad
     self.param_size = param_size
+    self.dr_range_low = dr_range_low
+    self.dr_range_high = dr_range_high
   def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
     env = self.env
     env.unwrapped._mjx_model = mjx_model
@@ -82,16 +88,15 @@ class AdVmapWrapper(Wrapper):
       return env.step(s, a)
     
     def step_and_grad(params, s, a):
+      params = jnp.clip(params, self.dr_range_low, self.dr_range_high)
       ns = step(params, s, a)
       grad = jax.jacfwd(lambda x,y,z : step(x,y,z).obs, argnums=0)(params, s, a)
-      print("gradsdf", grad)
       ns.info['grad']= grad
       return ns
     if self.get_grad:
       ns = jax.vmap(step_and_grad)(
         params, state, action
       )
-      print("grad", ns.info['grad'])
       return ns
     else:
       return jax.vmap(step)(

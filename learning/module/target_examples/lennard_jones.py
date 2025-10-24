@@ -54,7 +54,7 @@ from typing import Tuple
 
 import wandb
 
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 # ======================================================================================

@@ -67,30 +67,42 @@ def make_td3_networks(
     q_network_layer_norm: bool = False,
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
+    distributional_q : bool= False,
+    num_atoms: int = 101,
+    v_min: float = 0.,
+    v_max: float = 0.,
 ) -> Td3Networks:
-  """Make td3 networks."""
-
-  policy_network = networks.make_deterministic_policy_network(
-      action_size,
-      observation_size,
-      preprocess_observations_fn=preprocess_observations_fn,
-      hidden_layer_sizes=hidden_layer_sizes,
-      activation=activation,
-      layer_norm=policy_network_layer_norm,
-      obs_key = policy_obs_key
-  )
-  q_network = networks.make_q_network(
-      observation_size,
-      action_size,
-      preprocess_observations_fn=preprocess_observations_fn,
-      hidden_layer_sizes=hidden_layer_sizes,
-      activation=activation,
-      layer_norm=q_network_layer_norm,
-      obs_key = value_obs_key,
-  )
-
-  return Td3Networks(
-      policy_network=policy_network,
-      q_network=q_network,
-      
-  )
+    """Make td3 networks."""
+    policy_network = networks.make_deterministic_policy_network(
+        action_size,
+        observation_size,
+        preprocess_observations_fn=preprocess_observations_fn,
+        hidden_layer_sizes=hidden_layer_sizes,
+        activation=activation,
+        layer_norm=policy_network_layer_norm,
+        obs_key = policy_obs_key
+    )
+    if distributional_q:
+        q_network=networks.make_distributional_q_network(
+        observation_size,
+        action_size,
+        num_atoms,
+        v_max,
+        v_min,
+        preprocess_observations_fn=preprocess_observations_fn,
+        #    hidden_layer_sizes=hidden_layer_sizes,
+    )
+    else:
+        q_network = networks.make_q_network(
+        observation_size,
+        action_size,
+        preprocess_observations_fn=preprocess_observations_fn,
+        hidden_layer_sizes=hidden_layer_sizes,
+        activation=activation,
+        layer_norm=q_network_layer_norm,
+        obs_key = value_obs_key,
+    )
+    return Td3Networks(
+        policy_network=policy_network,
+        q_network=q_network,
+    )

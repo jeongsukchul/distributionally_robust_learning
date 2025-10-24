@@ -488,7 +488,125 @@ def make_q_network(
       init=lambda key: q_module.init(key, dummy_obs, dummy_action), apply=apply
   )
 
+class DistributionalQ(linen.Module):
+  num_atoms:int
+  v_min :float
+  v_max:float
+  layer_sizes: Sequence[int] = (1024, 512, 256),
+  activation: ActivationFn = linen.relu,
+  @linen.compact
+  def __call__(self, x):
+    hidden = x 
+    for i, hidden_size in enumerate(self.layer_sizes):
+      hidden = linen.Dense(
+          hidden_size,
+          name=f'hidden_{i}',
+      )(hidden)
+      if i != len(self.layer_sizes) - 1:
+        hidden = self.activation(hidden)
+    hidden = linen.Dense(self.num_atoms, name=f'final')
+    return hidden 
+  def projection(self, x, target_z):
+    delta_z = (self.v_max - self.v_min) / (self.num_atoms - 1)
+    next_dist = jax.nn.softmax(self(x), axis=-1)
 
+    target_z = jnp.clip(target_z, self.v_min, self.v_max)
+    b = (target_z - self.v_min) / delta_z
+    l = jnp.floor(b)
+    u = jnp.ceil(b)
+
+    l_mask = jnp.logical_and(u>0, l==u)
+    u_mask = jnp.logical_and(l<(self.num_atoms -1), l==u)
+
+    l = jnp.where(l_mask, l-1., l)
+    u = jnp.where(u_mask, u+1., u)
+    
+    B, N = next_dist.shape
+    offset = (jnp.arange(B, dtype=jnp.int32) * N)[:, None]   # (B, 1)
+    idx_l = (l.astype(jnp.int32) + offset).ravel()           # (B*N,)
+    idx_u = (u.astype(jnp.int32) + offset).ravel()           # (B*N,)
+
+    # Weights
+    wl = (u - b).ravel().astype(next_dist.dtype)             # (B*N,)
+    wu = (b - l).ravel().astype(next_dist.dtype)             # (B*N,)
+    v  = next_dist.ravel()                                   # (B*N,)
+
+    # Scatter-add into flat buffer
+    proj_flat = jnp.zeros(B * N, dtype=next_dist.dtype)
+    proj_flat = proj_flat.at[idx_l].add(v * wl)
+    proj_flat = proj_flat.at[idx_u].add(v * wu)
+    proj_dist = proj_flat.reshape(B, N)
+
+    return proj_dist
+
+
+
+def make_distributional_q_network(
+    obs_size: types.ObservationSize,
+    action_size: int,
+    num_atoms : int,
+    v_max: float,
+    v_min: float,
+    preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
+    hidden_layer_sizes: Sequence[int] = (256, 256),
+    n_critics: int = 2,
+    obs_key: str = 'state',
+) -> FeedForwardNetwork:
+  """Creates a value network."""
+
+  class DistributionalQModule(linen.Module):
+    """Q Module."""
+
+    n_critics: int
+
+    @linen.compact
+    def __call__(self, obs: jnp.ndarray, actions: jnp.ndarray):
+      hidden = jnp.concatenate([obs, actions], axis=-1)
+      res = []
+      for i in range(self.n_critics):
+        q = DistributionalQ(
+          layer_sizes=list(hidden_layer_sizes),
+          num_atoms=num_atoms,
+          v_min=v_min,
+          v_max=v_max,
+          name=f'critic_{i}',
+        )(hidden)
+        res.append(q)
+      return jnp.concatenate(res, axis=-1)
+    @linen.compact
+    def projection(self, obs, actions, target_q):
+      res = []
+      for i in range(self.n_critics):
+        hidden = jnp.concatenate([obs, actions], axis=-1)
+        q_proj = DistributionalQ(
+          layer_sizes=list(hidden_layer_sizes),
+          num_atoms=num_atoms,
+          v_min=v_min,
+          v_max=v_max,
+          name=f'critic_{i}',
+        )(hidden, target_q)
+        res.append(q_proj)
+      return jnp.concatenate(res, axis=-1)
+  q_module = DistributionalQModule(n_critics=n_critics)
+
+  def apply(processor_params, q_params, obs, actions, q_target=None, mode='call'):
+    if isinstance(obs, Mapping):
+      obs = preprocess_observations_fn(
+          obs[obs_key], normalizer_select(processor_params, obs_key)
+      )
+    else:
+      obs = preprocess_observations_fn(obs, processor_params)
+    if mode=='call':
+      res = q_module.apply(q_params, obs, actions)
+    elif mode=='projection':
+      res = q_module.projection(q_params, obs, actions, q_target)
+    return res
+  obs_size = _get_obs_state_size(obs_size, obs_key)
+  dummy_obs = jnp.zeros((1, obs_size))
+  dummy_action = jnp.zeros((1, action_size))
+  return FeedForwardNetwork(
+      init=lambda key: q_module.init(key, dummy_obs, dummy_action), apply=apply
+  )
 def make_model(
     layer_sizes: Sequence[int],
     obs_size: int,

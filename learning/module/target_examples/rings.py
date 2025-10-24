@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import chex
 import wandb
 from matplotlib import pyplot as plt
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 from typing import List
 
 

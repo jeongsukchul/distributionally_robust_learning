@@ -7,11 +7,10 @@ import chex
 import pandas as pd
 import numpyro.distributions as dist
 from matplotlib import pyplot as plt
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 from typing import List
 import wandb
 
-from utils.path_utils import project_path
 
 
 class StudentTMixtureModel(Target):

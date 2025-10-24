@@ -239,12 +239,16 @@ def train(
     raise ValueError("Environment does not have dr_range attribute. Please provide a valid environment with dr_range.")
   training_dr_range=  dr_range_low, dr_range_high
   dynamics_param_size = len(dr_range_low)
+  print("dr_range_low", dr_range_low)
+  print("dr_range_high", dr_range_high)
   env = wrap_for_adv_training(
       env,
       episode_length=episode_length,
       action_repeat=action_repeat,
       randomization_fn=functools.partial(randomization_fn,dr_range=training_dr_range),
       param_size = dynamics_param_size,
+      dr_range_low = dr_range_low,
+      dr_range_high= dr_range_high,
       get_grad=True,
   )  # pytype: disable=wrong-keyword-args
   normalize_fn = lambda x, y: x
@@ -377,10 +381,10 @@ def train(
   ):
     param_key, key = jax.random.split(key)
     # actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    dynamics_params, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
+    samples, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
                                       param_key)
-    dynamics_params = jnp.clip(dynamics_params, dr_range_low, dr_range_high)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
+    dynamics_params = samples + dr_range_mid[None, ...]
     nstate = env.step(env_state, actions, dynamics_params)
     model_grad = nstate.info['grad']
     state_extras = {x: nstate.info[x] for x in extra_fields} 
@@ -425,19 +429,19 @@ def train(
     env_state, transitions = adv_step(
         env, env_state, gmm_training_state, normalizer_params, q_params, policy, noise_scales, key, extra_fields=('truncation',)
     )
-    print("sample db state info: samples ", gmm_training_state.sample_db_state.samples.shape)
-    print("sample db state info: samples(new) ", transitions.dynamics_params.shape)
-    print("sample db state info: targetpdf", gmm_training_state.sample_db_state.target_lnpdfs.shape)
-    print("sample db state info: targetpdf(new)", transitions.target_pdf.shape)
-    print("sample db state info: targetgrad", gmm_training_state.sample_db_state.target_grads.shape)
-    print("sample db state info: targetgrad(new)", transitions.target_pdf_grad.shape)
-    print("sample db state info: means", gmm_training_state.sample_db_state.means.shape)
-    print("sample db state info: inv_chols", gmm_training_state.sample_db_state.inv_chols.shape)
-    print("sample db state info: chols", gmm_training_state.sample_db_state.chols.shape)
-    print("sample db state info: map", gmm_training_state.sample_db_state.mapping.shape)
-    print("sample db state info: map(new)", transitions.mapping.shape)
+    # print("sample db state info: samples ", gmm_training_state.sample_db_state.samples.shape)
+    # print("sample db state info: samples(new) ", transitions.dynamics_params.shape)
+    # print("sample db state info: targetpdf", gmm_training_state.sample_db_state.target_lnpdfs.shape)
+    # print("sample db state info: targetpdf(new)", transitions.target_pdf.shape)
+    # print("sample db state info: targetgrad", gmm_training_state.sample_db_state.target_grads.shape)
+    # print("sample db state info: targetgrad(new)", transitions.target_pdf_grad.shape)
+    # print("sample db state info: means", gmm_training_state.sample_db_state.means.shape)
+    # print("sample db state info: inv_chols", gmm_training_state.sample_db_state.inv_chols.shape)
+    # print("sample db state info: chols", gmm_training_state.sample_db_state.chols.shape)
+    # print("sample db state info: map", gmm_training_state.sample_db_state.mapping.shape)
+    # print("sample db state info: map(new)", transitions.mapping.shape)
     new_sample_db_state = gmmtd3_network.gmm_network.sample_selector.save_samples(gmm_training_state.model_state, \
-                    gmm_training_state.sample_db_state, transitions.dynamics_params, transitions.target_pdf, \
+                    gmm_training_state.sample_db_state, transitions.dynamics_params - dr_range_mid[None, ...], transitions.target_pdf, \
                       transitions.target_pdf_grad, transitions.mapping)
     gmm_training_state = gmm_training_state._replace(sample_db_state=new_sample_db_state)
 
@@ -462,7 +466,7 @@ def train(
       "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
       "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
     }
-    print("transitions", transitions)
+    # print("transitions", transitions)
     buffer_state = replay_buffer.insert(buffer_state, transitions)
     return normalizer_params, noise_scales, gmm_training_state, env_state, buffer_state, simul_info, transitions
 
@@ -696,20 +700,22 @@ def train(
     )
   ed = time.time()
   print("setup time", ed-st)
-
-  
-  # if process_id==0:
-  #   fig1 = render_gmm_pdf_1d_subplots(
-  #           gmmtd3_network.gmm_network,
-  #             _unpmap(training_state.gmm_params),
-  #             ndim=dr_range_low.shape[0],
-  #             low=dr_range_low,
-  #             high=dr_range_high,
-  #             training_step=0,
-  #             use_wandb=use_wandb,
-  #       )
-
   # # Create and initialize the replay buffer.
+  sample_key, local_key = jax.random.split(local_key)
+  samples = gmmtd3_network.gmm_network.model.sample(_unpmap(training_state.gmm_training_state.model_state.gmm_state), sample_key, 1000)[0]
+  log_prob_fn = jax.vmap(functools.partial(gmmtd3_network.gmm_network.model.log_density,\
+                                            gmm_state=_unpmap(training_state.gmm_training_state.model_state.gmm_state)))
+  fig = gmm_utils.visualise(
+    log_prob_fn,
+    dr_range_low,
+    dr_range_high,
+    samples + dr_range_mid[None, ...]
+  )
+  if use_wandb:
+    wandb.log(
+            {f"params_log_prob": fig},
+            step=int(current_step),
+        )
   t = time.time()
   prefill_key, local_key = jax.random.split(local_key)
   prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
@@ -752,48 +758,52 @@ def train(
         )
         checkpoint.save(checkpoint_logdir, current_step, params, ckpt_config)
       sample_key, local_key = jax.random.split(local_key)
-      samples = gmmtd3_network.gmm_network.model.sample(training_state.gmm_training_state.model_state.gmm_state, seed, 1000)[0]
+      samples = gmmtd3_network.gmm_network.model.sample(_unpmap(training_state.gmm_training_state.model_state.gmm_state), sample_key, 1000)[0]
+      log_prob_fn = jax.vmap(functools.partial(gmmtd3_network.gmm_network.model.log_density,\
+                                            gmm_state=_unpmap(training_state.gmm_training_state.model_state.gmm_state)))
       fig = gmm_utils.visualise(
-        env.dr_range,
-        samples
+        log_prob_fn,
+        dr_range_low,
+        dr_range_high,
+        samples + dr_range_mid[None, ...]
       )
       if use_wandb:
         wandb.log(
-                {f"all_dims_1d_pdf": wandb.Image(fig)},
+                {f"params_log_prob": fig},
                 step=int(current_step),
             )
       # Run evals.
-      if eval_with_training_env:
-        param_key, local_key = jax.random.split(local_key)
-        dynamics_params, _ = gmmtd3_network.gmm_network.apply(
-          _unpmap(training_state.gmm_params),
-          low=dr_range_low,
-          high=dr_range_high,
-          mode='sample',
-          rng=param_key,
-          n_samples=num_eval_envs,
-        )
-        dynamics_params = jax.lax.stop_gradient(dynamics_params)
-        local_key, test_key = jax.random.split(local_key)
-        env_keys = jax.random.split(test_key, num_eval_envs)
-        env_keys = jnp.reshape(
-            env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
-        )
-        # jax.pmap(eval_env.reset)(env_keys)
-        metrics = evaluator.run_evaluation(
-          _unpmap(
-                (training_state.normalizer_params, training_state.policy_params),
-          ),
-            dynamics_params,
-            training_metrics,
-        )
-      else:
-        metrics = evaluator.run_evaluation(
-          _unpmap(
-                (training_state.normalizer_params, training_state.policy_params)
-          ),
-            training_metrics,
-        )
+      # if eval_with_training_env:
+      #   param_key, local_key = jax.random.split(local_key)
+      #   dynamics_params, _ = gmmtd3_network.gmm_network.apply(
+      #     _unpmap(training_state.gmm_params),
+      #     low=dr_range_low,
+      #     high=dr_range_high,
+      #     mode='sample',
+      #     rng=param_key,
+      #     n_samples=num_eval_envs,
+      #   )
+      #   dynamics_params = jax.lax.stop_gradient(dynamics_params)
+      #   local_key, test_key = jax.random.split(local_key)
+      #   env_keys = jax.random.split(test_key, num_eval_envs)
+      #   env_keys = jnp.reshape(
+      #       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
+      #   )
+      #   # jax.pmap(eval_env.reset)(env_keys)
+      #   metrics = evaluator.run_evaluation(
+      #     _unpmap(
+      #           (training_state.normalizer_params, training_state.policy_params),
+      #     ),
+      #       dynamics_params,
+      #       training_metrics,
+      #   )
+      # else:
+      metrics = evaluator.run_evaluation(
+        _unpmap(
+              (training_state.normalizer_params, training_state.policy_params)
+        ),
+          training_metrics,
+      )
       logging.info(metrics)
       progress_fn(current_step, metrics)
 

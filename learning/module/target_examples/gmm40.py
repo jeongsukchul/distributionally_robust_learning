@@ -8,8 +8,7 @@ import distrax
 from matplotlib import pyplot as plt
 import wandb
 import numpy as np
-from targets.base_target import Target
-from utils.path_utils import project_path
+from learning.module.target_examples.base_target import Target
 import matplotlib
 def plot_contours_2D(log_prob_func,
                      ax: Optional[plt.Axes] = None,

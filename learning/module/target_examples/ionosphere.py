@@ -10,7 +10,7 @@ import numpyro
 import numpyro.distributions as pydist
 from jax._src.flatten_util import ravel_pytree
 
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 from utils.path_utils import project_path
 
 

@@ -16,7 +16,7 @@ from flax import linen as nn
 import matplotlib.pyplot as plt
 from flax.training import checkpoints
 
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 from utils.mode_classifier.classifier_model import CNN, FashionMnistCNN
 from utils.path_utils import project_path
 

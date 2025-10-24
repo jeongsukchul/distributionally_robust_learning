@@ -33,63 +33,94 @@ def make_losses(
     td3_network: td3_networks.Td3Networks,
     reward_scaling: float,
     discounting: float,
-    action_size: int,
+    distributional_q : bool=False,
 ):
-  """Creates the td3 losses."""
+    """Creates the td3 losses."""
 
-  policy_network = td3_network.policy_network
-  q_network = td3_network.q_network
+    policy_network = td3_network.policy_network
+    q_network = td3_network.q_network
+    if distributional_q:
+        def critic_loss(
+            q_params: Params,
+            policy_params: Params,
+            normalizer_params: Any,
+            target_q_params: Params,
+            transitions: Transition,
+            noise: jnp.ndarray,
+            q_support:jnp.ndarray,            
+            key: PRNGKey,
+        ) -> jnp.ndarray:
+            q_old_action = q_network.apply(
+                normalizer_params, q_params, transitions.observation, transitions.action
+            )
+            next_action = policy_network.apply(
+                normalizer_params, policy_params, transitions.next_observation
+            )
+            next_action = jnp.clip(next_action + noise, -1.0, 1.0)
 
-  def critic_loss(
-      q_params: Params,
-      policy_params: Params,
-      normalizer_params: Any,
-      target_q_params: Params,
-      transitions: Transition,
-      noise: jnp.ndarray,
-      key: PRNGKey,
-  ) -> jnp.ndarray:
-    q_old_action = q_network.apply(
-        normalizer_params, q_params, transitions.observation, transitions.action
-    )
-    next_action = policy_network.apply(
-        normalizer_params, policy_params, transitions.next_observation
-    )
-    next_action = jnp.clip(next_action + noise, -1.0, 1.0)
-    next_q = q_network.apply(
-        normalizer_params,
-        target_q_params,
-        transitions.next_observation,
-        next_action,
-    )
-    next_v = jnp.min(next_q, axis=-1) 
-    target_q = jax.lax.stop_gradient(
-        transitions.reward * reward_scaling
-        + transitions.discount * discounting * next_v
-    )
-    q_error = q_old_action - jnp.expand_dims(target_q, -1)
+            target_q =  transitions.reward * reward_scaling \
+                + transitions.discount * discounting * q_support
+            next_q_proj = q_network.apply(normalizer_params, q_params, transitions.next_observation, next_action, target_q, mode="projection")
+            next_q_value = jnp.sum(next_q_proj * q_support, axis=-1)
+            q_error = q_old_action - jnp.expand_dims(target_q, -1)
 
-    # Better bootstrapping for truncated episodes.
-    truncation = transitions.extras['state_extras']['truncation']
-    q_error *= jnp.expand_dims(1 - truncation, -1)
+            # Better bootstrapping for truncated episodes.
+            truncation = transitions.extras['state_extras']['truncation']
+            q_error *= jnp.expand_dims(1 - truncation, -1)
 
-    q_loss = 0.5 * jnp.mean(jnp.square(q_error))
-    return q_loss, (q_old_action, next_v)
+            q_loss = 0.5 * jnp.mean(jnp.square(q_error))
+            return q_loss, (q_old_action, next_v)
+    else:
+        def critic_loss(
+            q_params: Params,
+            policy_params: Params,
+            normalizer_params: Any,
+            target_q_params: Params,
+            transitions: Transition,
+            noise: jnp.ndarray,
+            key: PRNGKey,
+        ) -> jnp.ndarray:
+            q_old_action = q_network.apply(
+                normalizer_params, q_params, transitions.observation, transitions.action
+            )
+            next_action = policy_network.apply(
+                normalizer_params, policy_params, transitions.next_observation
+            )
+            next_action = jnp.clip(next_action + noise, -1.0, 1.0)
+            next_q = q_network.apply(
+                normalizer_params,
+                target_q_params,
+                transitions.next_observation,
+                next_action,
+            )
+            next_v = jnp.min(next_q, axis=-1) 
+            target_q = jax.lax.stop_gradient(
+                transitions.reward * reward_scaling
+                + transitions.discount * discounting * next_v
+            )
+            q_error = q_old_action - jnp.expand_dims(target_q, -1)
 
-  def actor_loss(
-      policy_params: Params,
-      normalizer_params: Any,
-      q_params: Params,
-      transitions: Transition,
-      key: PRNGKey,
-  ) -> jnp.ndarray:
-    action = policy_network.apply(
-        normalizer_params, policy_params, transitions.observation
-    )
-    q_action = q_network.apply(
-        normalizer_params, q_params, transitions.observation, action
-    )
-    min_q = jnp.min(q_action, axis=-1)
-    return -jnp.mean(min_q)
+            # Better bootstrapping for truncated episodes.
+            truncation = transitions.extras['state_extras']['truncation']
+            q_error *= jnp.expand_dims(1 - truncation, -1)
 
-  return critic_loss, actor_loss
+            q_loss = 0.5 * jnp.mean(jnp.square(q_error))
+            return q_loss, (q_old_action, next_v)
+
+    def actor_loss(
+        policy_params: Params,
+        normalizer_params: Any,
+        q_params: Params,
+        transitions: Transition,
+        key: PRNGKey,
+    ) -> jnp.ndarray:
+        action = policy_network.apply(
+            normalizer_params, policy_params, transitions.observation
+        )
+        q_action = q_network.apply(
+            normalizer_params, q_params, transitions.observation, action
+        )
+        min_q = jnp.min(q_action, axis=-1)
+        return -jnp.mean(min_q)
+
+    return critic_loss, actor_loss

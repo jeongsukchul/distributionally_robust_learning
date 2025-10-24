@@ -2,7 +2,7 @@ from typing import List
 import inference_gym.using_jax as gym
 import chex
 import matplotlib.pyplot as plt
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 class Brownian(Target):
@@ -10,8 +10,8 @@ class Brownian(Target):
         super().__init__(dim=dim, log_Z=log_Z, can_sample=can_sample)
         self.data_ndim = dim
 
-        target = gym.targets.BrownianMotionUnknownScalesMissingMiddleObservations()
-        self.target = gym.targets.VectorModel(target, flatten_sample_transformations=True)
+        target = gym.learning.module.target_examples.BrownianMotionUnknownScalesMissingMiddleObservations()
+        self.target = gym.learning.module.target_examples.VectorModel(target, flatten_sample_transformations=True)
 
     def get_dim(self):
         return self.dim

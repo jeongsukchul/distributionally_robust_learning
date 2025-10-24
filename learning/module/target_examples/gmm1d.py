@@ -8,7 +8,7 @@ import chex
 import jax.random
 import matplotlib.pyplot as plt
 import numpy as np
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 class GMM1D(Target):

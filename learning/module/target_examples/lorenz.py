@@ -5,7 +5,7 @@ import chex
 import matplotlib.pyplot as plt
 import jax
 import jax.numpy as jnp
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 class Lorenz(Target):

@@ -6,7 +6,7 @@ import numpyro
 import jax
 from jax._src.flatten_util import ravel_pytree
 
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 import numpyro.distributions as pydist
 import jax.numpy as jnp
 

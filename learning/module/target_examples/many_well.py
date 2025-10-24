@@ -9,7 +9,7 @@ import chex
 import matplotlib.pyplot as plt
 import wandb
 
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 # Taken from FAB code

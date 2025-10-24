@@ -38,14 +38,14 @@ def reduce_weighted_logsumexp(logx, w=None, axis=None, keep_dims=False, return_s
       return lswe, sgn
     return lswe
 
-def visualise(self, dr_range : chex.Array, samples: chex.Array = None, show=False) -> dict:
+def visualise(log_prob_fn, dr_range_low : chex.Array, dr_range_high: chex.Array, samples: chex.Array = None, show=False) -> dict:
+    dr_range_mid = (dr_range_low + dr_range_high)/2
     plt.close()
     fig = plt.figure()
     ax = fig.add_subplot()
-    low, high = dr_range
-    x, y = jnp.meshgrid(jnp.linspace(low[0], high[0], 100), jnp.linspace(low[1], high[1], 100))
+    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 100), jnp.linspace(dr_range_low[1], dr_range_high[1], 100))
     grid = jnp.c_[x.ravel(), y.ravel()]
-    pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
+    pdf_values = jax.vmap(jnp.exp)(log_prob_fn(sample=(grid - dr_range_mid[None,...])))
     pdf_values = jnp.reshape(pdf_values, x.shape)
     ctf = plt.contourf(x, y, pdf_values, levels=20, cmap='viridis')
     cbar = fig.colorbar(ctf)
@@ -65,9 +65,8 @@ def visualise(self, dr_range : chex.Array, samples: chex.Array = None, show=Fals
 
     # plt.savefig(os.path.join(project_path('./samples/funnel/'), f"{prefix}funnel.pdf"), bbox_inches='tight', pad_inches=0.1)
 
-    wb = {"figures/vis": [wandb.Image(fig)]}
 
     if show:
         plt.show()
 
-    return wb
+    return fig

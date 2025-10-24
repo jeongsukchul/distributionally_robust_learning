@@ -3,7 +3,7 @@ import numpy as np
 import jax.numpy as jnp
 import jax
 from utils.path_utils import project_path
-from targets.base_target import Target
+from learning.module.target_examples.base_target import Target
 
 
 class BreastCancer(Target):

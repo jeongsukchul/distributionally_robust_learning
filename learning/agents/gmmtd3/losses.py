@@ -121,7 +121,7 @@ def make_losses(
     new_num_updates = gmmvi_state.num_updates + 1
     new_model_state, new_component_adapter_state, new_sample_db_state = \
         gmm_network.component_adapter(gmmvi_state.component_adaptation_state,
-                                                    new_sample_db_state,
+                                                    gmmvi_state.sample_db_state,
                                                     new_model_state,
                                                     new_num_updates,
                                                     key)

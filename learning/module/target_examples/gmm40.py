@@ -81,8 +81,8 @@ class GMM40(Target):
         
         if not batched:
             log_prob = 10* jnp.squeeze(log_prob, axis=0)
-        log_prob = jnp.where(jnp.logical_or(x[:,0] > self._plot_bound, x[:,0] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
-        log_prob = jnp.where(jnp.logical_or(x[:,1] > self._plot_bound, x[:,1] < -self._plot_bound) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
+        # log_prob = jnp.where(jnp.logical_or(x[:,0] > self._plot_bound, x[:,0] < -self._plot_bound) , jnp.max(log_prob)* jnp.ones_like(log_prob), log_prob).squeeze()
+        # log_prob = jnp.where(jnp.logical_or(x[:,1] > self._plot_bound, x[:,1] < -self._plot_bound) , jnp.max(log_prob)* jnp.ones_like(log_prob), log_prob).squeeze()
 
         return  log_prob
 
@@ -100,9 +100,9 @@ class GMM40(Target):
 
     def visualise(self, samples: chex.Array = None, axes=None, model_log_prob_fn=None, show=False, prefix='') -> dict:
         plt.close()
-        fig = plt.figure(figsize=(10,10))
-        ax = fig.add_subplot(311)
-        ax2 = fig.add_subplot(312)
+        fig = plt.figure()
+        ax = fig.add_subplot()
+        # ax2 = fig.add_subplot(312)
         if samples is not None:
             plot_marginal_pair(samples[:, :2], ax, bounds=(-self._plot_bound, self._plot_bound))
             # jnp.save(project_path(f'samples/gmm40_samples'), samples)
@@ -114,13 +114,13 @@ class GMM40(Target):
             # ctf = plt.contourf(x, y, pdf_values, levels=50, cmap='viridis')
             # cbar = fig.colorbar(ctf)
             plot_contours_2D(self.log_prob, ax, bound=self._plot_bound*1.2, levels=50)
-        if model_log_prob_fn is not None:
-            ax3 = fig.add_subplot(313)
-            grid = jnp.c_[x.ravel(), y.ravel()]
-            pdf_values = jax.vmap(jnp.exp)(model_log_prob_fn(sample=grid))
-            pdf_values = jnp.reshape(pdf_values, x.shape)
-            ctf = ax3.contourf(x, y, pdf_values, levels=20, cmap='viridis')
-            cbar = fig.colorbar(ctf, ax=ax3)
+        # if model_log_prob_fn is not None:
+        #     ax3 = fig.add_subplot(122)
+        #     grid = jnp.c_[x.ravel(), y.ravel()]
+        #     pdf_values = jax.vmap(jnp.exp)(model_log_prob_fn(sample=grid))
+        #     pdf_values = jnp.reshape(pdf_values, x.shape)
+        #     ctf = ax3.contourf(x, y, pdf_values, levels=20, cmap='viridis')
+        #     cbar = fig.colorbar(ctf, ax=ax3)
         plt.xticks([])
         plt.yticks([])
         # import os

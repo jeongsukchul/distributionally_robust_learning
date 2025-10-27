@@ -13,6 +13,7 @@ from omegaconf import DictConfig
 from learning.module.gmmvi.component_adaptation import ComponentAdaptationState, setup_vips_component_adaptation
 from learning.module.gmmvi.configs import get_default_algorithm_config
 from learning.module.gmmvi.gmm_setup import GMMWrapper, GMMWrapperState, setup_full_cov_gmm, setup_gmm_wrapper
+from learning.module.gmmvi.least_squares import setup_quad_regression
 from learning.module.gmmvi.ng_update import get_ng_update_fns
 from learning.module.gmmvi.sample_db import SampleDB, SampleDBState, setup_sampledb
 from learning.module.gmmvi.sample_selector import setup_fixed_sample_selector
@@ -34,6 +35,7 @@ class GMMNetwork(NamedTuple):
     model : GMMWrapper
     sample_db : SampleDB
     ng_estimator : Callable
+    more_ng_estimator : Callable
     component_adapter : Callable
     component_updater : Callable
     sample_selector : Callable
@@ -44,18 +46,21 @@ def create_gmm_network_and_state(
     dim : int,
     num_envs : int,
     batch_size : int,
-    key : jax.random.PRNGKey
+    key : jax.random.PRNGKey,
+    prior_mean : float = 0.,
+    prior_scale : float = 1.,
 ):  
     
-    gmm = setup_full_cov_gmm(dim)
+    gmm = setup_full_cov_gmm(dim, cfg.max_components)
     
     gmm_state = gmm.init_gmm_state(key,
                                 cfg.num_initial_components,
-                                cfg.prior_mean,
-                                cfg.prior_scale,
+                                prior_mean,
+                                prior_scale,
                                 cfg.use_diagonal_convs,
-                                cfg.init_std**2)
+                                prior_scale**2)
     model = setup_gmm_wrapper(gmm,
+                            cfg.max_components,
                             cfg.initial_stepsize,
                             cfg.initial_l2_regularizer,
                             10000)
@@ -63,24 +68,28 @@ def create_gmm_network_and_state(
     sample_db = setup_sampledb(dim,
                             cfg.use_sample_database,
                             cfg.max_database_size,
+                            cfg.max_components,
                             cfg.use_diagonal_convs,
                             batch_size,
                             num_envs)
     sample_db_state = sample_db.init_sampleDB_state()
-
+    quad_regression_fn = setup_quad_regression(dim)
     # 'S' ; Stein Estimator +  'T' : Trust Rgeion Component Updater
-    ng_update_fn, hass_grad_fn = get_ng_update_fns(model,dim,
+    ng_update_fn, hass_grad_fn, more_hass_grad_fn = get_ng_update_fns(model,
+                                            quad_regression_fn,
+                                            dim,
                                             cfg.use_diagonal_convs,
                                             cfg.use_self_normalized_importance_weights,
                                             cfg.temperature,
                                             cfg.initial_l2_regularizer,
                                             )
     # 'A' vips component adaptation component increasing.
-    component_adapter_state, component_adapter = setup_vips_component_adaptation(sample_db,
+    component_adapter_state, component_adapter = setup_vips_component_adaptation(
+                        sample_db,
                         model,
                         dim,
-                        cfg.prior_mean,
-                        cfg.init_std ** 2,
+                        prior_mean,
+                        prior_scale ** 2,
                         cfg.use_diagonal_convs,
                         cfg.del_iters,
                         cfg.add_iters,
@@ -114,6 +123,7 @@ def create_gmm_network_and_state(
     gmm_network = GMMNetwork(model = model,
             sample_db=sample_db,
             ng_estimator=hass_grad_fn, 
+            more_ng_estimator = more_hass_grad_fn,
             component_adapter=component_adapter,
             component_updater=ng_update_fn,
             sample_selector=sample_selector,

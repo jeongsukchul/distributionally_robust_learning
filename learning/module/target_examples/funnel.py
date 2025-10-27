@@ -38,8 +38,8 @@ class Funnel(Target):
         log_prob = log_density_dominant + log_density_other
         if not batched:
             log_prob = jnp.squeeze(log_prob, axis=0)
-        log_prob = jnp.where(jnp.logical_or(x[:,0] > high[0], x[:,0] < low[0]) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
-        log_prob = jnp.where(jnp.logical_or(x[:,1] > high[1], x[:,1] < low[1]) , -1.2* jnp.ones_like(log_prob), log_prob).squeeze()
+        # log_prob = jnp.where(jnp.logical_or(x[:,0] > high[0], x[:,0] < low[0]) , jnp.max(log_prob)* jnp.ones_like(log_prob), log_prob).squeeze()
+        # log_prob = jnp.where(jnp.logical_or(x[:,1] > high[1], x[:,1] < low[1]) , jnp.max(log_prob)* jnp.ones_like(log_prob), log_prob).squeeze()
         
         return log_prob
 

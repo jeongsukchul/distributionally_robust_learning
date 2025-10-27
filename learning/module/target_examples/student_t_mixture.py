@@ -71,7 +71,7 @@ class StudentTMixtureModel(Target):
         entropy = -jnp.sum(mode_dist * (jnp.log(mode_dist) / jnp.log(self.num_components)))
         return entropy
 
-    def visualise(self, samples: chex.Array = None, axes=None, show=False, prefix='') -> dict:
+    def visualise(self, samples: chex.Array = None, axes=None, model_log_prob_fn=None, show=False, prefix='') -> dict:
         boarder = [-15, 15]
         if self.dim == 2:
             fig = plt.figure()

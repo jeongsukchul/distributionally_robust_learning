@@ -105,7 +105,7 @@ def make_losses(
         gmm_network.sample_selector.select_train_datas(gmmvi_state.sample_db_state)
     new_component_stepsizes = gmm_network.component_stepsize_fn(gmmvi_state.model_state)
     new_model_state = gmm_network.model.update_stepsizes(gmmvi_state.model_state, new_component_stepsizes)
-    expected_hessian_neg, expected_grad_neg = gmm_network.ng_estimator(new_model_state,
+    expected_hessian_neg, expected_grad_neg = gmm_network.more_ng_estimator(new_model_state,
                                                             samples,
                                                             sample_dist_densities,
                                                             target_lnpdfs,

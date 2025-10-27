@@ -96,7 +96,8 @@ def make_gmmtd3_networks(
       layer_norm=q_network_layer_norm,
       obs_key = value_obs_key,
   )
-  init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, batch_size, init_key, prior_mean=prior_mean, prior_scale=prior_scale)
+  init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, batch_size, init_key,\
+                                                                prior_mean=prior_mean, prior_scale=prior_scale)
   return GMMTd3Networks(
       policy_network=policy_network,
       q_network=q_network,

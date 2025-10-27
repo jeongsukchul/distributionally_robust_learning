@@ -71,8 +71,8 @@ class TransitionwithGMMParams(NamedTuple):
   mapping : jax.Array
   target_pdf: jax.Array
   target_pdf_grad: jax.Array
-  model_grad_norm : jax.Array
-  value_grad_norm : jax.Array
+  # model_grad_norm : jax.Array
+  # value_grad_norm : jax.Array
   extras: FrozenDict[str, Any]  # recommended
 @flax.struct.dataclass
 class TrainingState:
@@ -285,8 +285,8 @@ def train(
       mapping=0,
       target_pdf=0.,
       target_pdf_grad=dummy_params,
-      model_grad_norm = 0,
-      value_grad_norm = 0,
+      # model_grad_norm = 0,
+      # value_grad_norm = 0,
       extras={'state_extras': {'truncation': 0.0}, 'policy_extras': {}},
   )
   max_replay_size = max(max_replay_size // device_count, env.episode_length * num_envs // device_count)
@@ -395,7 +395,7 @@ def train(
     q_value_grad_fn = jax.grad(target_log_fn, has_aux=True)
     q_value_grad, (nstate, state_extras, q_values) = q_value_grad_fn(nstate.obs)
     target_grad = jax.tree_util.tree_map(lambda x,y: jnp.einsum('bxy,bx->by', x, y), model_grad, q_value_grad) #, model_grad @ q_value_grad
-
+    # target_grad = jnp.zeros_like(dynamics_params)
     return nstate, TransitionwithGMMParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
@@ -406,8 +406,8 @@ def train(
         mapping=mapping,
         target_pdf=q_values,
         target_pdf_grad= target_grad[value_obs_key],
-        model_grad_norm = jnp.linalg.norm(model_grad[value_obs_key], axis=(1,2)),
-        value_grad_norm = jnp.linalg.norm(q_value_grad[value_obs_key], axis=-1),
+        # model_grad_norm = jnp.linalg.norm(model_grad[value_obs_key], axis=(1,2)),
+        # value_grad_norm = jnp.linalg.norm(q_value_grad[value_obs_key], axis=-1),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
   def get_experience(
@@ -461,10 +461,10 @@ def train(
       "simul/reward_min" : transitions.reward.min(),
       "simul/dynamics_params_mean" : transitions.dynamics_params.mean(),
       "simul/dynamics_params_std" :transitions.dynamics_params.std(),
-      "simul/model_grad_norm_mean" : transitions.model_grad_norm.mean(),
-      "simul/model_grad_norm_std" : transitions.model_grad_norm.std(),
-      "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
-      "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
+      # "simul/model_grad_norm_mean" : transitions.model_grad_norm.mean(),
+      # "simul/model_grad_norm_std" : transitions.model_grad_norm.std(),
+      # "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
+      # "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
     }
     # print("transitions", transitions)
     buffer_state = replay_buffer.insert(buffer_state, transitions)

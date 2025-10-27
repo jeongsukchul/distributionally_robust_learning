@@ -59,8 +59,8 @@ def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, 
         ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
     # plt.xlabel('X')
     # plt.ylabel('Y')
-    plt.xticks(np.arange(low[0], high[0], 10))
-    plt.yticks(np.arange(low[1], high[1], 10))
+    plt.xticks([])
+    plt.yticks([])
     # plt.xlim(-10, 5)
     # plt.ylim(-5, 5)
 

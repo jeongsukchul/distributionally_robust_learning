@@ -12,7 +12,6 @@ from learning.module.gmmvi.least_squares import QuadRegression, QuadRegressionSt
 
 def get_ng_update_fns(gmm_wrapper, quad_regression_fn, DIM, DIAGONAL_COVS, USE_SELF_NORMALIZED_IMPORTANCE_WEIGHTS, TEMPERATURE: float, INITIAL_REGULARIZER: float):
     def _safe_log_softmax(logits, axis=-1):
-        # jax.debug.print("logits: {x}", x=logits)
         finite = jnp.isfinite(logits)
         any_finite = jnp.any(finite, axis=axis, keepdims=True)
 
@@ -36,10 +35,15 @@ def get_ng_update_fns(gmm_wrapper, quad_regression_fn, DIM, DIAGONAL_COVS, USE_S
         component_log_densities = jnp.transpose(component_log_densities)
         num_samples = samples.shape[0]
         log_ratios = target_lnpdfs - model_densities
+        target_mask = jnp.isfinite(target_lnpdfs)
+        model_mask = jnp.isfinite(model_densities)
+        # jax.debug.print("target isfinite : {x}", x=target_mask)
+        # jax.debug.print("model_mask : {x}", x=model_mask)
+
         def per_component(component_log_density, l2_regularizer, mean, chol_cov, mask):
             # Importance weights
             log_weights = _safe_log_softmax(component_log_density - background_densities, axis=0) #[BATCH]
-            weights= jnp.exp(log_weights)
+            weights= jnp.exp(log_weights)                                                  #[BATCH]
             # Fit quadratic reward around current component mean/cov
             G_hat, g_hat_lin, const_term = quad_regression_fn(
                 l2_regularizer,
@@ -109,7 +113,6 @@ def get_ng_update_fns(gmm_wrapper, quad_regression_fn, DIM, DIAGONAL_COVS, USE_S
             prec_times_diff = jax.scipy.linalg.cho_solve((chol_cov, True), jnp.transpose(samples - mean))  #[DIM, BATCH]
             expected_hessian = jnp.sum(
                 jnp.expand_dims(jnp.transpose(prec_times_diff), 1) * jnp.expand_dims(weighted_gradients, -1), 0)
-            # jax.debug.print("expected_hessian {x}", x=expected_hessian)
             
             expected_hessian = 0.5 * (expected_hessian + jnp.transpose(expected_hessian))
         expected_gradient = jnp.sum(weighted_gradients, 0)

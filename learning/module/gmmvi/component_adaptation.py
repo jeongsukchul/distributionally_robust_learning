@@ -99,10 +99,9 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
             des_entropy = gmm_wrapper.average_entropy(gmm_wrapper_state.gmm_state)
         max_logdensity = jnp.max(model_log_densities)
         rewards = target_lnpdfs - jnp.maximum(max_logdensity - THRESHOLD_FOR_ADD_HEURISTIC[it], model_log_densities)
-        mask = target_lnpdfs >= -69.
+        mask = target_lnpdfs >= -600.
         safe_rewards = jnp.where(mask, rewards, -jnp.inf)
         new_mean = samples[jnp.argmax(safe_rewards)]
-        # jax.debug.print("new mean {x}", x=new_mean )
         H_unscaled = 0.5 * DIM * (jnp.log(2.0 * jnp.pi) + 1)
         c = jnp.exp((2 * (des_entropy - H_unscaled)) / DIM)
         if DIAGONAL_COVS:
@@ -180,8 +179,6 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
         do_delete = _as_scalar_bool(iteration > DEL_ITERS)
         add_iter = (iteration>1) &(jnp.remainder(iteration, ADD_ITERS)==0) & (gmm_wrapper_state.gmm_state.num_components < MAX_COMPONENTS)
         add_iter = _as_scalar_bool(add_iter)
-        # jax.debug.print('iteration{x}', x=iteration)
-        # jax.debug.print('add iter {x}', x=add_iter)
         def delete_bad(args):
             gs, cs = args
             return _delete_bad_components(gs,cs)

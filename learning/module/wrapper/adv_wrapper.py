@@ -1,8 +1,9 @@
+import contextlib
 from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple, Union
 import jax
 import jax.numpy as jnp
 from mujoco import mjx
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from brax.envs.base import Wrapper, Env, State
 from brax.base import System
 import numpy as np
@@ -28,6 +29,7 @@ def wrap_for_adv_training(
     ] = None,
     dr_range_low: jnp.ndarray = None,
     dr_range_high: jnp.ndarray = None,
+    full_reset: bool = False,
     get_grad = False,
 ) -> Wrapper:
   """Common wrapper pattern for all brax training agents.
@@ -49,7 +51,7 @@ def wrap_for_adv_training(
   """
   env = AdVmapWrapper(env, randomization_fn, param_size, dr_range_low, dr_range_high, get_grad)
   env = EpisodeWrapper(env, episode_length, action_repeat)
-  env = BraxAutoResetWrapper(env)
+  env = BraxAutoResetWrapper(env, full_reset=full_reset)
   return env
 class AdVmapWrapper(Wrapper):
   """Wrapper for domain randomization."""
@@ -65,18 +67,30 @@ class AdVmapWrapper(Wrapper):
   ):
     super().__init__(env)
     self.rand_fn = functools.partial(randomization_fn, model=self.mjx_model, rng=None)
-    self.get_grad=  get_grad
+    self.get_grad =  get_grad
     self.param_size = param_size
     self.dr_range_low = dr_range_low
     self.dr_range_high = dr_range_high
-  def _env_fn(self, mjx_model: mjx.Model) -> mjx_env.MjxEnv:
-    env = self.env
-    env.unwrapped._mjx_model = mjx_model
-    return env
 
+  @contextlib.contextmanager
+  def v_env_fn(self, mjx_model: mjx.Model):
+    env = self.env.unwrapped
+    old_mjx_model = env._mjx_model
+    try:
+      env.unwrapped._mjx_model = mjx_model
+      yield env
+    finally:
+      env.unwrapped._mjx_model = old_mjx_model
+      
   def reset(self, rng: jax.Array) -> mjx_env.State:
     # state = jax.vmap(reset, in_axes=[self._in_axes, 0])(self._mjx_model_v, rng)
-    state = jax.vmap(self.env.reset)(rng)
+    def dr_reset(rng):
+      param_rng, rng = jax.random.split(rng)
+      params = jax.random.uniform(param_rng, (self.param_size,), minval=self.dr_range_low, maxval=self.dr_range_high)
+      mjx_model, inaxes = self.rand_fn(params=params)
+      with self.v_env_fn(mjx_model) as v_env:
+        return v_env.reset(rng)
+    state = jax.vmap(dr_reset, )(rng)
     if self.get_grad:
       state.info['grad']=jax.tree_util.tree_map(lambda x: jnp.zeros((x.shape + (self.param_size,))), state.obs)
     return state
@@ -84,14 +98,14 @@ class AdVmapWrapper(Wrapper):
   def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> State:
     def step(params, s, a):
       mjx_model, inaxes = self.rand_fn(params=params)
-      env = self._env_fn(mjx_model=mjx_model)
-      return env.step(s, a)
+      with self.v_env_fn(mjx_model) as v_env:
+        return v_env.step(s, a)
     
     def step_and_grad(params, s, a):
       params = jnp.clip(params, self.dr_range_low, self.dr_range_high)
       ns = step(params, s, a)
-      grad = jax.jacfwd(lambda x,y,z : step(x,y,z).obs, argnums=0)(params, s, a)
-      ns.info['grad']= grad
+      # grad = jax.jacfwd(lambda x,y,z : step(x,y,z).obs, argnums=0)(params, s, a)
+      # ns.info['grad']= grad
       return ns
     if self.get_grad:
       ns = jax.vmap(step_and_grad)(
@@ -159,28 +173,69 @@ class EpisodeWrapper(Wrapper):
 
 class BraxAutoResetWrapper(Wrapper):
   """Automatically resets Brax envs that are done."""
+  def __init__(self, env: Any, full_reset: bool = False):
+    super().__init__(env)
+    self._full_reset = full_reset
+    self._info_key = 'AutoResetWrapper'
 
-  def reset(self, rng: jax.Array, params:jax.Array) -> mjx_env.State:
-    state = self.env.reset(rng)
-    state.info['first_state'] = state.data
-    state.info['first_obs'] = state.obs
+  def reset(self, rng: jax.Array, params: jax.Array) -> mjx_env.State:
+    rng_key = jax.vmap(jax.random.split)(rng)
+    rng, key = rng_key[..., 0], rng_key[..., 1]
+    state = self.env.reset(key)
+    state.info[f'{self._info_key}_first_data'] = state.data
+    state.info[f'{self._info_key}_first_obs'] = state.obs
+    state.info[f'{self._info_key}_rng'] = rng
+    state.info[f'{self._info_key}_done_count'] = jnp.zeros(
+        key.shape[:-1], dtype=int
+    )
     state.info['dr_params'] = params
     return state
+  def step(self, state: mjx_env.State, action: jax.Array, params : jax.Array) -> mjx_env.State:
+    # grab the reset state.
+    reset_state = None
+    rng_key = jax.vmap(jax.random.split)(state.info[f'{self._info_key}_rng'])
+    reset_rng, reset_key = rng_key[..., 0], rng_key[..., 1]
+    if self._full_reset:
+      reset_state = self.reset(reset_key)
+      reset_data = reset_state.data
+      reset_obs = reset_state.obs
+    else:
+      reset_data = state.info[f'{self._info_key}_first_data']
+      reset_obs = state.info[f'{self._info_key}_first_obs']
 
-  def step(self, state: mjx_env.State, action: jax.Array, params: jax.Array) -> mjx_env.State:
     if 'steps' in state.info:
+      # reset steps to 0 if done.
       steps = state.info['steps']
       steps = jnp.where(state.done, jnp.zeros_like(steps), steps)
       state.info.update(steps=steps)
+
     state = state.replace(done=jnp.zeros_like(state.done))
     state = self.env.step(state, action, params)
-    state.info['dr_params']=params
+    state.info['dr_params'] = params
     def where_done(x, y):
       done = state.done
+      if done.shape and done.shape[0] != x.shape[0]:
+        return y
       if done.shape:
         done = jnp.reshape(done, [x.shape[0]] + [1] * (len(x.shape) - 1))
       return jnp.where(done, x, y)
 
-    data = jax.tree.map(where_done, state.info['first_state'], state.data)
-    obs = jax.tree.map(where_done, state.info['first_obs'], state.obs)
-    return state.replace(data=data, obs=obs)
+    data = jax.tree.map(where_done, reset_data, state.data)
+    obs = jax.tree.map(where_done, reset_obs, state.obs)
+
+    next_info = state.info
+    done_count_key = f'{self._info_key}_done_count'
+    if self._full_reset and reset_state:
+      next_info = jax.tree.map(where_done, reset_state.info, state.info)
+      next_info[done_count_key] = state.info[done_count_key]
+
+      if 'steps' in next_info:
+        next_info['steps'] = state.info['steps']
+      preserve_info_key = f'{self._info_key}_preserve_info'
+      if preserve_info_key in next_info:
+        next_info[preserve_info_key] = state.info[preserve_info_key]
+
+    next_info[done_count_key] += state.done.astype(int)
+    next_info[f'{self._info_key}_rng'] = reset_rng
+
+    return state.replace(data=data, obs=obs, info=next_info)

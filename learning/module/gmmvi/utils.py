@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import chex
 from typing import List
 import wandb
+import numpy as np
 def reduce_weighted_logsumexp(logx, w=None, axis=None, keep_dims=False, return_sign=False,):
     if w is None:
       lswe = jax.nn.logsumexp(
@@ -38,14 +39,14 @@ def reduce_weighted_logsumexp(logx, w=None, axis=None, keep_dims=False, return_s
       return lswe, sgn
     return lswe
 
-def visualise(log_prob_fn, dr_range_low : chex.Array, dr_range_high: chex.Array, samples: chex.Array = None, show=False) -> dict:
-    dr_range_mid = (dr_range_low + dr_range_high)/2
+def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, samples: chex.Array = None, show=False) -> dict:
     plt.close()
     fig = plt.figure()
     ax = fig.add_subplot()
-    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 100), jnp.linspace(dr_range_low[1], dr_range_high[1], 100))
+    low, high = dr_range_low, dr_range_high
+    x, y = jnp.meshgrid(jnp.linspace(low[0], high[0], 100), jnp.linspace(low[1], high[1], 100))
     grid = jnp.c_[x.ravel(), y.ravel()]
-    pdf_values = jax.vmap(jnp.exp)(log_prob_fn(sample=(grid - dr_range_mid[None,...])))
+    pdf_values = jax.vmap(jnp.exp)(log_prob_fn(sample=grid))
     pdf_values = jnp.reshape(pdf_values, x.shape)
     ctf = plt.contourf(x, y, pdf_values, levels=20, cmap='viridis')
     cbar = fig.colorbar(ctf)
@@ -58,15 +59,16 @@ def visualise(log_prob_fn, dr_range_low : chex.Array, dr_range_high: chex.Array,
         ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
     # plt.xlabel('X')
     # plt.ylabel('Y')
-    plt.xticks([])
-    plt.yticks([])
+    plt.xticks(np.arange(low[0], high[0], 10))
+    plt.yticks(np.arange(low[1], high[1], 10))
     # plt.xlim(-10, 5)
     # plt.ylim(-5, 5)
 
     # plt.savefig(os.path.join(project_path('./samples/funnel/'), f"{prefix}funnel.pdf"), bbox_inches='tight', pad_inches=0.1)
 
+    wb = {"figures/vis": [wandb.Image(fig)]}
 
     if show:
         plt.show()
 
-    return fig
+    return wb

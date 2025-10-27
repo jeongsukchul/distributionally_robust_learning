@@ -19,10 +19,10 @@ from typing import Any, Callable, Dict, Optional, Type, Union, Tuple
 
 from mujoco import mjx
 import jax
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from ml_collections import config_dict
 
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 # from mujoco_playground._src.dm_control_suite import acrobot
 # from mujoco_playground._src.dm_control_suite import ball_in_cup
 from custom_envs.dm_control_suite import cartpole

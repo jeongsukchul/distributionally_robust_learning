@@ -24,7 +24,7 @@ from ml_collections import config_dict
 import mujoco
 from mujoco import mjx
 
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from mujoco_playground._src import reward
 from mujoco_playground._src.dm_control_suite import common
 from omegaconf import OmegaConf
@@ -42,6 +42,9 @@ def default_config() -> config_dict.ConfigDict:
       episode_length=1000,
       action_repeat=1,
       vision=False,
+      impl="jax",
+      nconmax=100_000,
+      njmax=100,
   )
 
 
@@ -65,7 +68,7 @@ class Run(mjx_env.MjxEnv):
         _XML_PATH.read_text(), self._model_assets
     )
     self._mj_model.opt.timestep = self.sim_dt
-    self._mjx_model = mjx.put_model(self._mj_model)
+    self._mjx_model = mjx.put_model(self._mj_model, impl=self._config.impl)
     self._post_init()
 
   def _post_init(self) -> None:
@@ -85,7 +88,14 @@ class Run(mjx_env.MjxEnv):
         )
     )
 
-    data = mjx_env.init(self.mjx_model, qpos=qpos)
+    data = mjx_env.make_data(
+        self.mj_model,
+        qpos=qpos,
+        impl=self.mjx_model.impl.value,
+        nconmax=self._config.nconmax,
+        njmax=self._config.njmax,
+    )
+    data = mjx.forward(self.mjx_model, data)
 
     # Stabilize.
     data = mjx_env.step(self.mjx_model, data, jp.zeros(self.mjx_model.nu), 200)

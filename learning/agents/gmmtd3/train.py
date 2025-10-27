@@ -52,7 +52,7 @@ import optax
 from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics
 from flax.core import FrozenDict
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 Metrics = types.Metrics
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 
@@ -142,8 +142,6 @@ def train(
     num_envs: int = 1,
     num_eval_envs: int = 1024,
     learning_rate: float = 1e-4,
-    init_lmbda: float = 0.1,   #added
-    alpha : float = 2.0,
     discounting: float = 0.9, 
     seed: int = 0,
     batch_size: int = 256,
@@ -178,6 +176,7 @@ def train(
     use_wandb=False,
     noise_clip=0.5,
     policy_noise = 0.2,
+    value_obs_key="state",
 ):
   """gmmtd3 training."""
   process_id = jax.process_index()
@@ -258,6 +257,8 @@ def train(
       observation_size=obs_shape,
       action_size=action_size,
       dynamics_param_size = dynamics_param_size,
+      prior_mean = dr_range_mid,
+      prior_scale = (dr_range_high - dr_range_low)/10,
       batch_size= batch_size,
       num_envs = num_envs//jax.process_count(),
       init_key = init_key,
@@ -360,7 +361,7 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
-        gmm_training_state = new_gmm_training_state,
+        # gmm_training_state = new_gmm_training_state,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,
@@ -381,10 +382,9 @@ def train(
   ):
     param_key, key = jax.random.split(key)
     # actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    samples, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
+    dynamics_params, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
                                       param_key)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    dynamics_params = samples + dr_range_mid[None, ...]
     nstate = env.step(env_state, actions, dynamics_params)
     model_grad = nstate.info['grad']
     state_extras = {x: nstate.info[x] for x in extra_fields} 
@@ -405,9 +405,9 @@ def train(
         dynamics_params=dynamics_params,
         mapping=mapping,
         target_pdf=q_values,
-        target_pdf_grad= target_grad['state'],
-        model_grad_norm = jnp.linalg.norm(model_grad['state'], axis=(1,2)),
-        value_grad_norm = jnp.linalg.norm(q_value_grad['state'], axis=-1),
+        target_pdf_grad= target_grad[value_obs_key],
+        model_grad_norm = jnp.linalg.norm(model_grad[value_obs_key], axis=(1,2)),
+        value_grad_norm = jnp.linalg.norm(q_value_grad[value_obs_key], axis=-1),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
   def get_experience(
@@ -441,7 +441,7 @@ def train(
     # print("sample db state info: map", gmm_training_state.sample_db_state.mapping.shape)
     # print("sample db state info: map(new)", transitions.mapping.shape)
     new_sample_db_state = gmmtd3_network.gmm_network.sample_selector.save_samples(gmm_training_state.model_state, \
-                    gmm_training_state.sample_db_state, transitions.dynamics_params - dr_range_mid[None, ...], transitions.target_pdf, \
+                    gmm_training_state.sample_db_state, transitions.dynamics_params, transitions.target_pdf, \
                       transitions.target_pdf_grad, transitions.mapping)
     gmm_training_state = gmm_training_state._replace(sample_db_state=new_sample_db_state)
 
@@ -709,13 +709,14 @@ def train(
     log_prob_fn,
     dr_range_low,
     dr_range_high,
-    samples + dr_range_mid[None, ...]
+    samples,
   )
   if use_wandb:
     wandb.log(
-            {f"params_log_prob": fig},
-            step=int(current_step),
+            fig,
+            step=int(0),
         )
+  print("fig initial step")
   t = time.time()
   prefill_key, local_key = jax.random.split(local_key)
   prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
@@ -765,11 +766,11 @@ def train(
         log_prob_fn,
         dr_range_low,
         dr_range_high,
-        samples + dr_range_mid[None, ...]
+        samples,
       )
       if use_wandb:
         wandb.log(
-                {f"params_log_prob": fig},
+                fig,
                 step=int(current_step),
             )
       # Run evals.

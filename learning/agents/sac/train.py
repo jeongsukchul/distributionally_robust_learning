@@ -41,7 +41,7 @@ from brax.envs.base import Wrapper
 from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training
 from learning.module.wrapper.dr_wrapper import wrap_for_dr_training
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 import flax
 import jax
 import jax.numpy as jnp

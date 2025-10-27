@@ -25,7 +25,7 @@ import numpy as np
 
 from mujoco_playground._src import collision
 from mujoco_playground._src import gait
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from mujoco_playground._src.collision import geoms_colliding
 from mujoco_playground._src.locomotion.g1 import base as g1_base
 from mujoco_playground._src.locomotion.g1 import g1_constants as consts

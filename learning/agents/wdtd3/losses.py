@@ -26,7 +26,7 @@ from brax.training.types import PRNGKey
 from brax.training.distribution import NormalDistribution
 import jax
 import jax.numpy as jnp
-from mujoco_playground._src.wrapper import Wrapper
+from learning.module.wrapper.wrapper import Wrapper
 
 Any = types.Any
 

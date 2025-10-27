@@ -12,7 +12,7 @@ eval_episodes: 1
 eval_pi: true
 eval_value: true # evaluate value function approximation
 eval_freq: 50000
-
+impl : warp
 eval_with_training_env : false #added
 #policy
 policy : td3

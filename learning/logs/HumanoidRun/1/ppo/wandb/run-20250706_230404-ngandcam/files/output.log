@@ -17,7 +17,7 @@ Traceback (most recent call last):
     return _envs[env_name](config=config, config_overrides=config_overrides)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco_playground/_src/dm_control_suite/humanoid.py", line 74, in __init__
-    self._mjx_model = mjx.put_model(self._mj_model)
+    self._mjx_model =  mjx.put_model(self._mj_model, impl=self._config.impl)
                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/home/ros/miniconda3/envs/mujoco/lib/python3.12/site-packages/mujoco/mjx/_src/io.py", line 397, in put_model
     raise NotImplementedError('Warp backend not implemented yet.')

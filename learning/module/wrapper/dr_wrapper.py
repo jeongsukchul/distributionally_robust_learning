@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple, U
 import jax
 import jax.numpy as jnp
 from mujoco import mjx
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from brax.envs.base import Wrapper, Env, State
 from brax.base import System
 import functools

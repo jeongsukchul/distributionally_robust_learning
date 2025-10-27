@@ -71,10 +71,10 @@ from helper import make_dir
 import warnings
 import pickle
 import shutil
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
-from mujoco_playground._src import mjx_env
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
+from custom_envs import mjx_env
 from utils import save_configs_to_wandb_and_local
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 import scipy
 
 
@@ -478,7 +478,7 @@ def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
     for param in gmmtd3_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
             gmmtd3_params[param] = getattr(cfg, param)
-
+    gmmtd3_params['num_evals'] = 1000
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}"
     wandb_name += cfg.comment
     if cfg.use_wandb:
@@ -511,6 +511,7 @@ def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
         dr_train_ratio = cfg.dr_train_ratio,
         seed=cfg.seed,
         eval_with_training_env = cfg.eval_with_training_env,
+        value_obs_key = gmmtd3_params.network_factory.value_obs_key,
     )
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
@@ -634,6 +635,7 @@ def train(cfg: dict):
     cfg_dir = make_dir(cfg.work_dir / "cfg")
     shutil.copy('config.yaml', os.path.join(cfg_dir, 'config.yaml'))
     env_cfg = registry.get_default_config(cfg.task)
+    env_cfg['impl'] = cfg.impl
     if cfg.policy == "td3" :
         if "stand" in cfg.task:
             env_cfg.reward_config.scales.energy = -5e-5
@@ -649,6 +651,7 @@ def train(cfg: dict):
             env_cfg.reward_config.scales.feet_phase = 1.0
             env_cfg.reward_config.scales.ang_vel_xy = -0.3
             env_cfg.reward_config.scales.orientation = -5.0
+    
     env = registry.load(cfg.task, config=env_cfg)
 
     if cfg.randomization:

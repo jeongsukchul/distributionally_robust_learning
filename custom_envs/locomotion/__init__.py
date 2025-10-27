@@ -21,7 +21,7 @@ import jax
 from ml_collections import config_dict
 from mujoco import mjx
 
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from custom_envs.locomotion.barkour import joystick as barkour_joystick
 from custom_envs.locomotion.berkeley_humanoid import joystick as berkeley_humanoid_joystick
 from custom_envs.locomotion.berkeley_humanoid import randomize as berkeley_humanoid_randomize

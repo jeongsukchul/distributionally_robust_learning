@@ -24,7 +24,7 @@ from mujoco import mjx
 import numpy as np
 
 from mujoco_playground._src import collision
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from mujoco_playground._src.locomotion.h1 import base as h1_base
 from mujoco_playground._src.locomotion.h1 import h1_constants
 

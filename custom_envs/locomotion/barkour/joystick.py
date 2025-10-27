@@ -25,7 +25,7 @@ from mujoco import mjx
 import numpy as np
 
 from mujoco_playground._src import collision
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 
 _FEET_SITES = [
     "foot_front_left",
@@ -126,7 +126,7 @@ class Joystick(mjx_env.MjxEnv):
 
     self._mj_model = mj_model
     self._mj_model.opt.timestep = config.sim_dt
-    self._mjx_model = mjx.put_model(self._mj_model)
+    self._mjx_model =  mjx.put_model(self._mj_model, impl=self._config.impl)
     self._post_init()
 
   def _post_init(self) -> None:

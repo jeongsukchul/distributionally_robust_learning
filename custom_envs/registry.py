@@ -23,7 +23,7 @@ import custom_envs.locomotion as locomotion
 import custom_envs.manipulation as manipulation
 # from mujoco_playground._src import locomotion
 # from mujoco_playground._src import manipulation
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 
 DomainRandomizer = Optional[
     Callable[[mjx.Model, jax.Array], Tuple[mjx.Model, mjx.Model]]

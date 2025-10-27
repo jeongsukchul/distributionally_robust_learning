@@ -19,7 +19,7 @@ import jax
 from ml_collections import config_dict
 from mujoco import mjx
 
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from custom_envs.manipulation.aloha import handover as aloha_handover
 from custom_envs.manipulation.aloha import single_peg_insertion as aloha_peg
 from custom_envs.manipulation.franka_emika_panda import open_cabinet as panda_open_cabinet

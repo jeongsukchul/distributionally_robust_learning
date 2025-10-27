@@ -46,7 +46,7 @@ import jax
 import jax.numpy as jnp
 import optax
 from mujoco import mjx
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from brax.envs.wrappers import training as brax_training
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator

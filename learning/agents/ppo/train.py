@@ -42,7 +42,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 from learning.module.wrapper.evaluator import Evaluator
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 Metrics = types.Metrics

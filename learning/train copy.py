@@ -62,7 +62,7 @@ import warnings
 import pickle
 import shutil
 from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
-from mujoco_playground._src import mjx_env
+from custom_envs import mjx_env
 from utils import save_configs_to_wandb_and_local
 
 

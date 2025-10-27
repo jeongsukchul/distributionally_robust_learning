@@ -48,7 +48,7 @@ from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
 from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training          #changed with td3
 from learning.module.wrapper.dr_wrapper import wrap_for_dr_training          #changed with td3
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 
 
 Metrics = types.Metrics
@@ -290,7 +290,6 @@ def train(
       td3_network=td3_network,
       reward_scaling=reward_scaling,
       discounting=discounting,
-      action_size=action_size,
   )
   critic_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
       critic_loss, q_optimizer, has_aux=True, pmap_axis_name=_PMAP_AXIS_NAME

@@ -45,7 +45,7 @@ from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics, Transiti
 from learning.module.wrapper.adv_wrapper import wrap_for_adv_training
 from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
 from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training          #changed with tdmpc
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 
 
 Metrics = types.Metrics

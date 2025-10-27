@@ -39,7 +39,7 @@ from agents.wdtd3 import checkpoint
 from agents.wdtd3 import losses as wdtd3_losses
 from agents.wdtd3 import networks as wdtd3_networks
 from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training
-from mujoco_playground._src.wrapper import Wrapper, wrap_for_brax_training
+from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 from learning.module.wrapper.evaluator import Evaluator
 
 Metrics = types.Metrics

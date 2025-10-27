@@ -1,7 +1,7 @@
 from typing import NamedTuple, Callable, Optional, Tuple
 import chex
 import jax.numpy as jnp
-
+import jax
 
 class QuadRegressionState(NamedTuple):
     bias_entry: int
@@ -27,9 +27,11 @@ def setup_quad_regression(DIM):
 
     def fit_quadratic(regularizer: float, inputs: chex.Array,
                       outputs: chex.Array, num_samples,
-                      weights: chex.Array = None, sample_mean: chex.Array = None, sample_chol_cov: chex.Array = None,
+                      weights: chex.Array = None, sample_mean: chex.Array = None, sample_chol_cov: chex.Array = None
                       ) \
             -> Tuple[chex.Array, chex.Array, chex.Array]:
+        valid = jnp.isfinite(outputs)
+        outputs = jnp.where(valid, outputs, 0.)
         def _fit(regularizer: float, num_samples: int, inputs: chex.Array,
                  outputs: chex.Array, weights: chex.Array = None) -> chex.Array:
             def _feature_fn(num_samples: int, x: chex.Array) -> chex.Array:
@@ -53,15 +55,17 @@ def setup_quad_regression(DIM):
             if weights is not None:
                 if len(weights.shape) == 1:
                     weights = jnp.expand_dims(weights, 1)
+                weights = valid[:,None] * weights
                 weighted_features = jnp.transpose(weights * features)
             else:
-                weighted_features = jnp.transpose(features)
+                weighted_features = jnp.transpose(valid[:,None] * features)
             # regression
             reg_mat = jnp.eye(quad_reg_state.num_features) * regularizer
-            #
+            
             if quad_reg_state.bias_entry is not None:
                 bias_index = jnp.arange(len(reg_mat))[quad_reg_state.bias_entry]
                 reg_mat = reg_mat.at[bias_index, bias_index].set(0)
+            
             params = jnp.squeeze(jnp.linalg.solve(weighted_features @ features + reg_mat,
                                                   weighted_features @ jnp.expand_dims(outputs, 1)))
             return params

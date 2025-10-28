@@ -52,6 +52,9 @@ import optax
 from brax.envs.base import Wrapper, Env, State
 from brax.training.types import Policy, PolicyParams, PRNGKey, Metrics
 from flax.core import FrozenDict
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.tri as mtri
 from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
 Metrics = types.Metrics
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
@@ -59,6 +62,22 @@ InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 ReplayBufferState = Any
 
 _PMAP_AXIS_NAME = 'i'
+
+def target_contour_plot(samples, log_prob):
+  xy = np.asarray(samples)
+  x, y = xy[:, 0], xy[:,1]
+  z = np.asarray(log_prob)
+  m = np.isfinite(z)
+  x, y, z = x[m], y[m], z[m]
+
+  tri = mtri.Triangulation(x, y)
+  fig = plt.figure()
+  cs = plt.tricontourf(tri, z, levels=30, cmap='viridis')  # or tricontour for lines
+  plt.colorbar(cs, label='log p(x)')
+  plt.scatter(x, y, s=5, c='k', alpha=0.3)
+  wb = {"figures/target": [wandb.Image(fig)]}
+
+  return wb
 
 class TransitionwithGMMParams(NamedTuple):
   """Transition with additional dynamics parameters."""
@@ -177,6 +196,7 @@ def train(
     noise_clip=0.5,
     policy_noise = 0.2,
     value_obs_key="state",
+    distributional_q=False,
 ):
   """gmmtd3 training."""
   process_id = jax.process_index()
@@ -194,7 +214,7 @@ def train(
     raise ValueError(
         'No training will happen because min_replay_size >= num_timesteps'
     )
-  num_evals=10
+  # num_evals=(num_timesteps - num_prefill_env_steps)//env_steps_per_actor_step
   if max_replay_size is None:
     max_replay_size = num_timesteps
   st = time.time()
@@ -213,7 +233,7 @@ def train(
       -(num_timesteps - num_prefill_env_steps)
       // (num_evals_after_init * env_steps_per_actor_step)
   )
-
+  num_training_steps_per_epoch = 1
   assert num_envs % device_count == 0
   import copy
   env = copy.deepcopy(environment)
@@ -253,13 +273,14 @@ def train(
   normalize_fn = lambda x, y: x
   if normalize_observations:
     normalize_fn = running_statistics.normalize
+  gmm_batch_size=4096
   gmmtd3_network, gmm_init_state = network_factory(
       observation_size=obs_shape,
       action_size=action_size,
       dynamics_param_size = dynamics_param_size,
       prior_mean = dr_range_mid,
       prior_scale = (dr_range_high - dr_range_low)/10,
-      batch_size= batch_size,
+      batch_size= gmm_batch_size,
       num_envs = num_envs//jax.process_count(),
       init_key = init_key,
       preprocess_observations_fn=normalize_fn,
@@ -353,6 +374,13 @@ def train(
         'next_v_min' : next_v.min(),
         'next_v_max' : next_v.max(),
         'next_v_mean' : next_v.mean(),
+        'num_components' : new_gmm_training_state.model_state.gmm_state.num_components,
+        'gmm_mean_x_min' : new_gmm_training_state.model_state.gmm_state.means[:,0].min(),
+        'gmm_mean_x_mean' : new_gmm_training_state.model_state.gmm_state.means[:,0].mean(),
+        'gmm_mean_x_max' : new_gmm_training_state.model_state.gmm_state.means[:,0].max(),
+        'gmm_mean_y_min' : new_gmm_training_state.model_state.gmm_state.means[:,1].min(),
+        'gmm_mean_y_mean' : new_gmm_training_state.model_state.gmm_state.means[:,1].mean(),
+        'gmm_mean_y_max' : new_gmm_training_state.model_state.gmm_state.means[:,1].max(),
     }
 
     new_training_state = training_state.replace(
@@ -361,7 +389,7 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
-        # gmm_training_state = new_gmm_training_state,
+        gmm_training_state = new_gmm_training_state,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,
@@ -375,6 +403,7 @@ def train(
     gmm_training_state: GMMTrainingState,
     normalizer_params,
     q_params,
+    target_q_params,
     policy: Policy,
     noise_scales : jnp.ndarray,
     key: PRNGKey,
@@ -384,18 +413,25 @@ def train(
     # actions, policy_extras = policy(env_state.obs, noise_scales, key)
     dynamics_params, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
                                       param_key)
+    clip_mask = jnp.all((dynamics_params>=dr_range_low) & (dynamics_params<=dr_range_high), axis=-1)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
+
     nstate = env.step(env_state, actions, dynamics_params)
     model_grad = nstate.info['grad']
     state_extras = {x: nstate.info[x] for x in extra_fields} 
     # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
-    def target_log_fn(obs):
-      q_values = gmmtd3_network.q_network.apply(normalizer_params, q_params, obs, actions).mean(-1)
-      return q_values.mean(), (nstate, state_extras, q_values)
-    q_value_grad_fn = jax.grad(target_log_fn, has_aux=True)
-    q_value_grad, (nstate, state_extras, q_values) = q_value_grad_fn(nstate.obs)
-    target_grad = jax.tree_util.tree_map(lambda x,y: jnp.einsum('bxy,bx->by', x, y), model_grad, q_value_grad) #, model_grad @ q_value_grad
+    # def target_log_fn(obs):
+    #   q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, obs, actions).mean(-1)
+    #   loss = (clip_mask * q_values).mean()
+    #   q_values = jnp.where(clip_mask, q_values, -jnp.inf)
+    #   return loss, (nstate, state_extras, q_values)
+    # q_value_grad_fn = jax.grad(target_log_fn, has_aux=True)
+    # q_value_grad, (nstate, state_extras, q_values) = q_value_grad_fn(nstate.obs)
+    q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, env_state.obs, actions).mean(-1)
+    q_values = jnp.where(clip_mask, q_values, -jnp.inf)
+    # target_grad = jax.tree_util.tree_map(lambda x,y: jnp.einsum('bxy,bx->by', x, y), model_grad, q_value_grad) #, model_grad @ q_value_grad
     # target_grad = jnp.zeros_like(dynamics_params)
+    
     return nstate, TransitionwithGMMParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
@@ -405,7 +441,7 @@ def train(
         dynamics_params=dynamics_params,
         mapping=mapping,
         target_pdf=q_values,
-        target_pdf_grad= target_grad[value_obs_key],
+        target_pdf_grad= jnp.zeros_like(dynamics_params),
         # model_grad_norm = jnp.linalg.norm(model_grad[value_obs_key], axis=(1,2)),
         # value_grad_norm = jnp.linalg.norm(q_value_grad[value_obs_key], axis=-1),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
@@ -414,6 +450,7 @@ def train(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
       q_params : Params,
+      target_q_params : Params,
       noise_scales: jnp.ndarray,
       gmm_training_state : GMMTrainingState,
       env_state: envs.State,
@@ -427,7 +464,7 @@ def train(
     noise_key, key = jax.random.split(key)
     policy = make_policy((normalizer_params, policy_params))
     env_state, transitions = adv_step(
-        env, env_state, gmm_training_state, normalizer_params, q_params, policy, noise_scales, key, extra_fields=('truncation',)
+        env, env_state, gmm_training_state, normalizer_params, q_params, target_q_params, policy, noise_scales, key, extra_fields=('truncation',)
     )
     # print("sample db state info: samples ", gmm_training_state.sample_db_state.samples.shape)
     # print("sample db state info: samples(new) ", transitions.dynamics_params.shape)
@@ -453,7 +490,10 @@ def train(
     noise_scales = (1-env_state.done)* noise_scales + \
           env_state.done* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
     
-
+    q_values = transitions.target_pdf
+    mask = jnp.isfinite(q_values)
+    q_count = mask.sum()
+    q_values = jnp.where(mask, q_values, 0.)
     simul_info ={
       "simul/reward_mean" : transitions.reward.mean(),
       "simul/reward_std" : transitions.reward.std(),
@@ -461,8 +501,10 @@ def train(
       "simul/reward_min" : transitions.reward.min(),
       "simul/dynamics_params_mean" : transitions.dynamics_params.mean(),
       "simul/dynamics_params_std" :transitions.dynamics_params.std(),
-      # "simul/model_grad_norm_mean" : transitions.model_grad_norm.mean(),
-      # "simul/model_grad_norm_std" : transitions.model_grad_norm.std(),
+      "simul/q_values" : q_values/q_count,
+      "simul/q_values_std" : q_values.std(),
+      "simul/finite_ratio" : q_count/num_envs,
+      "simul/finite_count" : q_count,
       # "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
       # "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
     }
@@ -486,6 +528,7 @@ def train(
         training_state.normalizer_params,
         training_state.policy_params,
         training_state.q_params,
+        training_state.target_q_params,
         training_state.noise_scales,
         training_state.gmm_training_state,
         env_state,
@@ -526,6 +569,7 @@ def train(
           training_state.normalizer_params,
           training_state.policy_params,
           training_state.q_params,
+          training_state.target_q_params,
           training_state.noise_scales,
           training_state.gmm_training_state,
           env_state,
@@ -621,9 +665,9 @@ def train(
       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
   )
 
-  dynamics_params = jnp.zeros((local_devices_to_use, num_envs//jax.process_count(), dynamics_param_size))
+  # dynamics_params = jnp.zeros((local_devices_to_use, num_envs//jax.process_count(), dynamics_param_size))
   # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-  env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
+  env_state = jax.pmap(env.reset)(env_keys)
   obs_shape = jax.tree_util.tree_map(
       lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
   )
@@ -645,8 +689,8 @@ def train(
   del global_key
 
   # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-  dynamics_params = jax.random.uniform(param_key, shape=(num_envs//jax.process_count(), dynamics_param_size), minval=dr_range_low, maxval=dr_range_high)
-  env_state = jax.pmap(env.reset)(env_keys, dynamics_params[None,...])
+  # dynamics_params = jax.random.uniform(param_key, shape=(num_envs//jax.process_count(), dynamics_param_size), minval=dr_range_low, maxval=dr_range_high)
+  # env_state = jax.pmap(env.reset)(env_keys)
   if restore_checkpoint_path is not None:
     params = checkpoint.load(restore_checkpoint_path)
     training_state = training_state.replace(
@@ -705,25 +749,45 @@ def train(
   samples = gmmtd3_network.gmm_network.model.sample(_unpmap(training_state.gmm_training_state.model_state.gmm_state), sample_key, 1000)[0]
   log_prob_fn = jax.vmap(functools.partial(gmmtd3_network.gmm_network.model.log_density,\
                                             gmm_state=_unpmap(training_state.gmm_training_state.model_state.gmm_state)))
-  fig = gmm_utils.visualise(
-    log_prob_fn,
-    dr_range_low,
-    dr_range_high,
-    samples,
-  )
-  if use_wandb:
-    wandb.log(
-            fig,
-            step=int(0),
-        )
-  print("fig initial step")
+  if process_id ==0:
+    fig = gmm_utils.visualise(
+      log_prob_fn,
+      dr_range_low,
+      dr_range_high,
+      samples,
+    )
+    if use_wandb:
+      wandb.log(
+              fig,
+              step=int(0),
+          )
+    # samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
+    #   gmmtd3_network.gmm_network.sample_selector.select_train_datas(_unpmap(training_state.gmm_training_state.sample_db_state))
+    # fig2 = target_contour_plot(samples, target_lnpdfs)
+    # if use_wandb:
+    #   wandb.log(
+    #           fig2,
+    #           step=int(0),
+    #       )
+    metrics = evaluator.run_evaluation(
+      _unpmap(
+            (training_state.normalizer_params, training_state.policy_params)
+      ),
+      training_metrics={},
+
+    )
+    
+    logging.info(metrics)
+    progress_fn(0, metrics)
+
+    print("fig initial step")
   t = time.time()
   prefill_key, local_key = jax.random.split(local_key)
   prefill_keys = jax.random.split(prefill_key, local_devices_to_use)
   training_state, env_state, buffer_state, _ = prefill_replay_buffer(
       training_state, env_state, buffer_state, prefill_keys
   )
-
+  
   replay_size = (
       jnp.sum(jax.vmap(replay_buffer.size)(buffer_state)) * jax.process_count()
   )
@@ -762,15 +826,30 @@ def train(
       samples = gmmtd3_network.gmm_network.model.sample(_unpmap(training_state.gmm_training_state.model_state.gmm_state), sample_key, 1000)[0]
       log_prob_fn = jax.vmap(functools.partial(gmmtd3_network.gmm_network.model.log_density,\
                                             gmm_state=_unpmap(training_state.gmm_training_state.model_state.gmm_state)))
+      def target_log_fn(obs):
+        policy = make_policy(_unpmap(training_state.normalizer_params, training_state.policy_params))
+        actions = policy(obs)
+        q_values = gmmtd3_network.q_network.apply(_unpmap(training_state.normalizer_params), \
+                                                  _unpmap(training_state.target_q_params), obs, actions).mean(-1)
+        return q_values
       fig = gmm_utils.visualise(
         log_prob_fn,
         dr_range_low,
         dr_range_high,
         samples,
       )
+      
       if use_wandb:
         wandb.log(
                 fig,
+                step=int(current_step),
+            )
+      samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
+        gmmtd3_network.gmm_network.sample_selector.select_train_datas(_unpmap(training_state.gmm_training_state.sample_db_state))
+      fig2 = target_contour_plot(samples, target_lnpdfs)
+      if use_wandb:
+        wandb.log(
+                fig2,
                 step=int(current_step),
             )
       # Run evals.
@@ -821,7 +900,7 @@ def train(
 
   # If there was no mistakes the training_state should still be identical on all
   # devices.
-  pmap.assert_is_replicated(training_state)
+  # pmap.assert_is_replicated(training_state)
   logging.info('total steps: %s', total_steps)
   pmap.synchronize_hosts()
   return (functools.partial(make_policy, deterministic=True), params, metrics)

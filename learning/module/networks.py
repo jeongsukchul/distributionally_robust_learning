@@ -492,8 +492,8 @@ class DistributionalQ(linen.Module):
   num_atoms:int
   v_min :float
   v_max:float
-  layer_sizes: Sequence[int] = (1024, 512, 256),
-  activation: ActivationFn = linen.relu,
+  layer_sizes: Sequence[int] = (1024, 512, 256)
+  activation: ActivationFn = linen.relu
   @linen.compact
   def __call__(self, x):
     hidden = x 
@@ -504,7 +504,8 @@ class DistributionalQ(linen.Module):
       )(hidden)
       if i != len(self.layer_sizes) - 1:
         hidden = self.activation(hidden)
-    hidden = linen.Dense(self.num_atoms, name=f'final')
+
+    hidden = linen.Dense(self.num_atoms, name=f'final')(hidden)
     return hidden 
   def projection(self, x, target_z):
     delta_z = (self.v_max - self.v_min) / (self.num_atoms - 1)
@@ -512,8 +513,9 @@ class DistributionalQ(linen.Module):
 
     target_z = jnp.clip(target_z, self.v_min, self.v_max)
     b = (target_z - self.v_min) / delta_z
-    l = jnp.floor(b)
-    u = jnp.ceil(b)
+    l = jnp.floor(b).astype(jnp.int32)
+    u = jnp.clip(l + 1, 0, self.num_atoms - 1)
+    l = jnp.clip(l,     0, self.num_atoms - 1)
 
     l_mask = jnp.logical_and(u>0, l==u)
     u_mask = jnp.logical_and(l<(self.num_atoms -1), l==u)
@@ -559,34 +561,28 @@ def make_distributional_q_network(
 
     n_critics: int
 
+    def setup(self):
+      self.critics = [
+        DistributionalQ(
+          layer_sizes=list(hidden_layer_sizes),
+          num_atoms=num_atoms,
+          v_min=v_min,
+          v_max=v_max,
+          name=f'critic_{i}',
+        )
+        for i in range(self.n_critics)
+      ]
+
     @linen.compact
-    def __call__(self, obs: jnp.ndarray, actions: jnp.ndarray):
+    def __call__(self, obs, actions):
       hidden = jnp.concatenate([obs, actions], axis=-1)
-      res = []
-      for i in range(self.n_critics):
-        q = DistributionalQ(
-          layer_sizes=list(hidden_layer_sizes),
-          num_atoms=num_atoms,
-          v_min=v_min,
-          v_max=v_max,
-          name=f'critic_{i}',
-        )(hidden)
-        res.append(q)
-      return jnp.concatenate(res, axis=-1)
-    @linen.compact
+      outs = [crit(hidden) for crit in self.critics]  # __call__ ok
+      return jnp.stack(outs, axis=-1)
+
     def projection(self, obs, actions, target_q):
-      res = []
-      for i in range(self.n_critics):
-        hidden = jnp.concatenate([obs, actions], axis=-1)
-        q_proj = DistributionalQ(
-          layer_sizes=list(hidden_layer_sizes),
-          num_atoms=num_atoms,
-          v_min=v_min,
-          v_max=v_max,
-          name=f'critic_{i}',
-        )(hidden, target_q)
-        res.append(q_proj)
-      return jnp.concatenate(res, axis=-1)
+      hidden = jnp.concatenate([obs, actions], axis=-1)
+      outs = [crit.projection(hidden, target_q) for crit in self.critics]  # <-- direct call
+      return jnp.stack(outs, axis=-1)
   q_module = DistributionalQModule(n_critics=n_critics)
 
   def apply(processor_params, q_params, obs, actions, q_target=None, mode='call'):
@@ -596,11 +592,14 @@ def make_distributional_q_network(
       )
     else:
       obs = preprocess_observations_fn(obs, processor_params)
-    if mode=='call':
-      res = q_module.apply(q_params, obs, actions)
-    elif mode=='projection':
-      res = q_module.projection(q_params, obs, actions, q_target)
-    return res
+
+
+    if mode == 'call':
+      return q_module.apply(q_params, obs, actions)
+    elif mode == 'projection':
+      # IMPORTANT: call via apply(..., method=...)
+      return q_module.apply(q_params, obs, actions, q_target,
+                            method=DistributionalQModule.projection)
   obs_size = _get_obs_state_size(obs_size, obs_key)
   dummy_obs = jnp.zeros((1, obs_size))
   dummy_action = jnp.zeros((1, action_size))

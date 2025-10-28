@@ -35,8 +35,8 @@ def get_ng_update_fns(gmm_wrapper, quad_regression_fn, DIM, DIAGONAL_COVS, USE_S
         component_log_densities = jnp.transpose(component_log_densities)
         num_samples = samples.shape[0]
         log_ratios = target_lnpdfs - model_densities
-        target_mask = jnp.isfinite(target_lnpdfs)
-        model_mask = jnp.isfinite(model_densities)
+        # target_mask = jnp.isfinite(target_lnpdfs)
+        # model_mask = jnp.isfinite(model_densities)
         # jax.debug.print("target isfinite : {x}", x=target_mask)
         # jax.debug.print("model_mask : {x}", x=model_mask)
 

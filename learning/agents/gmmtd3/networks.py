@@ -75,6 +75,10 @@ def make_gmmtd3_networks(
     q_network_layer_norm: bool = False,
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
+    distributional_q : bool= False,
+    num_atoms: int = 101,
+    v_min: float = 0.,
+    v_max: float = 0.,
 ) -> GMMTd3Networks:
   """Make td3 networks."""
 

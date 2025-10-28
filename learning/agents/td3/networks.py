@@ -105,4 +105,4 @@ def make_td3_networks(
     return Td3Networks(
         policy_network=policy_network,
         q_network=q_network,
-    )
+    ), jnp.linspace(v_min, v_max, num_atoms)

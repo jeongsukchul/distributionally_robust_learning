@@ -156,6 +156,7 @@ def progress_fn(num_steps, metrics, use_wandb=True):
         wandb.log(metrics, step=num_steps)
     print("-------------------------------------------------------------------")
     print(f"num_steps: {num_steps}")
+    print(f"num_update_steps: {num_steps//8}")
     
     for k,v in metrics.items():
         print(f" {k} :  {v}")
@@ -302,11 +303,16 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         )
     
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    if cfg.adv_wrapper and cfg.custom_wrapper:
+        randomizer = registry.get_domain_randomizer_eval(cfg.task)
+    else:
+        randomizer = randomization_fn
     train_fn = functools.partial(
         td3.train, **dict(td3_training_params),
         network_factory=network_factory,
         progress_fn=progress,
-        randomization_fn=randomization_fn,
+        randomization_fn = randomizer,
+        eval_randomization_fn=randomization_fn,
         dr_train_ratio = cfg.dr_train_ratio,
         custom_wrapper = cfg.custom_wrapper,
         seed=cfg.seed,

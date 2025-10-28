@@ -182,9 +182,15 @@ def brax_td3_config(env_name: str) -> config_dict.ConfigDict:
   if env_name in ("CheetahRun","WalkerRun", "PendulumSwingUp", "HumanoidWalk", "CartpoleSwingup","HopperHop"):
     rl_config.network_factory = config_dict.create(
       q_network_layer_norm=True,
+      distributional_q = False,
+      v_min = -500.0,
+      v_max = 500.0,
       policy_obs_key="state",
       value_obs_key="privileged_state",
     )
+    rl_config.distributional_q = False
+    rl_config.policy_noise= 0.1
+    rl_config.std_min = 0.1
   return rl_config
 
 def brax_rambo_config(env_name: str) -> config_dict.ConfigDict:

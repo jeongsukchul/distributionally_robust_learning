@@ -143,6 +143,9 @@ def train(
     randomization_fn: Optional[
         Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
     ] = None,
+    eval_randomization_fn: Optional[
+        Callable[[base.System, jnp.ndarray], Tuple[base.System, base.System]]
+    ] = None,
     checkpoint_logdir: Optional[str] = None,
     restore_checkpoint_path: Optional[str] = None,
     dr_train_ratio = 1.0,
@@ -152,6 +155,7 @@ def train(
     noise_clip=0.5,
     custom_wrapper=False,
     adv_wrapper=False,
+    distributional_q=False,
 ):
   """td3 training."""
   process_id = jax.process_index()
@@ -184,6 +188,7 @@ def train(
   # equals to
   # ceil(num_timesteps - num_prefill_env_steps /
   #      (num_evals_after_init * env_steps_per_actor_step))
+  num_evals_after_init = 1000
   num_training_steps_per_epoch = -(
       -(num_timesteps - num_prefill_env_steps)
       // (num_evals_after_init * env_steps_per_actor_step)
@@ -229,6 +234,9 @@ def train(
         episode_length=episode_length,
         action_repeat=action_repeat,
         randomization_fn=training_randomization_fn,
+        param_size = len(dr_low),
+        dr_range_low=dr_low,
+        dr_range_high=dr_high,
       )
     else:
       env = wrap_for_dr_training(#wrap_for_training(
@@ -258,7 +266,7 @@ def train(
   normalize_fn = lambda x, y: x
   if normalize_observations:
     normalize_fn = running_statistics.normalize
-  td3_network = network_factory(
+  td3_network, q_support = network_factory(
       observation_size=obs_shape,
       action_size=action_size,
       preprocess_observations_fn=normalize_fn,
@@ -290,6 +298,7 @@ def train(
       td3_network=td3_network,
       reward_scaling=reward_scaling,
       discounting=discounting,
+      distributional_q=distributional_q,
   )
   critic_update = gradients.gradient_update_fn(  # pytype: disable=wrong-arg-types  # jax-ndarray
       critic_loss, q_optimizer, has_aux=True, pmap_axis_name=_PMAP_AXIS_NAME
@@ -305,16 +314,29 @@ def train(
     key, key_critic, key_actor,key_noise = jax.random.split(key, 4)
     noise = jax.random.normal(key_noise, shape=transitions.action.shape) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)
-    (critic_loss, (current_q, next_v)), q_params, q_optimizer_state = critic_update(
-        training_state.q_params,
-        training_state.policy_params,
-        training_state.normalizer_params,
-        training_state.target_q_params,
-        transitions,
-        noise,
-        key_critic,
-        optimizer_state=training_state.q_optimizer_state,
-    )
+    if distributional_q:
+      (critic_loss, (current_q, next_v)), q_params, q_optimizer_state = critic_update(
+          training_state.q_params,
+          training_state.policy_params,
+          training_state.normalizer_params,
+          training_state.target_q_params,
+          transitions,
+          noise,
+          q_support,
+          key_critic,
+          optimizer_state=training_state.q_optimizer_state,
+      )
+    else:
+      (critic_loss, (current_q, next_v)), q_params, q_optimizer_state = critic_update(
+          training_state.q_params,
+          training_state.policy_params,
+          training_state.normalizer_params,
+          training_state.target_q_params,
+          transitions,
+          noise,
+          key_critic,
+          optimizer_state=training_state.q_optimizer_state,
+      )
     actor_loss, policy_params, policy_optimizer_state = actor_update(
         training_state.policy_params,
         training_state.normalizer_params,
@@ -323,7 +345,8 @@ def train(
         key_actor,
         optimizer_state=training_state.policy_optimizer_state,
     )
-
+    # if distributional_q:
+      # tau = 0.1
     new_target_q_params = jax.tree_util.tree_map(
         lambda x, y: x * (1 - tau) + y * tau,
         training_state.target_q_params,
@@ -404,6 +427,7 @@ def train(
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
+      target_q_params: Params,
       noise_scales: jnp.ndarray,
       env_state: envs.State,
       buffer_state: ReplayBufferState,
@@ -425,6 +449,7 @@ def train(
     )
     noise_scales = (1-env_state.done)* noise_scales + \
           env_state.done * (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
+    q_values = td3_network.q_network.apply(normalizer_params, target_q_params, transitions.observation, transitions.action).mean(-1)
     
     # dynamics_params = jax.random.uniform(key=jax.random.PRNGKey(seed), shape=(noise_scales.shape[0],len(dr_low)), minval=dr_low, maxval=dr_high)
     simul_info ={
@@ -432,6 +457,14 @@ def train(
       "simul/reward_std" : transitions.reward.std(),
       "simul/reward_max" : transitions.reward.max(),
       "simul/reward_min" : transitions.reward.min(),
+      "simul/q_values" : q_values.mean(),
+      "simul/q_values_std" : q_values.std(),
+      "simul/q_values_max" : q_values.max(),
+      "simul/q_values_p75" : jnp.quantile(q_values, 0.75),
+      "simul/q_values_p25" : jnp.quantile(q_values, 0.25),
+      "simul/q_values_mid" : jnp.quantile(q_values, 0.5),
+      "simul/q_values_min" : q_values.min(),
+
       # "simul/dynamics_params_mean" : dynamics_params.mean(),
       # "simul/dynamics_params_std" : dynamics_params.std(),
     }
@@ -453,6 +486,7 @@ def train(
     normalizer_params, noise_scales, env_state, buffer_state, simul_info = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
+        training_state.target_q_params,
         training_state.noise_scales,
         env_state,
         buffer_state,
@@ -493,6 +527,7 @@ def train(
       new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
+          training_state.target_q_params,
           training_state.noise_scales,
           env_state,
           buffer_state,
@@ -569,18 +604,14 @@ def train(
 
   global_key, local_key = jax.random.split(rng)
   local_key = jax.random.fold_in(local_key, process_id)
-  local_key, rb_key, env_key, eval_key, param_key = jax.random.split(local_key, 5)
+  local_key, rb_key, env_key, eval_key, reset_key = jax.random.split(local_key, 5)
   env_keys = jax.random.split(env_key, num_envs // jax.process_count())
   env_keys = jnp.reshape(
       env_keys, (local_devices_to_use, -1) + env_keys.shape[1:]
   )
   if randomization_fn is not None and custom_wrapper :
-    if adv_wrapper:
-      dynamics_params = jax.random.uniform(key=param_key, shape=(num_envs // jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
-      dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-      env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
-    else:
-      env_state = jax.pmap(env.reset)(env_keys)#, dynamics_params
+
+    env_state = jax.pmap(env.reset)(env_keys)#, dynamics_params
   else:
     env_state = jax.pmap(env.reset)(env_keys)
   print("obs", jax.tree_util.tree_map( lambda x: x.shape , env_state.obs))
@@ -620,9 +651,9 @@ def train(
 
   eval_env = copy.deepcopy(environment)
   v_randomization_fn=None
-  if randomization_fn is not None:
+  if eval_randomization_fn is not None:
     v_randomization_fn = functools.partial(
-        randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), dr_range=env.dr_range
+        eval_randomization_fn, rng=jax.random.split(eval_key, num_eval_envs), dr_range=env.dr_range
     )
 
   eval_env = wrap_for_brax_training(

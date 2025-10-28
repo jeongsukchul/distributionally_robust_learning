@@ -50,26 +50,35 @@ def make_losses(
             q_support:jnp.ndarray,            
             key: PRNGKey,
         ) -> jnp.ndarray:
+            """ 
+            B : batch_size
+            A : num_atoms
+            N : num_critics(often just use 2)
+            """
+            batch_size = transitions.action.shape[0]
             q_old_action = q_network.apply(
-                normalizer_params, q_params, transitions.observation, transitions.action
+                normalizer_params, q_params, transitions.observation, transitions.action #[B, A, N]
             )
             next_action = policy_network.apply(
                 normalizer_params, policy_params, transitions.next_observation
             )
             next_action = jnp.clip(next_action + noise, -1.0, 1.0)
 
-            target_q =  transitions.reward * reward_scaling \
-                + transitions.discount * discounting * q_support
-            next_q_proj = q_network.apply(normalizer_params, q_params, transitions.next_observation, next_action, target_q, mode="projection")
-            next_q_value = jnp.sum(next_q_proj * q_support, axis=-1)
-            q_error = q_old_action - jnp.expand_dims(target_q, -1)
+            target_q =  transitions.reward[..., None] * reward_scaling \
+                + transitions.discount[..., None] * discounting * q_support[None, ...] #[B, A,]
+            next_q_proj = q_network.apply(normalizer_params, target_q_params, \
+                                          transitions.next_observation, next_action, target_q, mode="projection") # [B, A, N]
+            next_q_value = jnp.sum(next_q_proj * q_support[None, :, None], axis=1) #[B, N]
+            min_idx = next_q_value.argmin(axis=-1)       #[B,]
+            target_dist = jnp.swapaxes(next_q_proj, 1, 2)[jnp.arange(batch_size), min_idx] #[B,A]
 
+            q_error = -jnp.sum(target_dist[...,None]*jax.nn.log_softmax(q_old_action, axis=1), axis=(1,2))
             # Better bootstrapping for truncated episodes.
             truncation = transitions.extras['state_extras']['truncation']
-            q_error *= jnp.expand_dims(1 - truncation, -1)
-
-            q_loss = 0.5 * jnp.mean(jnp.square(q_error))
-            return q_loss, (q_old_action, next_v)
+            q_error *= 1-truncation
+            q_loss = q_error.mean()
+            # q_loss = 0.5 * jnp.mean(jnp.square(q_error))
+            return q_loss, (q_old_action, next_q_value)
     else:
         def critic_loss(
             q_params: Params,

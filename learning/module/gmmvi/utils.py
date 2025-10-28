@@ -66,7 +66,7 @@ def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, 
 
     # plt.savefig(os.path.join(project_path('./samples/funnel/'), f"{prefix}funnel.pdf"), bbox_inches='tight', pad_inches=0.1)
 
-    wb = {"figures/vis": [wandb.Image(fig)]}
+    wb = {"figures/model": [wandb.Image(fig)]}
 
     if show:
         plt.show()

@@ -17,6 +17,7 @@ eval_with_training_env : false #added
 #policy
 policy : td3
 asymmetric_critic: true
+distributional_q : false
 
 #dynamics shift
 randomization: true
@@ -74,7 +75,6 @@ custom_wrapper: true
 adv_wrapper : true
 #flow
 flow_lr : ???
-dr_flow : false
 dr_train_ratio : 1.0
 
 #simba

@@ -89,8 +89,10 @@ class AdVmapWrapper(Wrapper):
       params = jax.random.uniform(param_rng, (self.param_size,), minval=self.dr_range_low, maxval=self.dr_range_high)
       mjx_model, inaxes = self.rand_fn(params=params)
       with self.v_env_fn(mjx_model) as v_env:
-        return v_env.reset(rng)
-    state = jax.vmap(dr_reset, )(rng)
+        return v_env.reset(rng), params
+    state, params = jax.vmap(dr_reset, )(rng)
+    state.info['dr_params'] = params
+
     if self.get_grad:
       state.info['grad']=jax.tree_util.tree_map(lambda x: jnp.zeros((x.shape + (self.param_size,))), state.obs)
     return state
@@ -111,11 +113,14 @@ class AdVmapWrapper(Wrapper):
       ns = jax.vmap(step_and_grad)(
         params, state, action
       )
-      return ns
+
     else:
       return jax.vmap(step)(
         params, state, action
       )
+    ns.info['dr_params'] = params
+
+    return ns
     
 class EpisodeWrapper(Wrapper):
   """Maintains episode step count and sets done at episode end."""
@@ -178,7 +183,7 @@ class BraxAutoResetWrapper(Wrapper):
     self._full_reset = full_reset
     self._info_key = 'AutoResetWrapper'
 
-  def reset(self, rng: jax.Array, params: jax.Array) -> mjx_env.State:
+  def reset(self, rng: jax.Array) -> mjx_env.State:
     rng_key = jax.vmap(jax.random.split)(rng)
     rng, key = rng_key[..., 0], rng_key[..., 1]
     state = self.env.reset(key)
@@ -188,7 +193,6 @@ class BraxAutoResetWrapper(Wrapper):
     state.info[f'{self._info_key}_done_count'] = jnp.zeros(
         key.shape[:-1], dtype=int
     )
-    state.info['dr_params'] = params
     return state
   def step(self, state: mjx_env.State, action: jax.Array, params : jax.Array) -> mjx_env.State:
     # grab the reset state.
@@ -211,7 +215,6 @@ class BraxAutoResetWrapper(Wrapper):
 
     state = state.replace(done=jnp.zeros_like(state.done))
     state = self.env.step(state, action, params)
-    state.info['dr_params'] = params
     def where_done(x, y):
       done = state.done
       if done.shape and done.shape[0] != x.shape[0]:

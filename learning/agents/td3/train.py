@@ -409,7 +409,7 @@ def train(
     if randomization_fn is not None and custom_wrapper:
       if adv_wrapper:
         dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs//jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
-        params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
+        # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
         nstate = env.step(env_state, actions, params)
       else:
         nstate = env.step(env_state, actions, step_key)

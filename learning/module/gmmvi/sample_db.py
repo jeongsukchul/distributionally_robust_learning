@@ -45,61 +45,73 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, MAX_COMPONENTS, DIAGONAL_COVS
     def add_samples(sampledb_state: SampleDBState, new_samples, new_means, new_chols, new_target_lnpdfs,
                     new_target_grads, new_mapping):
         num_samples_written = sampledb_state.num_samples_written + jnp.shape(new_samples)[0]
+
+        finite_mask = jnp.isfinite(new_target_lnpdfs)  # [SAMPLE_SIZE]
+        finite_mask_exp = finite_mask[:, None]         # [SAMPLE_SIZE, 1]
+
         if KEEP_SAMPLES:
-            num_components = jnp.shape(new_means)[0]
-            mapping = jnp.roll(sampledb_state.mapping, SAMPLE_SIZE, axis=0)
-            mapping = mapping.at[:SAMPLE_SIZE].set(new_mapping)
-            # means = jnp.roll(sampledb_state.means, num_components, axis=0)
-            # means = means.at[:num_components].set(new_means)
-            means = new_means
-            # chols = jnp.roll(sampledb_state.chols, num_components, axis=0)
-            # chols = chols.at[:num_components].set(new_chols)
-            chols = new_chols
+            # Roll the buffer and then selectively overwrite only finite rows in the front window.
+            front_samples_prev = sampledb_state.samples[:SAMPLE_SIZE]
+            front_lnpdfs_prev = sampledb_state.target_lnpdfs[:SAMPLE_SIZE]
+            front_grads_prev = sampledb_state.target_grads[:SAMPLE_SIZE]
+            front_mapping_prev = sampledb_state.mapping[:SAMPLE_SIZE]
+
             samples = jnp.roll(sampledb_state.samples, SAMPLE_SIZE, axis=0)
-            samples = samples.at[:SAMPLE_SIZE].set(new_samples)
             target_lnpdfs = jnp.roll(sampledb_state.target_lnpdfs, SAMPLE_SIZE, axis=0)
-            target_lnpdfs = target_lnpdfs.at[:SAMPLE_SIZE].set(new_target_lnpdfs)
             target_grads = jnp.roll(sampledb_state.target_grads, SAMPLE_SIZE, axis=0)
-            target_grads = target_grads.at[:SAMPLE_SIZE].set(new_target_grads)
-            # mapping = jnp.concatenate((sampledb_state.mapping, new_mapping + jnp.shape(sampledb_state.chols)[0]))
-            # means = jnp.concatenate((sampledb_state.means, new_means))
-            # chols = jnp.concatenate((sampledb_state.chols, new_chols))
-            # samples = jnp.concatenate((sampledb_state.samples, new_samples))
-            # target_lnpdfs = jnp.concatenate((sampledb_state.target_lnpdfs, new_target_lnpdfs))
-            # target_grads = jnp.concatenate((sampledb_state.target_grads, new_target_grads))
+            mapping = jnp.roll(sampledb_state.mapping, SAMPLE_SIZE, axis=0)
 
-            if DIAGONAL_COVS:
-                # inv_chols = jnp.roll(sampledb_state.inv_chols, num_components, axis=0)
-                # inv_chols = inv_chols.at[:num_components].set(1./new_chols)
-                inv_chols = 1./new_chols
-                # inv_chols = jnp.concatenate((sampledb_state.inv_chols, 1. / new_chols))
-            else:
-                # inv_chols = jnp.roll(sampledb_state.inv_chols, num_components, axis=0)
-                # inv_chols = inv_chols.at[:num_components].set(jnp.linalg.inv(new_chols))
-                inv_chols = jnp.linalg.inv(new_chols)
-                # inv_chols = jnp.concatenate((sampledb_state.inv_chols, jnp.linalg.inv(new_chols)))
-        else:
-            mapping = new_mapping
+
+            # Keep previous row when not finite.
+            front_samples = jnp.where(finite_mask_exp, new_samples, front_samples_prev)
+            front_lnpdfs = jnp.where(finite_mask, new_target_lnpdfs, front_lnpdfs_prev)
+            front_grads = jnp.where(finite_mask_exp, new_target_grads, front_grads_prev)
+            front_mapping = jnp.where(finite_mask, new_mapping, front_mapping_prev)
+
+            samples = samples.at[:SAMPLE_SIZE].set(front_samples)
+            target_lnpdfs = target_lnpdfs.at[:SAMPLE_SIZE].set(front_lnpdfs)
+            target_grads = target_grads.at[:SAMPLE_SIZE].set(front_grads)
+            mapping = mapping.at[:SAMPLE_SIZE].set(front_mapping)
+
             means = new_means
             chols = new_chols
-            if DIAGONAL_COVS:
-                inv_chols = 1. / new_chols
-            else:
-                inv_chols = jnp.linalg.inv(new_chols)
-            samples = new_samples
-            target_lnpdfs = new_target_lnpdfs
-            target_grads = new_target_grads
+            inv_chols = jnp.linalg.inv(new_chols)
+        else:
+            # Overwrite only the first SAMPLE_SIZE window; keep old content for invalid rows.
+            samples = sampledb_state.samples
+            target_lnpdfs = sampledb_state.target_lnpdfs
+            target_grads = sampledb_state.target_grads
+            mapping = sampledb_state.mapping
 
-        return SampleDBState(num_samples_written=num_samples_written,
-                             samples=samples,
-                             target_lnpdfs=target_lnpdfs,
-                             target_grads=target_grads,
-                             mapping=mapping,
-                             means=means,
-                             chols=chols,
-                             inv_chols=inv_chols,
-                             )
+            prev_samples = samples[:SAMPLE_SIZE]
+            prev_lnpdfs = target_lnpdfs[:SAMPLE_SIZE]
+            prev_grads = target_grads[:SAMPLE_SIZE]
+            prev_mapping = mapping[:SAMPLE_SIZE]
 
+            new_front_samples = jnp.where(finite_mask_exp, new_samples, prev_samples)
+            new_front_lnpdfs = jnp.where(finite_mask, new_target_lnpdfs, prev_lnpdfs)
+            new_front_grads = jnp.where(finite_mask_exp, new_target_grads, prev_grads)
+            new_front_mapping = jnp.where(finite_mask, new_mapping, prev_mapping)
+
+            samples = samples.at[:SAMPLE_SIZE].set(new_front_samples)
+            target_lnpdfs = target_lnpdfs.at[:SAMPLE_SIZE].set(new_front_lnpdfs)
+            target_grads = target_grads.at[:SAMPLE_SIZE].set(new_front_grads)
+            mapping = mapping.at[:SAMPLE_SIZE].set(new_front_mapping)
+
+            means = new_means
+            chols = new_chols
+            inv_chols = jnp.linalg.inv(new_chols)
+
+        return SampleDBState(
+            num_samples_written=num_samples_written,
+            samples=samples,
+            target_lnpdfs=target_lnpdfs,
+            target_grads=target_grads,
+            mapping=mapping,
+            means=means,
+            chols=chols,
+            inv_chols=inv_chols,
+        )
     def get_random_sample(sample_db_state: SampleDBState, N: int, seed: chex.PRNGKey):
         chosen_indices = jax.random.permutation(seed, jnp.arange(jnp.shape(sample_db_state.samples)[0]),
                                                 independent=True)[:N]

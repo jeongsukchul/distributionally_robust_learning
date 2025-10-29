@@ -189,11 +189,11 @@ def setup_vips_component_adaptation(sample_db: SampleDB, gmm_wrapper: GMMWrapper
         def add_new(args):
             gs, cs, ss, s = args
             return _add_new_component(gs,cs,ss,s)
-        # gmm_wrapper_state, component_adaption_state = jax.lax.cond(do_delete, delete_bad, \
-        #                                                            lambda args : args, operand=(gmm_wrapper_state, component_adaption_state))
-        # gmm_wrapper_state, component_adaption_state, sample_db_state = jax.lax.cond(add_iter,
-        #                         add_new, lambda args: args[:-1],
-        #                         operand=(gmm_wrapper_state, component_adaption_state, sample_db_state, seed))
+        gmm_wrapper_state, component_adaption_state = jax.lax.cond(do_delete, delete_bad, \
+                                                                   lambda args : args, operand=(gmm_wrapper_state, component_adaption_state))
+        gmm_wrapper_state, component_adaption_state, sample_db_state = jax.lax.cond(add_iter,
+                                add_new, lambda args: args[:-1],
+                                operand=(gmm_wrapper_state, component_adaption_state, sample_db_state, seed))
 
         return gmm_wrapper_state, component_adaption_state, sample_db_state
     # def adapt_number_of_components(component_adaption_state: ComponentAdaptationState,

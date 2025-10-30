@@ -49,9 +49,10 @@ def create_gmm_network_and_state(
     key : jax.random.PRNGKey,
     prior_mean : float = 0.,
     prior_scale : float = 1.,
+    bound_info : dict = None,
 ):  
     
-    gmm = setup_full_cov_gmm(dim, cfg.max_components)
+    gmm = setup_full_cov_gmm(dim, cfg.max_components, bound_info)
     
     gmm_state = gmm.init_gmm_state(key,
                                 cfg.num_initial_components,
@@ -71,7 +72,8 @@ def create_gmm_network_and_state(
                             cfg.max_components,
                             cfg.use_diagonal_convs,
                             batch_size,
-                            num_envs)
+                            num_envs,
+                            inv_bijector=model.inv_bijector)
     sample_db_state = sample_db.init_sampleDB_state()
     quad_regression_fn = setup_quad_regression(dim)
     # 'S' ; Stein Estimator +  'T' : Trust Rgeion Component Updater

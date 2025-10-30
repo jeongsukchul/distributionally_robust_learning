@@ -20,6 +20,8 @@ class GMM(NamedTuple):
     log_densities_also_individual: Callable
     log_density: Callable
     log_density_and_grad: Callable
+    bijector: Callable
+    inv_bijector: Callable
 
 class GMMState(NamedTuple):
     log_weights: chex.Array
@@ -44,7 +46,8 @@ class GMMWrapper(NamedTuple):
     sample_from_components_shuffle: Callable
     log_density_and_grad: Callable
     sample: Callable
-
+    bijector: Callable
+    inv_bijector:Callable
 class GMMWrapperState(NamedTuple):
     gmm_state: GMMState
     l2_regularizers: chex.Array
@@ -121,7 +124,9 @@ def setup_gmm_wrapper(gmm: GMM, MAX_COMPONENTS, INITIAL_STEPSIZE, INITIAL_REGULA
                       sample_from_components_no_shuffle=gmm.sample_from_components_no_shuffle,
                       sample_from_components_shuffle=gmm.sample_from_components_shuffle,
                       log_density_and_grad=gmm.log_density_and_grad,
-                      sample=gmm.sample)
+                      sample=gmm.sample,
+                      bijector=gmm.bijector,
+                      inv_bijector=gmm.inv_bijector)
 
 
 def _setup_initial_mixture_params(NUM_DIM, key, diagonal_covs, MAX_COMPONENTS, num_initial_components, prior_mean, prior_scale,
@@ -277,27 +282,28 @@ def setup_get_average_entropy_fn(gaussian_entropy_fn: Callable):
     return get_average_entropy
 
 
-def setup_log_density_fn(component_log_densities_fn: Callable):
+def setup_log_density_fn(component_log_densities_fn: Callable, inv_bijector, bijector_log_prob):
     def log_density(gmm_state: GMMState, sample: chex.Array) -> chex.Array:
-        log_densities = component_log_densities_fn(gmm_state, sample)
+        bounded_sample = inv_bijector(sample)
+        log_densities = component_log_densities_fn(gmm_state, bounded_sample)
         log_densities = jnp.where(gmm_state.component_mask > 0, log_densities, -jnp.inf)
         weighted_densities = log_densities + gmm_state.log_weights
-        return jax.nn.logsumexp(weighted_densities)
+        return jax.nn.logsumexp(weighted_densities) + bijector_log_prob(sample)
 
     return log_density
 
 
-def setup_log_density_and_grad_fn(component_log_densities_fn: Callable):
+def setup_log_density_and_grad_fn(component_log_densities_fn: Callable, inv_bijector, bijector_log_prob):
     def log_density_and_grad(gmm_state: GMMState, sample: chex.Array) -> Tuple[chex.Array, chex.Array, chex.Array]:
         def compute_log_densities(sample):
-            log_densities = component_log_densities_fn(gmm_state, sample)
+            bounded_sample = inv_bijector(sample)
+            log_densities = component_log_densities_fn(gmm_state, bounded_sample)
             log_densities = jnp.where(gmm_state.component_mask > 0, log_densities, -jnp.inf)
             weighted_densities = log_densities + gmm_state.log_weights
 
-            x = jax.nn.logsumexp(weighted_densities, axis=0)
+            x = jax.nn.logsumexp(weighted_densities, axis=0) + bijector_log_prob(sample)
 
             return x, log_densities
-
         (log_densities, log_component_densities), log_densities_grad = jax.value_and_grad(compute_log_densities,
                                                                                           has_aux=True)(sample)
 
@@ -306,12 +312,13 @@ def setup_log_density_and_grad_fn(component_log_densities_fn: Callable):
     return log_density_and_grad
 
 
-def setup_log_densities_also_individual_fn(component_log_densities_fn: Callable):
+def setup_log_densities_also_individual_fn(component_log_densities_fn: Callable, inv_bijector, bijector_log_prob):
     def log_densities_also_individual(gmm_state: GMMState, sample: chex.Array) -> Tuple[chex.Array, chex.Array]:
-        log_densities = component_log_densities_fn(gmm_state, sample)
+        bounded_sample = inv_bijector(sample)
+        log_densities = component_log_densities_fn(gmm_state, bounded_sample)
         log_densities = jnp.where(gmm_state.component_mask > 0, log_densities, -jnp.inf)
-        weighted_densities = log_densities + gmm_state.log_weights
-        return jax.nn.logsumexp(weighted_densities), log_densities
+        weighted_densities = log_densities + gmm_state.log_weights 
+        return jax.nn.logsumexp(weighted_densities) + bijector_log_prob(sample), log_densities
 
     return log_densities_also_individual
 
@@ -372,7 +379,20 @@ def setup_log_densities_also_individual_fn(component_log_densities_fn: Callable)
 #                log_density_and_grad=setup_log_density_and_grad_fn(component_log_densities))
 
 
-def setup_full_cov_gmm(DIM, MAX_COMPONENTS) -> GMM:
+def setup_full_cov_gmm(DIM, MAX_COMPONENTS, bound_info=None) -> GMM:
+    if bound_info is not None:
+        low, high = bound_info
+        bijector = lambda x:  jnp.tanh(x)*(high-low)/2 + (low+high)/2
+        # bijector = lambda x: x
+        inv_bijector = lambda x: jnp.arctan((2*x-(low+high))/(high-low))
+        # inv_bijector = lambda x: x
+        bijector_log_prob = lambda x : jnp.log(2 * jnp.ones_like(low)).sum(-1) -jnp.log(high-low).sum(-1)-jnp.log(1- ((2*x-(low+high))/(high-low))**2).sum(-1)
+        bijector_log_prob = lambda x : -jnp.log(1- ((2*x-(low+high))/(high-low))**2).sum(-1)
+        # bijector_log_prob = lambda x : 0
+    else:
+        bijector = lambda x: x
+        inv_bijector = lambda x: x
+        bijector_log_prob = lambda x : 0
     def init_full_cov_gmm_state(seed, num_initial_components, prior_mean, prior_scale, diagonal_covs, initial_cov=None):
         weights, means, chol_covs = _setup_initial_mixture_params(DIM, seed, diagonal_covs, MAX_COMPONENTS, num_initial_components,
                                                                   prior_mean, prior_scale, initial_cov)
@@ -386,9 +406,9 @@ def setup_full_cov_gmm(DIM, MAX_COMPONENTS) -> GMM:
     def sample_from_component(gmm_state: GMMState, index: int, num_samples: int, seed: chex.Array) -> chex.Array:
         Z = jax.random.normal(seed, shape=(DIM, num_samples))
         return (gmm_state.means[index][:, None] + gmm_state.chol_covs[index] @Z).T
-        return jnp.transpose(jnp.expand_dims(gmm_state.means[index], axis=-1)
-                             + gmm_state.chol_covs[index] @ jax.random.normal(key=seed, shape=(DIM, num_samples)))
-
+    def sample_from_component_bijected(gmm_state: GMMState, index: int, num_samples: int, seed: chex.Array) -> chex.Array:
+        Z = jax.random.normal(seed, shape=(DIM, num_samples))
+        return bijector((gmm_state.means[index][:, None] + gmm_state.chol_covs[index] @Z).T)
     def component_log_densities(gmm_state: GMMState, sample: chex.Array) -> chex.Array:
         mask = gmm_state.component_mask
         chol_safe = gmm_state.chol_covs * mask[:, None, None] + jnp.eye(DIM)[None, :, :] * (1.0 - mask[:, None, None])
@@ -424,15 +444,21 @@ def setup_full_cov_gmm(DIM, MAX_COMPONENTS) -> GMM:
         #                 num_components=gmm_state.num_components + 1)
 
     return GMM(init_gmm_state=init_full_cov_gmm_state,
-               sample=setup_sample_fn(sample_from_component),
-               sample_from_components_no_shuffle=setup_sample_from_components_no_shuffle_fn(sample_from_component),
-               sample_from_components_shuffle=setup_sample_from_components_shuffle_fn(sample_from_component),
+               sample=setup_sample_fn(sample_from_component_bijected),
+               sample_from_components_no_shuffle=setup_sample_from_components_no_shuffle_fn(sample_from_component_bijected),
+               sample_from_components_shuffle=setup_sample_from_components_shuffle_fn(sample_from_component_bijected),
                add_component=add_component,
                remove_component=functools.partial(remove_component, MAX_COMPONENTS=MAX_COMPONENTS, DIM=DIM),
                replace_components=replace_components,
                average_entropy=setup_get_average_entropy_fn(gaussian_entropy),
                replace_weights=replace_weights,
                component_log_densities=component_log_densities,
-               log_density=setup_log_density_fn(component_log_densities),
-               log_densities_also_individual=setup_log_densities_also_individual_fn(component_log_densities),
-               log_density_and_grad=setup_log_density_and_grad_fn(component_log_densities))
+               log_density=setup_log_density_fn(component_log_densities, \
+                                                inv_bijector=inv_bijector, bijector_log_prob=bijector_log_prob),
+               log_densities_also_individual=setup_log_densities_also_individual_fn(component_log_densities, \
+                                                inv_bijector=inv_bijector, bijector_log_prob=bijector_log_prob),
+               log_density_and_grad=setup_log_density_and_grad_fn(component_log_densities, \
+                                                inv_bijector=inv_bijector, bijector_log_prob=bijector_log_prob),
+               bijector=bijector,
+               inv_bijector=inv_bijector,
+            )       

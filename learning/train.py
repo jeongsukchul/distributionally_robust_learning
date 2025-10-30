@@ -303,7 +303,7 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         )
     
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
-    if cfg.adv_wrapper and cfg.custom_wrapper:
+    if cfg.custom_wrapper:
         randomizer = registry.get_domain_randomizer_eval(cfg.task)
     else:
         randomizer = randomization_fn
@@ -460,12 +460,14 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
             **flowtd3_params.network_factory,
         )
         
+    randomizer = registry.get_domain_randomizer_eval(cfg.task)
     progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
     train_fn = functools.partial(  
         flowtd3.train, **dict(flowtd3_training_params),
         network_factory=network_factory,
         progress_fn=progress,
-        randomization_fn=randomization_fn,
+        eval_randomization_fn=randomization_fn,
+        randomization_fn=randomizer,
         use_wandb=cfg.use_wandb,
         dr_train_ratio = cfg.dr_train_ratio,
         seed=cfg.seed,
@@ -485,7 +487,7 @@ def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
         if param in cfg and getattr(cfg, param) is not None:
             gmmtd3_params[param] = getattr(cfg, param)
     gmmtd3_params['num_evals'] = 1000
-    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.dr_train_ratio={cfg.dr_train_ratio}"
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.asym={cfg.asymmetric_critic}.dr_train_ratio={cfg.dr_train_ratio}"
     wandb_name += cfg.comment
     if cfg.use_wandb:
         wandb.init(
@@ -711,7 +713,7 @@ def train(cfg: dict):
     else:
         eval_env = registry.load(cfg.task, config=env_cfg)
     if cfg.save_video and cfg.use_wandb:
-        n_episodes = 100
+        n_episodes = 10
         jit_inference_fn = jax.jit(make_inference_fn(params,deterministic=True))
         jit_reset = jax.jit(eval_env.reset)
         jit_step = jax.jit(eval_env.step)

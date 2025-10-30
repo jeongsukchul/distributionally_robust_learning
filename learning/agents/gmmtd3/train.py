@@ -56,6 +56,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.tri as mtri
 from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
+from matplotlib.ticker import MaxNLocator
 Metrics = types.Metrics
 InferenceParams = Tuple[running_statistics.NestedMeanStd, Params]
 
@@ -71,13 +72,17 @@ def target_contour_plot(samples, log_prob):
   x, y, z = x[m], y[m], z[m]
 
   tri = mtri.Triangulation(x, y)
-  fig = plt.figure()
+  fig, ax = plt.subplots()
   cs = plt.tricontourf(tri, z, levels=30, cmap='viridis')  # or tricontour for lines
   plt.colorbar(cs, label='log p(x)')
   plt.scatter(x, y, s=5, c='k', alpha=0.3)
-  wb = {"figures/target": [wandb.Image(fig)]}
+  ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+  ax.yaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+  ax.minorticks_on()
+  ax.grid(True, which='major', alpha=0.25, linewidth=0.8)
+  ax.grid(True, which='minor', alpha=0.12, linewidth=0.6)
 
-  return wb
+  return fig
 
 class TransitionwithGMMParams(NamedTuple):
   """Transition with additional dynamics parameters."""
@@ -88,8 +93,8 @@ class TransitionwithGMMParams(NamedTuple):
   next_observation: jax.Array
   dynamics_params: jax.Array
   mapping : jax.Array
-  target_pdf: jax.Array
-  target_pdf_grad: jax.Array
+  target_lnpdf: jax.Array
+  target_lnpdf_grad: jax.Array
   # model_grad_norm : jax.Array
   # value_grad_norm : jax.Array
   extras: FrozenDict[str, Any]  # recommended
@@ -225,6 +230,7 @@ def train(
   num_prefill_env_steps = num_prefill_actor_steps * env_steps_per_actor_step
   assert num_timesteps - num_prefill_env_steps >= 0
   num_evals_after_init = max(num_evals - 1, 1)
+  num_evals_after_init = 100
   # The number of run_one_td3_epoch calls per run_td3_training.
   # equals to
   # ceil(num_timesteps - num_prefill_env_steps /
@@ -233,7 +239,7 @@ def train(
       -(num_timesteps - num_prefill_env_steps)
       // (num_evals_after_init * env_steps_per_actor_step)
   )
-  num_training_steps_per_epoch = 1
+  print("num training steps per epoch", num_training_steps_per_epoch)
   assert num_envs % device_count == 0
   import copy
   env = copy.deepcopy(environment)
@@ -304,8 +310,8 @@ def train(
       next_observation=dummy_obs,
       dynamics_params=dummy_params,
       mapping=0,
-      target_pdf=0.,
-      target_pdf_grad=dummy_params,
+      target_lnpdf=0.,
+      target_lnpdf_grad=dummy_params,
       # model_grad_norm = 0,
       # value_grad_norm = 0,
       extras={'state_extras': {'truncation': 0.0}, 'policy_extras': {}},
@@ -335,7 +341,7 @@ def train(
   ) -> Tuple[Tuple[TrainingState, PRNGKey], Metrics]:
     training_state, key = carry
 
-    key, key_critic, key_actor,key_noise,key_gmm = jax.random.split(key, 5)
+    key, key_critic, key_actor,key_noise = jax.random.split(key, 4)
     
     noise = jax.random.normal(key_noise, shape=transitions.action.shape) * policy_noise
     noise = jnp.clip(noise,-noise_clip, noise_clip)
@@ -357,7 +363,6 @@ def train(
         key_actor,
         optimizer_state=training_state.policy_optimizer_state,
     )
-    new_gmm_training_state = gmm_update(training_state.gmm_training_state, key_gmm)
 
     new_target_q_params = jax.tree_util.tree_map(
         lambda x, y: x * (1 - tau) + y * tau,
@@ -374,13 +379,7 @@ def train(
         'next_v_min' : next_v.min(),
         'next_v_max' : next_v.max(),
         'next_v_mean' : next_v.mean(),
-        'num_components' : new_gmm_training_state.model_state.gmm_state.num_components,
-        'gmm_mean_x_min' : new_gmm_training_state.model_state.gmm_state.means[:,0].min(),
-        'gmm_mean_x_mean' : new_gmm_training_state.model_state.gmm_state.means[:,0].mean(),
-        'gmm_mean_x_max' : new_gmm_training_state.model_state.gmm_state.means[:,0].max(),
-        'gmm_mean_y_min' : new_gmm_training_state.model_state.gmm_state.means[:,1].min(),
-        'gmm_mean_y_mean' : new_gmm_training_state.model_state.gmm_state.means[:,1].mean(),
-        'gmm_mean_y_max' : new_gmm_training_state.model_state.gmm_state.means[:,1].max(),
+
     }
 
     new_training_state = training_state.replace(
@@ -389,7 +388,7 @@ def train(
         q_optimizer_state=q_optimizer_state,
         q_params=q_params,
         target_q_params=new_target_q_params,
-        gmm_training_state = new_gmm_training_state,
+        # gmm_training_state = new_gmm_training_state,
         gradient_steps=training_state.gradient_steps + 1,
         env_steps=training_state.env_steps,
         normalizer_params=training_state.normalizer_params,
@@ -413,10 +412,15 @@ def train(
     # actions, policy_extras = policy(env_state.obs, noise_scales, key)
     dynamics_params, mapping = gmmtd3_network.gmm_network.sample_selector.select_samples(gmm_training_state.model_state,
                                       param_key)
+    params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
     clip_mask = jnp.all((dynamics_params>=dr_range_low) & (dynamics_params<=dr_range_high), axis=-1)
+    reuse_mask = env_state.done
+    print("clip_mask",clip_mask)
+    print("reuse_mask",reuse_mask)
+    mask = clip_mask * reuse_mask
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
 
-    nstate = env.step(env_state, actions, dynamics_params)
+    nstate = env.step(env_state, actions, params)
     model_grad = nstate.info['grad']
     state_extras = {x: nstate.info[x] for x in extra_fields} 
     # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
@@ -428,7 +432,7 @@ def train(
     # q_value_grad_fn = jax.grad(target_log_fn, has_aux=True)
     # q_value_grad, (nstate, state_extras, q_values) = q_value_grad_fn(nstate.obs)
     q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, env_state.obs, actions).mean(-1)
-    q_values = jnp.where(clip_mask, q_values, -jnp.inf)
+    q_values = jnp.where(mask, q_values, -jnp.inf)
     # target_grad = jax.tree_util.tree_map(lambda x,y: jnp.einsum('bxy,bx->by', x, y), model_grad, q_value_grad) #, model_grad @ q_value_grad
     # target_grad = jnp.zeros_like(dynamics_params)
     
@@ -440,8 +444,8 @@ def train(
         next_observation= nstate.obs,
         dynamics_params=dynamics_params,
         mapping=mapping,
-        target_pdf=q_values,
-        target_pdf_grad= jnp.zeros_like(dynamics_params),
+        target_lnpdf=q_values,
+        target_lnpdf_grad= jnp.zeros_like(dynamics_params),
         # model_grad_norm = jnp.linalg.norm(model_grad[value_obs_key], axis=(1,2)),
         # value_grad_norm = jnp.linalg.norm(q_value_grad[value_obs_key], axis=-1),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
@@ -469,17 +473,17 @@ def train(
     # print("sample db state info: samples ", gmm_training_state.sample_db_state.samples.shape)
     # print("sample db state info: samples(new) ", transitions.dynamics_params.shape)
     # print("sample db state info: targetpdf", gmm_training_state.sample_db_state.target_lnpdfs.shape)
-    # print("sample db state info: targetpdf(new)", transitions.target_pdf.shape)
+    # print("sample db state info: targetpdf(new)", transitions.target_lnpdf.shape)
     # print("sample db state info: targetgrad", gmm_training_state.sample_db_state.target_grads.shape)
-    # print("sample db state info: targetgrad(new)", transitions.target_pdf_grad.shape)
+    # print("sample db state info: targetgrad(new)", transitions.target_lnpdf_grad.shape)
     # print("sample db state info: means", gmm_training_state.sample_db_state.means.shape)
     # print("sample db state info: inv_chols", gmm_training_state.sample_db_state.inv_chols.shape)
     # print("sample db state info: chols", gmm_training_state.sample_db_state.chols.shape)
     # print("sample db state info: map", gmm_training_state.sample_db_state.mapping.shape)
     # print("sample db state info: map(new)", transitions.mapping.shape)
     new_sample_db_state = gmmtd3_network.gmm_network.sample_selector.save_samples(gmm_training_state.model_state, \
-                    gmm_training_state.sample_db_state, transitions.dynamics_params, transitions.target_pdf, \
-                      transitions.target_pdf_grad, transitions.mapping)
+                    gmm_training_state.sample_db_state, transitions.dynamics_params, transitions.target_lnpdf, \
+                      transitions.target_lnpdf_grad, transitions.mapping)
     gmm_training_state = gmm_training_state._replace(sample_db_state=new_sample_db_state)
 
     normalizer_params = running_statistics.update(
@@ -490,10 +494,10 @@ def train(
     noise_scales = (1-env_state.done)* noise_scales + \
           env_state.done* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
     
-    q_values = transitions.target_pdf
+    q_values = transitions.target_lnpdf
     mask = jnp.isfinite(q_values)
     q_count = mask.sum()
-    q_values = jnp.where(mask, q_values, 0.)
+    # q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, transitions.observation, transitions.action).mean(-1)
     simul_info ={
       "simul/reward_mean" : transitions.reward.mean(),
       "simul/reward_std" : transitions.reward.std(),
@@ -501,10 +505,14 @@ def train(
       "simul/reward_min" : transitions.reward.min(),
       "simul/dynamics_params_mean" : transitions.dynamics_params.mean(),
       "simul/dynamics_params_std" :transitions.dynamics_params.std(),
-      "simul/q_values" : q_values/q_count,
-      "simul/q_values_std" : q_values.std(),
+      "simul/q_values" : q_values.mean(where=mask),
       "simul/finite_ratio" : q_count/num_envs,
-      "simul/finite_count" : q_count,
+      "simul/q_values_std" : q_values.std(where=mask),
+      "simul/q_values_max" : q_values.max(initial=0., where=mask),
+      "simul/q_values_p75" : jnp.nanquantile(q_values, 0.75),
+      "simul/q_values_p25" : jnp.nanquantile(q_values, 0.25),
+      "simul/q_values_mid" : jnp.nanquantile(q_values, 0.5),
+      "simul/q_values_min" : q_values.min(initial=0.,where=mask),
       # "simul/value_grad_norm_mean" : transitions.value_grad_norm.mean(),
       # "simul/value_grad_norm_std" : transitions.value_grad_norm.std(),
     }
@@ -517,13 +525,14 @@ def train(
       env_state: envs.State,
       buffer_state: ReplayBufferState,
       key: PRNGKey,
+      no_gmm_training : bool = False,
   ) -> Tuple[
       TrainingState,
       envs.State,
       ReplayBufferState,
       Metrics,
   ]:
-    experience_key, training_key = jax.random.split(key)
+    experience_key, training_key, key_gmm = jax.random.split(key, 3)
     normalizer_params, noise_scales, new_gmm_training_state, env_state, buffer_state, simul_info, simul_transitions = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
@@ -544,6 +553,8 @@ def train(
     buffer_state, transitions = replay_buffer.sample(buffer_state)
     # Change the front dimension of transitions so 'update_step' is called
     # grad_updates_per_step times by the scan.
+    samples = transitions.dynamics_params
+    target_lnpdf = transitions.target_lnpdf
     transitions = jax.tree_util.tree_map(
         lambda x: jnp.reshape(x, (grad_updates_per_step, -1) + x.shape[1:]),
         transitions,
@@ -551,9 +562,22 @@ def train(
     (training_state, _), metrics = jax.lax.scan(
         sgd_step, (training_state, training_key), transitions
     )
+    if not no_gmm_training:
+      new_gmm_training_state = gmm_update(training_state.gmm_training_state, key_gmm)
+      training_state = training_state.replace(gmm_training_state=new_gmm_training_state)
+      gmm_metrics={
+          'num_components' : new_gmm_training_state.model_state.gmm_state.num_components,
+          'gmm_mean_x_min' : new_gmm_training_state.model_state.gmm_state.means[:,0].min(),
+          'gmm_mean_x_mean' : new_gmm_training_state.model_state.gmm_state.means[:,0].mean(),
+          'gmm_mean_x_max' : new_gmm_training_state.model_state.gmm_state.means[:,0].max(),
+          'gmm_mean_y_min' : new_gmm_training_state.model_state.gmm_state.means[:,1].min(),
+          'gmm_mean_y_mean' : new_gmm_training_state.model_state.gmm_state.means[:,1].mean(),
+          'gmm_mean_y_max' : new_gmm_training_state.model_state.gmm_state.means[:,1].max(),
+      }
+      metrics.update(gmm_metrics)
     metrics['buffer_current_size'] = replay_buffer.size(buffer_state)
     metrics.update(simul_info)
-    return training_state, env_state, buffer_state, metrics
+    return training_state, env_state, buffer_state, metrics, samples, target_lnpdf
 
   def prefill_replay_buffer(
       training_state: TrainingState,
@@ -609,24 +633,27 @@ def train(
       env_state: envs.State,
       buffer_state: ReplayBufferState,
       key: PRNGKey,
+      no_gmm_training: bool = False,
+      train_length: int = 1,
   ) -> Tuple[TrainingState, envs.State, ReplayBufferState, Metrics]:
 
     def f(carry, unused_t):
       ts, es, bs, k = carry
       k, new_key = jax.random.split(k)
-      ts, es, bs, metrics = training_step(ts, es, bs, k)
-      return (ts, es, bs, new_key), metrics
+      ts, es, bs, metrics, sms, lnpdfs = training_step(ts, es, bs, k, no_gmm_training)
+      return (ts, es, bs, new_key), (metrics, sms, lnpdfs)
 
-    (training_state, env_state, buffer_state, key), metrics = jax.lax.scan(
+    (training_state, env_state, buffer_state, key), (metrics, samples, target_lnpdfs) = jax.lax.scan(
         f,
         (training_state, env_state, buffer_state, key),
         (),
-        length=num_training_steps_per_epoch,
+        length=train_length,
     )
     metrics = jax.tree_util.tree_map(jnp.mean, metrics)
-    return training_state, env_state, buffer_state, metrics
+    return training_state, env_state, buffer_state, metrics, samples, target_lnpdfs
 
-  training_epoch = jax.pmap(training_epoch, axis_name=_PMAP_AXIS_NAME)
+  training_epoch_pmap = jax.pmap(functools.partial(training_epoch, train_length=1),\
+                                  axis_name=_PMAP_AXIS_NAME)
 
   # Note that this is NOT a pure jittable method.
   def training_epoch_with_timing(
@@ -637,12 +664,39 @@ def train(
   ) -> Tuple[TrainingState, envs.State, ReplayBufferState, Metrics]:
     nonlocal training_walltime
     t = time.time()
-    (training_state, env_state, buffer_state, metrics) = training_epoch(
+    (training_state, env_state, buffer_state, metrics, samples, target_lnpdfs) = training_epoch_pmap(
         training_state, env_state, buffer_state, key
     )
     metrics = jax.tree_util.tree_map(jnp.mean, metrics)
     jax.tree_util.tree_map(lambda x: x.block_until_ready(), metrics)
 
+    epoch_training_time = time.time() - t
+    training_walltime += epoch_training_time
+    sps = (
+        env_steps_per_actor_step * 1
+    ) / epoch_training_time
+    metrics = {
+        'training/sps': sps,
+        'training/walltime': training_walltime,
+        **{f'training/{name}': value for name, value in metrics.items()},
+    }
+
+    return training_state, env_state, buffer_state, metrics, samples, target_lnpdfs  # pytype: disable=bad-return-type  # py311-upgrade
+  training_epoch_no_gmm = jax.pmap(functools.partial(training_epoch, no_gmm_training=True,\
+                            train_length=num_training_steps_per_epoch), axis_name=_PMAP_AXIS_NAME)
+  def training_without_gmm(
+      training_state: TrainingState,
+      env_state: envs.State,
+      buffer_state: ReplayBufferState,
+      key: PRNGKey,
+  ) -> Tuple[TrainingState, envs.State, ReplayBufferState, Metrics]:
+    nonlocal training_walltime
+    t = time.time()
+    (training_state, env_state, buffer_state, metrics, samples, target_lnpdfs) = training_epoch_no_gmm(
+        training_state, env_state, buffer_state, key, 
+    )
+    metrics = jax.tree_util.tree_map(jnp.mean, metrics)
+    jax.tree_util.tree_map(lambda x: x.block_until_ready(), metrics)
     epoch_training_time = time.time() - t
     training_walltime += epoch_training_time
     sps = (
@@ -654,7 +708,6 @@ def train(
         **{f'training/{name}': value for name, value in metrics.items()},
     }
     return training_state, env_state, buffer_state, metrics  # pytype: disable=bad-return-type  # py311-upgrade
-
   global_key, local_key = jax.random.split(rng)
   local_key = jax.random.fold_in(local_key, process_id)
   local_key, rb_key, env_key, param_key, eval_key, randomization_key = jax.random.split(local_key, 6)
@@ -758,7 +811,7 @@ def train(
     )
     if use_wandb:
       wandb.log(
-              fig,
+              {"model" :wandb.Image(fig)},
               step=int(0),
           )
     # samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
@@ -787,7 +840,6 @@ def train(
   training_state, env_state, buffer_state, _ = prefill_replay_buffer(
       training_state, env_state, buffer_state, prefill_keys
   )
-  
   replay_size = (
       jnp.sum(jax.vmap(replay_buffer.size)(buffer_state)) * jax.process_count()
   )
@@ -796,17 +848,29 @@ def train(
   training_walltime = time.time() - t
 
   current_step = 0
-  for _ in range(num_evals_after_init):
+  for epoch in range(num_evals_after_init):
     logging.info('step %s', current_step)
 
     # Optimization
     epoch_key, local_key = jax.random.split(local_key)
     epoch_keys = jax.random.split(epoch_key, local_devices_to_use)
-    (training_state, env_state, buffer_state, training_metrics) = (
-        training_epoch_with_timing(
-            training_state, env_state, buffer_state, epoch_keys
-        )
-    )
+    target_fig = None
+    if current_step < num_timesteps/500:
+      (training_state, env_state, buffer_state, training_metrics) = (
+          training_without_gmm(
+              training_state, env_state, buffer_state, epoch_keys
+          )
+      )
+    else: 
+      (training_state, env_state, buffer_state, training_metrics, samples, target_lnpdfs) = (
+          training_epoch_with_timing(
+              training_state, env_state, buffer_state, epoch_keys
+          )
+      )
+      print("samples in target", samples.shape)
+      print('targetlnpdf in eval', target_lnpdfs.shape)
+      target_fig = target_contour_plot(samples.squeeze(), target_lnpdfs.squeeze())
+
     current_step = int(_unpmap(training_state.env_steps))
 
     # Eval and logging
@@ -832,26 +896,35 @@ def train(
         q_values = gmmtd3_network.q_network.apply(_unpmap(training_state.normalizer_params), \
                                                   _unpmap(training_state.target_q_params), obs, actions).mean(-1)
         return q_values
-      fig = gmm_utils.visualise(
+      model_fig = gmm_utils.visualise(
         log_prob_fn,
         dr_range_low,
         dr_range_high,
         samples,
       )
-      
       if use_wandb:
-        wandb.log(
-                fig,
+        if target_fig is not None:
+          wandb.log(
+                {"comparison" :
+                 [
+                   wandb.Image(model_fig, caption="model"),
+                   wandb.Image(target_fig, caption="target"),  
+                ]},
                 step=int(current_step),
             )
-      samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
-        gmmtd3_network.gmm_network.sample_selector.select_train_datas(_unpmap(training_state.gmm_training_state.sample_db_state))
-      fig2 = target_contour_plot(samples, target_lnpdfs)
-      if use_wandb:
-        wandb.log(
-                fig2,
+        else:
+          wandb.log(
+                {"model" :wandb.Image(model_fig)},
                 step=int(current_step),
             )
+      # samples, mapping, sample_dist_densities, target_lnpdfs, target_lnpdf_grads = \
+        # gmmtd3_network.gmm_network.sample_selector.select_train_datas(_unpmap(training_state.gmm_training_state.sample_db_state))
+      # fig2 = target_contour_plot(samples, target_lnpdfs)
+      # if use_wandb:
+      #   wandb.log(
+      #           fig2,
+      #           step=int(current_step),
+      #       )
       # Run evals.
       # if eval_with_training_env:
       #   param_key, local_key = jax.random.split(local_key)

@@ -5,6 +5,8 @@ import chex
 from typing import List
 import wandb
 import numpy as np
+from matplotlib.ticker import MaxNLocator
+
 def reduce_weighted_logsumexp(logx, w=None, axis=None, keep_dims=False, return_sign=False,):
     if w is None:
       lswe = jax.nn.logsumexp(
@@ -57,18 +59,18 @@ def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, 
         # sample_x = jnp.clip(samples[idx, 0],low[0], high[0])
         # sample_y = jnp.clip(samples[idx, 1],low[1], high[1])
         ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
     # plt.xlabel('X')
     # plt.ylabel('Y')
-    plt.xticks([])
-    plt.yticks([])
     # plt.xlim(-10, 5)
     # plt.ylim(-5, 5)
 
     # plt.savefig(os.path.join(project_path('./samples/funnel/'), f"{prefix}funnel.pdf"), bbox_inches='tight', pad_inches=0.1)
 
-    wb = {"figures/model": [wandb.Image(fig)]}
+    # wb = {"figures/model": [wandb.Image(fig)]}
 
     if show:
         plt.show()
 
-    return wb
+    return fig

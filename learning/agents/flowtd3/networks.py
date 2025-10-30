@@ -96,6 +96,10 @@ def make_flowtd3_networks(
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
     fab_online : bool = False,
+    distributional_q : bool = False,
+    v_min : bool = False,
+    num_atoms: int = 101,
+    v_max : bool = False,
 ) -> FlowTd3Networks:
   """Make td3 networks."""
 

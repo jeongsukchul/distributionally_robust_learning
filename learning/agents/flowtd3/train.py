@@ -212,6 +212,7 @@ def train(
     use_norm:bool=True,
     use_advantage:bool= True,
     fab_online: bool = False,
+    distributional_q : bool =False,
 ):
   """flowtd3 training."""
   process_id = jax.process_index()
@@ -277,6 +278,9 @@ def train(
       episode_length=episode_length,
       action_repeat=action_repeat,
       randomization_fn=functools.partial(randomization_fn,dr_range=training_dr_range),
+      param_size=len(dr_range_low),
+      dr_range_low=dr_range_low,
+      dr_range_high=dr_range_high,
   )  # pytype: disable=wrong-keyword-args
   normalize_fn = lambda x, y: x
   if normalize_observations:
@@ -689,7 +693,7 @@ def train(
 
   dynamics_params = jnp.zeros((local_devices_to_use, num_envs//jax.process_count(), len(dr_range_low)))
   # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-  env_state = jax.pmap(env.reset)(env_keys, dynamics_params)
+  env_state = jax.pmap(env.reset)(env_keys)
 
   obs_shape = jax.tree_util.tree_map(
       lambda x: specs.Array(x.shape[-1:], jnp.dtype('float32')), env_state.obs
@@ -722,7 +726,7 @@ def train(
   )
   dynamics_params = jax.lax.stop_gradient(dynamics_params)
   # dynamics_params = jnp.reshape(dynamics_params, (local_devices_to_use, -1) + dynamics_params.shape[1:])
-  env_state = jax.pmap(env.reset)(env_keys, dynamics_params[None,...])
+  env_state = jax.pmap(env.reset)(env_keys)
   if restore_checkpoint_path is not None:
     params = checkpoint.load(restore_checkpoint_path)
     training_state = training_state.replace(
@@ -744,6 +748,9 @@ def train(
       episode_length=episode_length,
       action_repeat=action_repeat,
       randomization_fn=functools.partial(randomization_fn,dr_range=env.dr_range),
+      param_size=len(dr_range_low),
+      dr_range_low=dr_range_low,
+      dr_range_high=dr_range_high,
     )
     evaluator = AdvEvaluator(
         eval_env,
@@ -754,7 +761,7 @@ def train(
         key=eval_key,
     )
   else:
-    v_randomization_fn=functools.partial(randomization_fn, 
+    v_randomization_fn=functools.partial(eval_randomization_fn, 
       rng=jax.random.split(key, num_eval_envs // jax.process_count()//local_devices_to_use), dr_range=env.dr_range
     )
 

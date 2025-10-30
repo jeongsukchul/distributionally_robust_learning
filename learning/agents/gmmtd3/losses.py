@@ -114,7 +114,7 @@ def make_losses(
                                     expected_hessian_neg,
                                     expected_grad_neg,
                                     new_model_state.stepsizes)
-
+        
     # new_weight_stepsize_adapter_state = weight_stepsize_adapter.update_stepsize(train_state.weight_stepsize_adapter_state, new_model_state)
     new_model_state = gmm_network.weight_updater(new_model_state, samples, sample_dist_densities, target_lnpdfs,
                                                     gmmvi_state.weight_stepsize)

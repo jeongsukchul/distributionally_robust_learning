@@ -188,7 +188,7 @@ def train(
   # equals to
   # ceil(num_timesteps - num_prefill_env_steps /
   #      (num_evals_after_init * env_steps_per_actor_step))
-  num_evals_after_init = 1000
+  # num_evals_after_init = 1000
   num_training_steps_per_epoch = -(
       -(num_timesteps - num_prefill_env_steps)
       // (num_evals_after_init * env_steps_per_actor_step)
@@ -245,7 +245,7 @@ def train(
           action_repeat=action_repeat,
           randomization_fn=training_randomization_fn,
           n_nominals=1,
-          n_envs=num_envs
+          n_envs=num_envs,
       )  # pytype: disable=wrong-keyword-args
 
   else:
@@ -410,7 +410,7 @@ def train(
       if adv_wrapper:
         dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs//jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
         # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
-        nstate = env.step(env_state, actions, params)
+        nstate = env.step(env_state, actions, dynamics_params)
       else:
         nstate = env.step(env_state, actions, step_key)
     else:

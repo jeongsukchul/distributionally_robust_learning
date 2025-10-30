@@ -39,11 +39,10 @@ class Funnel(Target):
         if not batched:
             log_prob = jnp.squeeze(log_prob, axis=0)
         max_log_prob = jnp.max(log_prob)
-        # log_prob = -10 *jnp.ones_like(log_prob)
+        log_prob = -10 *jnp.ones_like(log_prob)
         log_prob = jnp.where(jnp.logical_or(x[:,0] > high[0], x[:,0] < low[0]) , max_log_prob* jnp.ones_like(log_prob), log_prob).squeeze()
         log_prob = jnp.where(jnp.logical_or(x[:,1] > high[1], x[:,1] < low[1]) , max_log_prob* jnp.ones_like(log_prob), log_prob).squeeze()
         
-        return jnp.zeros_like(log_prob)
         return log_prob
 
     def sample(self, seed: chex.PRNGKey, sample_shape: chex.Shape = ()) -> chex.Array:

@@ -23,7 +23,7 @@ class SampleDB(NamedTuple):
     get_newest_samples: Callable
 
 
-def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, MAX_COMPONENTS, DIAGONAL_COVS, BATCH_SIZE, SAMPLE_SIZE) -> SampleDB:
+def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, MAX_COMPONENTS, DIAGONAL_COVS, BATCH_SIZE, SAMPLE_SIZE, inv_bijector) -> SampleDB:
     def init_sample_db_state():
         if DIAGONAL_COVS:
             chols = jnp.zeros((MAX_COMPONENTS, DIM))
@@ -119,6 +119,7 @@ def setup_sampledb(DIM, KEEP_SAMPLES, MAX_SAMPLES, MAX_COMPONENTS, DIAGONAL_COVS
         return sample_db_state.samples[chosen_indices], sample_db_state.target_lnpdfs[chosen_indices]
 
     def _gaussian_log_pdf(mean, chol, inv_chol, x):
+        x = inv_bijector(x)
         if DIAGONAL_COVS:
             constant_part = - 0.5 * DIM * jnp.log(2 * jnp.pi) - jnp.sum(jnp.log(chol))
             return constant_part - 0.5 * jnp.sum(jnp.square(jnp.expand_dims(inv_chol, 1)

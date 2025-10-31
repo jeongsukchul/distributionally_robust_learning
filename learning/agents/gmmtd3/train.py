@@ -573,7 +573,6 @@ def train(
       prefill_replay_buffer, axis_name=_PMAP_AXIS_NAME
   )
   evaluation_steps=20
-
   def evaluation_on_current_occupancy(
     training_state: TrainingState,
     env_state: envs.State,
@@ -581,8 +580,9 @@ def train(
     key: PRNGKey,
   ) -> Tuple[TrainingState, envs.State, ReplayBufferState, PRNGKey]:
 
-    def f(carry, params):
-      training_state, env_state, buffer_state, key = carry
+    def f(carry, env_state):
+      print("env_state", env_state)
+      training_state, buffer_state, key = carry
       shape = np.sqrt(num_envs).astype(int)
       x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
                            jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
@@ -608,11 +608,10 @@ def train(
           noise_scales = new_noise_scales,
           env_steps=training_state.env_steps + env_steps_per_actor_step,
       )
-      return (new_training_state, env_state, buffer_state, new_key), pdf_values
+      return (new_training_state, buffer_state, new_key), pdf_values
     return jax.lax.scan(
         f,
-        (training_state, env_state, buffer_state, key),
-        length=evaluation_steps,
+        (training_state, buffer_state, key), env_state, length=num_envs
     )[1]
 
   evaluation_on_current_occupancy = jax.pmap(
@@ -833,17 +832,18 @@ def train(
   target_pdfs = evaluation_on_current_occupancy(
       training_state, env_state, buffer_state, evaluation_key
   )
-  target_fig = plt.figure()
   shape = np.sqrt(num_envs).astype(int)
   x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
                         jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
   target_pdfs = target_pdfs.mean(axis=(0,1))
-  ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
-  cbar = target_fig.colorbar(ctf)
-  if use_wandb:
-    wandb.log({
-      'target_prob on current occupancy with critic',wandb.Image(target_fig)
-    }, current_step=0)
+  if process_id==0:
+    target_fig = plt.figure()
+    ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
+    cbar = target_fig.colorbar(ctf)
+    if use_wandb:
+      wandb.log({
+        'target_prob on current occupancy with critic' : wandb.Image(target_fig)
+      }, step=0)
   training_walltime = time.time() - t
 
   current_step = 0
@@ -921,7 +921,24 @@ def train(
       )
       logging.info(metrics)
       progress_fn(current_step, metrics)
-
+      #evaluation on current occupancy
+      evaluation_key, local_key = jax.random.split(local_key)
+      evaluation_key = jax.random.split(evaluation_key, local_devices_to_use)
+      target_pdfs = evaluation_on_current_occupancy(
+          training_state, env_state, buffer_state, evaluation_key
+      )
+      shape = np.sqrt(num_envs).astype(int)
+      x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
+                            jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
+      target_pdfs = target_pdfs.mean(axis=(0,1))
+      if process_id==0:
+        target_fig = plt.figure()
+        ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
+        cbar = target_fig.colorbar(ctf)
+        if use_wandb:
+          wandb.log({
+            'target_prob on current occupancy with critic' : wandb.Image(target_fig)
+          }, step=current_step)
   total_steps = current_step
   if not total_steps >= num_timesteps:
     raise AssertionError(

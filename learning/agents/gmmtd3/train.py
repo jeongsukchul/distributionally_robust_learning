@@ -91,6 +91,7 @@ class TransitionwithGMMParams(NamedTuple):
   reward: jax.Array
   discount: jax.Array
   next_observation: jax.Array
+  q_values : jax.Array
   target_lnpdf: jax.Array
   target_lnpdf_grad: jax.Array
   extras: FrozenDict[str, Any]  # recommended
@@ -306,6 +307,7 @@ def train(
       next_observation=dummy_obs,
       # dynamics_params=dummy_params,
       # mapping=0,
+      q_values=0.,
       target_lnpdf=0.,
       target_lnpdf_grad=dummy_params,
 
@@ -408,14 +410,16 @@ def train(
     nstate = env.step(env_state, actions, dynamics_params)
     state_extras = {x: nstate.info[x] for x in extra_fields} 
 
-    q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, env_state.obs, actions).mean(-1)
+    q_values = gmmtd3_network.q_network.apply(normalizer_params, q_params, env_state.obs, actions).mean(-1)
+    target_lnpdf = jax.nn.log_softmax(-q_values, axis=-1)
     return nstate, TransitionwithGMMParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
         reward=nstate.reward,
         discount=1 - nstate.done,
         next_observation= nstate.obs,
-        target_lnpdf=-q_values,
+        q_values = q_values,
+        target_lnpdf= target_lnpdf,
         target_lnpdf_grad= jnp.zeros_like(dynamics_params),
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
@@ -448,7 +452,7 @@ def train(
     noise_scales = (1-env_state.done)* noise_scales + \
           env_state.done* (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
     
-    q_values = -transitions.target_lnpdf
+    q_values = transitions.q_values
     # q_values = gmmtd3_network.q_network.apply(normalizer_params, target_q_params, transitions.observation, transitions.action).mean(-1)
     simul_info ={
       "simul/reward_mean" : transitions.reward.mean(),
@@ -572,46 +576,44 @@ def train(
   prefill_replay_buffer = jax.pmap(
       prefill_replay_buffer, axis_name=_PMAP_AXIS_NAME
   )
-  evaluation_steps=20
+  
   def evaluation_on_current_occupancy(
     training_state: TrainingState,
     env_state: envs.State,
     buffer_state: ReplayBufferState,
     key: PRNGKey,
   ) -> Tuple[TrainingState, envs.State, ReplayBufferState, PRNGKey]:
-
-    def f(carry, env_state):
-      print("env_state", env_state)
-      training_state, buffer_state, key = carry
-      shape = np.sqrt(num_envs).astype(int)
-      x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
-                           jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
-      dynamics_params_grid = jnp.c_[x.ravel(), y.ravel()]
-      print("dynamics_params_grid", dynamics_params_grid)
+    # shape = np.sqrt(num_envs).astype(int)
+    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                          jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+    dynamics_params_grid = jnp.c_[x.ravel(), y.ravel()]
+    shape = (num_envs//jax.process_count(), len(dr_range_low) )
+    def f(carry, dynamics_param):
+      training_state, env_state, buffer_state, key = carry
       key, new_key = jax.random.split(key)
+
       new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
           training_state.normalizer_params,
           training_state.policy_params,
           training_state.q_params,
           training_state.target_q_params,
-          dynamics_params_grid,
+          dynamics_param[None, ...] * jnp.ones((num_envs//jax.process_count(), len(dr_range_low))),
           training_state.noise_scales,
           env_state,
           buffer_state,
           key,
       )
       pdf_values = simul_transitions.target_lnpdf
-      pdf_values = jnp.reshape(pdf_values, x.shape)
       
       new_training_state = training_state.replace(
           normalizer_params=new_normalizer_params,
           noise_scales = new_noise_scales,
           env_steps=training_state.env_steps + env_steps_per_actor_step,
       )
-      return (new_training_state, buffer_state, new_key), pdf_values
+      return (new_training_state, env_state, buffer_state, new_key), pdf_values
     return jax.lax.scan(
         f,
-        (training_state, buffer_state, key), env_state, length=num_envs
+        (training_state, env_state, buffer_state, key), xs= dynamics_params_grid,
     )[1]
 
   evaluation_on_current_occupancy = jax.pmap(
@@ -832,10 +834,13 @@ def train(
   target_pdfs = evaluation_on_current_occupancy(
       training_state, env_state, buffer_state, evaluation_key
   )
+  print("target_pdfs", target_pdfs.shape)
   shape = np.sqrt(num_envs).astype(int)
-  x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
-                        jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
-  target_pdfs = target_pdfs.mean(axis=(0,1))
+  x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                        jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+  target_pdfs = target_pdfs.mean(axis=(0,2))
+  target_pdfs = jnp.reshape(target_pdfs, x.shape)
+  print("x shape", x.shape)
   if process_id==0:
     target_fig = plt.figure()
     ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
@@ -854,18 +859,18 @@ def train(
     epoch_key, local_key = jax.random.split(local_key)
     epoch_keys = jax.random.split(epoch_key, local_devices_to_use)
     target_fig = None
-    if current_step < num_timesteps/5:
-      (training_state, env_state, buffer_state, training_metrics) = (
-          training_without_gmm(
-              training_state, env_state, buffer_state, epoch_keys
-          )
-      )
-    else: 
-      (training_state, env_state, buffer_state, training_metrics, samples, target_lnpdfs) = (
-          training_epoch_with_timing(
-              training_state, env_state, buffer_state, epoch_keys
-          )
-      )
+    # if current_step < num_timesteps/5:
+    #   (training_state, env_state, buffer_state, training_metrics) = (
+    #       training_without_gmm(
+    #           training_state, env_state, buffer_state, epoch_keys
+    #       )
+    #   )
+    # else: 
+    (training_state, env_state, buffer_state, training_metrics, samples, target_lnpdfs) = (
+        training_epoch_with_timing(
+            training_state, env_state, buffer_state, epoch_keys
+        )
+    )
 
     current_step = int(_unpmap(training_state.env_steps))
 
@@ -927,10 +932,10 @@ def train(
       target_pdfs = evaluation_on_current_occupancy(
           training_state, env_state, buffer_state, evaluation_key
       )
-      shape = np.sqrt(num_envs).astype(int)
-      x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], shape),\
-                            jnp.linspace(dr_range_low[1], dr_range_high[1], num_envs//shape))
-      target_pdfs = target_pdfs.mean(axis=(0,1))
+      x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                            jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+      target_pdfs = target_pdfs.mean(axis=(0,2))
+      target_pdfs = target_pdfs.reshape(x.shape)
       if process_id==0:
         target_fig = plt.figure()
         ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')

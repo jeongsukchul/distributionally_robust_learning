@@ -179,7 +179,7 @@ def make_losses(
     else: 
         value_loss = (data_log_prob * next_q_adv).mean()
     # return lmbda_params* value_loss + kl_loss, (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)
-    return -lmbda_params*value_loss +  kl_loss, (value_loss, kl_loss)
+    return -lmbda_params * value_loss +  kl_loss, (value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
 
 

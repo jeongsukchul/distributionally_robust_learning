@@ -49,7 +49,10 @@ from learning.module.wrapper.evaluator import Evaluator, AdvEvaluator
 from learning.module.wrapper.drhard_wrapper import wrap_for_hard_dr_training          #changed with td3
 from learning.module.wrapper.dr_wrapper import wrap_for_dr_training          #changed with td3
 from learning.module.wrapper.wrapper import Wrapper, wrap_for_brax_training
-
+import wandb
+import numpy as np
+import matplotlib.pyplot as plt
+from flax.core import FrozenDict
 
 Metrics = types.Metrics
 Transition = types.Transition
@@ -59,6 +62,16 @@ ReplayBufferState = Any
 
 _PMAP_AXIS_NAME = 'i'
 
+class TransitionwithCritic(NamedTuple):
+  """Transition with additional dynamics parameters."""
+  observation: jax.Array
+  action: jax.Array
+  reward: jax.Array
+  discount: jax.Array
+  next_observation: jax.Array
+  q_values : jax.Array
+  target_lnpdf: jax.Array
+  extras: FrozenDict[str, Any]  # recommended
 
 @flax.struct.dataclass
 class TrainingState:
@@ -156,6 +169,7 @@ def train(
     custom_wrapper=False,
     adv_wrapper=False,
     distributional_q=False,
+    use_wandb=False,
 ):
   """td3 training."""
   process_id = jax.process_index()
@@ -203,9 +217,9 @@ def train(
   rng, key = jax.random.split(rng)
   
   if hasattr(env,'dr_range') :
-    dr_low, dr_high = env.dr_range
-    dr_mid = (dr_low + dr_high) / 2.
-    dr_scale = (dr_high - dr_low) / 2.
+    dr_range_low, dr_range_high = env.dr_range
+    dr_mid = (dr_range_low + dr_range_high) / 2.
+    dr_scale = (dr_range_high - dr_range_low) / 2.
     training_dr_range = (dr_mid - dr_train_ratio*dr_scale, dr_mid + dr_train_ratio*dr_scale)
   else:
     training_dr_range = None
@@ -234,9 +248,9 @@ def train(
         episode_length=episode_length,
         action_repeat=action_repeat,
         randomization_fn=training_randomization_fn,
-        param_size = len(dr_low),
-        dr_range_low=dr_low,
-        dr_range_high=dr_high,
+        param_size = len(dr_range_low),
+        dr_range_low=dr_range_low,
+        dr_range_high=dr_range_high,
       )
     else:
       env = wrap_for_dr_training(#wrap_for_training(
@@ -280,12 +294,14 @@ def train(
   dummy_obs = { key: jnp.zeros(obs_shape[key]) for key in obs_shape } if isinstance(obs_shape, dict) else jnp.zeros((obs_shape,))
   print("dummy_obs", dummy_obs)
   dummy_action = jnp.zeros((action_size,))
-  dummy_transition = Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+  dummy_transition = TransitionwithCritic(  # pytype: disable=wrong-arg-types  # jax-ndarray
       observation=dummy_obs,
       action=dummy_action,
       reward=0.0,
       discount=0.0,
       next_observation=dummy_obs,
+      q_values=0.,
+      target_lnpdf=0.,
       extras={'state_extras': {'truncation': 0.0}, 'policy_extras': {}},
   )
   replay_buffer = replay_buffers.UniformSamplingQueue(
@@ -308,7 +324,7 @@ def train(
   )
 
   def sgd_step(
-      carry: Tuple[TrainingState, PRNGKey], transitions: Transition
+      carry: Tuple[TrainingState, PRNGKey], transitions: TransitionwithCritic
   ) -> Tuple[Tuple[TrainingState, PRNGKey], Metrics]:
     training_state, key = carry
     key, key_critic, key_actor,key_noise = jax.random.split(key, 4)
@@ -376,30 +392,14 @@ def train(
         noise_scales=training_state.noise_scales,
     )
     return (new_training_state, key), metrics
-
-  def actor_step(
-    env: Env,
-    env_state: State,
-    policy: Policy,
-    noise_scales : jnp.ndarray,
-    key: PRNGKey,
-    extra_fields: Sequence[str] = (),
-  ):
-    actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    nstate = env.step(env_state, actions)
-    state_extras = {x: nstate.info[x] for x in extra_fields}
-    return nstate, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
-        observation=env_state.obs,
-        action=actions,
-        reward=nstate.reward,
-        discount=1 - nstate.done,
-        next_observation= nstate.obs,
-        extras={'policy_extras': policy_extras, 'state_extras': state_extras},
-    )
   def adv_step(
     env: Env,
     env_state: State,
     policy: Policy,
+    normalizer_params,
+    q_params,
+    target_q_params,
+    dynamics_params: jnp.ndarray,
     noise_scales : jnp.ndarray,
     key: PRNGKey,
     extra_fields: Sequence[str] = (),
@@ -408,26 +408,31 @@ def train(
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
     if randomization_fn is not None and custom_wrapper:
       if adv_wrapper:
-        dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs//jax.process_count(),len(dr_low)), minval=dr_low, maxval=dr_high)
         # params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
         nstate = env.step(env_state, actions, dynamics_params)
       else:
         nstate = env.step(env_state, actions, step_key)
     else:
       nstate = env.step(env_state, actions)
+    q_values = td3_network.q_network.apply(normalizer_params, q_params, env_state.obs, actions).mean(-1)
+    target_lnpdfs = jax.nn.log_softmax(q_values, -1)
     state_extras = {x: nstate.info[x] for x in extra_fields}
-    return nstate, Transition(  # pytype: disable=wrong-arg-types  # jax-ndarray
+    return nstate, TransitionwithCritic(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
         action=actions,
         reward=nstate.reward,
         discount=1 - nstate.done,
         next_observation= nstate.obs,
+        q_values = q_values,
+        target_lnpdf= target_lnpdfs,
         extras={'policy_extras': policy_extras, 'state_extras': state_extras},
     )
   def get_experience(
       normalizer_params: running_statistics.RunningStatisticsState,
       policy_params: Params,
+      q_params: Params,
       target_q_params: Params,
+      dynamics_params: jnp.ndarray,
       noise_scales: jnp.ndarray,
       env_state: envs.State,
       buffer_state: ReplayBufferState,
@@ -440,7 +445,7 @@ def train(
     noise_key, key = jax.random.split(key)
     policy = make_policy((normalizer_params, policy_params))
     env_state, transitions = adv_step(
-        env, env_state, policy, noise_scales, key, extra_fields=('truncation',)
+        env, env_state, policy, normalizer_params, q_params, target_q_params, dynamics_params, noise_scales, key, extra_fields=('truncation',)
     )
     normalizer_params = running_statistics.update(
         normalizer_params,
@@ -449,9 +454,8 @@ def train(
     )
     noise_scales = (1-env_state.done)* noise_scales + \
           env_state.done * (jax.random.normal(noise_key, shape=noise_scales.shape) *(std_max - std_min) + std_min)
-    q_values = td3_network.q_network.apply(normalizer_params, target_q_params, transitions.observation, transitions.action).mean(-1)
-    
-    # dynamics_params = jax.random.uniform(key=jax.random.PRNGKey(seed), shape=(noise_scales.shape[0],len(dr_low)), minval=dr_low, maxval=dr_high)
+    q_values = transitions.q_values
+    # dynamics_params = jax.random.uniform(key=jax.random.PRNGKey(seed), shape=(noise_scales.shape[0],len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
     simul_info ={
       "simul/reward_mean" : transitions.reward.mean(),
       "simul/reward_std" : transitions.reward.std(),
@@ -469,7 +473,7 @@ def train(
       # "simul/dynamics_params_std" : dynamics_params.std(),
     }
     buffer_state = replay_buffer.insert(buffer_state, transitions)
-    return normalizer_params, noise_scales, env_state, buffer_state, simul_info
+    return normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions
 
   def training_step(
       training_state: TrainingState,
@@ -482,11 +486,15 @@ def train(
       ReplayBufferState,
       Metrics,
   ]:
-    experience_key, training_key = jax.random.split(key)
-    normalizer_params, noise_scales, env_state, buffer_state, simul_info = get_experience(
+    experience_key, training_key, param_key = jax.random.split(key, 3)
+    dynamics_params = jax.random.uniform(key=param_key, shape=(num_envs//jax.process_count(),len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+    
+    normalizer_params, noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
         training_state.normalizer_params,
         training_state.policy_params,
+        training_state.q_params,
         training_state.target_q_params,
+        dynamics_params,
         training_state.noise_scales,
         env_state,
         buffer_state,
@@ -523,15 +531,18 @@ def train(
     def f(carry, unused):
       del unused
       training_state, env_state, buffer_state, key = carry
-      key, new_key = jax.random.split(key)
-      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info = get_experience(
-          training_state.normalizer_params,
-          training_state.policy_params,
-          training_state.target_q_params,
-          training_state.noise_scales,
-          env_state,
-          buffer_state,
-          key,
+      key, new_key, step_key = jax.random.split(key,3)
+      dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs//jax.process_count(),len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
+      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+        training_state.normalizer_params,
+        training_state.policy_params,
+        training_state.q_params,
+        training_state.target_q_params,
+        dynamics_params,
+        training_state.noise_scales,
+        env_state,
+        buffer_state,
+        key,
       )
       new_training_state = training_state.replace(
           normalizer_params=new_normalizer_params,
@@ -550,7 +561,48 @@ def train(
   prefill_replay_buffer = jax.pmap(
       prefill_replay_buffer, axis_name=_PMAP_AXIS_NAME
   )
+  def evaluation_on_current_occupancy(
+      training_state: TrainingState,
+      env_state: envs.State,
+      buffer_state: ReplayBufferState,
+      key: PRNGKey,
+  ) -> Tuple[TrainingState, envs.State, ReplayBufferState, PRNGKey]:
+    # shape = np.sqrt(num_envs).astype(int)
+    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                          jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+    dynamics_params_grid = jnp.c_[x.ravel(), y.ravel()]
+    def f(carry, dynamics_param):
+      training_state, env_state, buffer_state, key = carry
+      key, new_key = jax.random.split(key)
+      print("dynamics_param", dynamics_param)
 
+      new_normalizer_params, new_noise_scales, env_state, buffer_state, simul_info, simul_transitions = get_experience(
+          training_state.normalizer_params,
+          training_state.policy_params,
+          training_state.q_params,
+          training_state.target_q_params,
+          dynamics_param[None, ...] * jnp.ones((num_envs//jax.process_count(), len(dr_range_low))),
+          training_state.noise_scales,
+          env_state,
+          buffer_state,
+          key,
+      )
+      pdf_values = simul_transitions.target_lnpdf
+      
+      new_training_state = training_state.replace(
+          normalizer_params=new_normalizer_params,
+          noise_scales = new_noise_scales,
+          env_steps=training_state.env_steps + env_steps_per_actor_step,
+      )
+      return (new_training_state, env_state, buffer_state, new_key), pdf_values
+    return jax.lax.scan(
+        f,
+        (training_state, env_state, buffer_state, key), xs= dynamics_params_grid,
+    )[1]
+
+  evaluation_on_current_occupancy = jax.pmap(
+      evaluation_on_current_occupancy, axis_name=_PMAP_AXIS_NAME
+  )
   def training_epoch(
       training_state: TrainingState,
       env_state: envs.State,
@@ -697,6 +749,28 @@ def train(
   )
   logging.info('replay size after prefill %s', replay_size)
   assert replay_size >= min_replay_size
+  #evaluation on current occupancy
+  if adv_wrapper:
+    evaluation_key, local_key = jax.random.split(local_key)
+    evaluation_key = jax.random.split(evaluation_key, local_devices_to_use)
+    target_pdfs = evaluation_on_current_occupancy(
+        training_state, env_state, buffer_state, evaluation_key
+    )
+    print("target_pdfs", target_pdfs.shape)
+    shape = np.sqrt(num_envs).astype(int)
+    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                          jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+    target_pdfs = target_pdfs.mean(axis=(0,2))
+    target_pdfs = jnp.reshape(target_pdfs, x.shape)
+    print("x shape", x.shape)
+    if process_id==0:
+      target_fig = plt.figure()
+      ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
+      cbar = target_fig.colorbar(ctf)
+      if use_wandb:
+        wandb.log({
+          'target_prob on current occupancy with critic' : wandb.Image(target_fig)
+        }, step=0)
   training_walltime = time.time() - t
 
   current_step = 0
@@ -736,7 +810,25 @@ def train(
       )
       logging.info(metrics)
       progress_fn(current_step, metrics)
-
+      #evaluation on current occupancy
+  evaluation_key, local_key = jax.random.split(local_key)
+  evaluation_key = jax.random.split(evaluation_key, local_devices_to_use)
+  if adv_wrapper:
+    target_pdfs = evaluation_on_current_occupancy(
+        training_state, env_state, buffer_state, evaluation_key
+    )
+    x, y = jnp.meshgrid(jnp.linspace(dr_range_low[0], dr_range_high[0], 32),\
+                          jnp.linspace(dr_range_low[1], dr_range_high[1], 32))
+    target_pdfs = target_pdfs.mean(axis=(0,2))
+    target_pdfs = jnp.reshape(target_pdfs, x.shape)
+    if process_id==0:
+      target_fig = plt.figure()
+      ctf = plt.contourf(x, y, target_pdfs, levels=20, cmap='viridis')
+      cbar = target_fig.colorbar(ctf)
+      if use_wandb:
+        wandb.log({
+          'target_prob on current occupancy with critic' : wandb.Image(target_fig)
+        }, step=int(current_step))
   total_steps = current_step
   if not total_steps >= num_timesteps:
     raise AssertionError(

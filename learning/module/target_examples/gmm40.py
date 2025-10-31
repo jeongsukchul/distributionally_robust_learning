@@ -11,6 +11,7 @@ import numpy as np
 from learning.module.target_examples.base_target import Target
 import matplotlib
 def plot_contours_2D(log_prob_func,
+                     fig,
                      ax: Optional[plt.Axes] = None,
                      bound: float = 3,
                      levels: int = 20):
@@ -26,7 +27,10 @@ def plot_contours_2D(log_prob_func,
     x1 = x_points[:, 0].reshape(n_points, n_points)
     x2 = x_points[:, 1].reshape(n_points, n_points)
     z = log_probs.reshape(n_points, n_points)
-    ct = ax.contour(x1, x2, z, levels=levels)
+    z = jnp.exp(z)
+    ctf = ax.contourf(x1, x2, z, levels=levels, cmap='viridis')
+    # ct = ax.contour(x1, x2, z, levels=levels)
+    fig.colorbar(ctf, ax=ax)
     # ax.contourf(x1, x2, np.exp(z), levels = 20, cmap = 'viridis')
 
 
@@ -107,13 +111,13 @@ class GMM40(Target):
             plot_marginal_pair(samples[:, :2], ax, bounds=(-self._plot_bound, self._plot_bound))
             # jnp.save(project_path(f'samples/gmm40_samples'), samples)
         if self.dim == 2:
-            x, y = jnp.meshgrid(jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100), jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100))
-            grid = jnp.c_[x.ravel(), y.ravel()]
-            pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
-            pdf_values = jnp.reshape(pdf_values, x.shape)
+            # x, y = jnp.meshgrid(jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100), jnp.linspace(-self._plot_bound*1.2, self._plot_bound*1.2, 100))
+            # grid = jnp.c_[x.ravel(), y.ravel()]
+            # pdf_values = jax.vmap(jnp.exp)(self.log_prob(grid))
+            # pdf_values = jnp.reshape(pdf_values, x.shape)
             # ctf = plt.contourf(x, y, pdf_values, levels=50, cmap='viridis')
             # cbar = fig.colorbar(ctf)
-            plot_contours_2D(self.log_prob, ax, bound=self._plot_bound*1.2, levels=50)
+            plot_contours_2D(self.log_prob, fig, ax, bound=self._plot_bound*1.2, levels=50)
         # if model_log_prob_fn is not None:
         #     ax3 = fig.add_subplot(122)
         #     grid = jnp.c_[x.ravel(), y.ravel()]

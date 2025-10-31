@@ -115,7 +115,7 @@ class AdVmapWrapper(Wrapper):
       )
 
     else:
-      return jax.vmap(step)(
+      ns = jax.vmap(step)(
         params, state, action
       )
     ns.info['dr_params'] = params

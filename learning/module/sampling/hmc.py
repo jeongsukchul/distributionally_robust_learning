@@ -20,7 +20,6 @@ import blackjax.mcmc.proposal as proposal
 import blackjax.mcmc.trajectory as trajectory
 from blackjax.mcmc.trajectory import hmc_energy
 from blackjax.types import Array, ArrayLikeTree, ArrayTree, PRNGKey
-from blackjax.mcmc.integrators import EuclideanKineticEnergy
 
 
 
@@ -51,7 +50,7 @@ class HMCState(NamedTuple):
 def velocity_verlet(
     log_q_fn: Callable,
     log_p_fn: Callable,
-    kinetic_energy_fn: EuclideanKineticEnergy,
+    kinetic_energy_fn,
 ) -> EuclideanIntegrator:
     a1 = 0
     b1 = 0.5

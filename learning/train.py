@@ -316,7 +316,8 @@ def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
         dr_train_ratio = cfg.dr_train_ratio,
         custom_wrapper = cfg.custom_wrapper,
         seed=cfg.seed,
-        adv_wrapper = cfg.adv_wrapper
+        adv_wrapper = cfg.adv_wrapper,
+        use_wandb=cfg.use_wandb
     )
     make_inference_fn, params, metrics = train_fn(        
         environment=env,

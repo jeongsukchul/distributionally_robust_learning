@@ -67,14 +67,13 @@ def make_gmmtd3_networks(
     batch_size : int,
     init_key :jax.random.PRNGKey,
     preprocess_observations_fn: types.PreprocessObservationFn = types.identity_observation_preprocessor,
-    prior_mean : jnp.ndarray = 0.,
-    prior_scale : jnp.ndarray = 1.,
     hidden_layer_sizes: Sequence[int] = (256, 256),
     activation: networks.ActivationFn = linen.relu,
     policy_network_layer_norm: bool = False,
     q_network_layer_norm: bool = False,
     policy_obs_key: str = 'state',
     value_obs_key: str = 'state',
+    bound_info : Tuple = None,
     distributional_q : bool= False,
     num_atoms: int = 101,
     v_min: float = 0.,
@@ -101,7 +100,7 @@ def make_gmmtd3_networks(
       obs_key = value_obs_key,
   )
   init_gmmvi_state, gmm_network = create_gmm_network_and_state(dynamics_param_size, num_envs, batch_size, init_key,\
-                                                                prior_mean=prior_mean, prior_scale=prior_scale)
+                                                                bound_info=bound_info)
   return GMMTd3Networks(
       policy_network=policy_network,
       q_network=q_network,

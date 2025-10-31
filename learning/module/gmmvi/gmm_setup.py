@@ -22,7 +22,7 @@ class GMM(NamedTuple):
     log_density_and_grad: Callable
     bijector: Callable
     inv_bijector: Callable
-
+    bijector_log_prob : Callable
 class GMMState(NamedTuple):
     log_weights: chex.Array
     means: chex.Array
@@ -48,6 +48,7 @@ class GMMWrapper(NamedTuple):
     sample: Callable
     bijector: Callable
     inv_bijector:Callable
+    bijector_log_prob : Callable
 class GMMWrapperState(NamedTuple):
     gmm_state: GMMState
     l2_regularizers: chex.Array
@@ -126,7 +127,8 @@ def setup_gmm_wrapper(gmm: GMM, MAX_COMPONENTS, INITIAL_STEPSIZE, INITIAL_REGULA
                       log_density_and_grad=gmm.log_density_and_grad,
                       sample=gmm.sample,
                       bijector=gmm.bijector,
-                      inv_bijector=gmm.inv_bijector)
+                      inv_bijector=gmm.inv_bijector,
+                      bijector_log_prob=gmm.bijector_log_prob)
 
 
 def _setup_initial_mixture_params(NUM_DIM, key, diagonal_covs, MAX_COMPONENTS, num_initial_components, prior_mean, prior_scale,
@@ -387,7 +389,7 @@ def setup_full_cov_gmm(DIM, MAX_COMPONENTS, bound_info=None) -> GMM:
         inv_bijector = lambda x: jnp.arctan((2*x-(low+high))/(high-low))
         # inv_bijector = lambda x: x
         bijector_log_prob = lambda x : jnp.log(2 * jnp.ones_like(low)).sum(-1) -jnp.log(high-low).sum(-1)-jnp.log(1- ((2*x-(low+high))/(high-low))**2).sum(-1)
-        bijector_log_prob = lambda x : -jnp.log(1- ((2*x-(low+high))/(high-low))**2).sum(-1)
+        # bijector_log_prob = lambda x : -jnp.log(1- ((2*x-(low+high))/(high-low))**2).sum(-1)
         # bijector_log_prob = lambda x : 0
     else:
         bijector = lambda x: x
@@ -461,4 +463,5 @@ def setup_full_cov_gmm(DIM, MAX_COMPONENTS, bound_info=None) -> GMM:
                                                 inv_bijector=inv_bijector, bijector_log_prob=bijector_log_prob),
                bijector=bijector,
                inv_bijector=inv_bijector,
+               bijector_log_prob=bijector_log_prob
             )       

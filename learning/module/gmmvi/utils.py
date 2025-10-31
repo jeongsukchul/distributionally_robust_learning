@@ -41,7 +41,7 @@ def reduce_weighted_logsumexp(logx, w=None, axis=None, keep_dims=False, return_s
       return lswe, sgn
     return lswe
 
-def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, samples: chex.Array = None, show=False) -> dict:
+def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, samples: chex.Array = None, bijector_log_prob=None, show=False) -> dict:
     plt.close()
     fig = plt.figure()
     ax = fig.add_subplot()
@@ -53,14 +53,42 @@ def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, 
     ctf = plt.contourf(x, y, pdf_values, levels=20, cmap='viridis')
     cbar = fig.colorbar(ctf)
     if samples is not None:
-        idx = jax.random.choice(jax.random.PRNGKey(0), samples.shape[0], (300,))
-        sample_x = samples[idx,0]
-        sample_y = samples[idx,1]
-        # sample_x = jnp.clip(samples[idx, 0],low[0], high[0])
-        # sample_y = jnp.clip(samples[idx, 1],low[1], high[1])
-        ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
-        ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+      idx = jax.random.choice(jax.random.PRNGKey(0), samples.shape[0], (300,))
+      sample_x = samples[idx,0]
+      sample_y = samples[idx,1]
+      # sample_x = jnp.clip(samples[idx, 0],low[0], high[0])
+      # sample_y = jnp.clip(samples[idx, 1],low[1], high[1])
+      ax.scatter(sample_x, sample_y, c='r', alpha=0.5, marker='x')
+      ax.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+      ax.yaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+    fig2 = None
+    if bijector_log_prob is not None:
+        fig2 = plt.figure()
+        ax2 = fig2.add_subplot(111)
+
+        # bijector_log_prob should return log |det J| or something same-shape as logp
+        bij_part = bijector_log_prob(grid)              # (10000,)
+        bij_part = jnp.reshape(bij_part, x.shape)       # (100,100)
+
+        # model minus bijector term (still jax)
+        combined = pdf_values - jax.vmap(jnp.exp)(bij_part)
+
+        combined_np = np.asarray(combined)
+
+        ctf2 = ax2.contourf(x, y, combined_np, levels=20, cmap='viridis')
+        cbar2 = fig2.colorbar(ctf2, ax=ax2)
+        cbar2.set_label('log p(x) - bijector_term')
+
+        ax2.set_xlabel("x")
+        ax2.set_ylabel("y")
+        ax2.set_xlim(float(low[0]), float(high[0]))
+        ax2.set_ylim(float(low[1]), float(high[1]))
+
+        ax2.xaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+        ax2.yaxis.set_major_locator(MaxNLocator(nbins=10, prune=None))
+        ax2.minorticks_on()
+        ax2.grid(True, which="major", alpha=0.25, linewidth=0.8)
+        ax2.grid(True, which="minor", alpha=0.12, linewidth=0.6)
     # plt.xlabel('X')
     # plt.ylabel('Y')
     # plt.xlim(-10, 5)
@@ -73,4 +101,4 @@ def visualise(log_prob_fn, dr_range_low:chex.Array, dr_range_high : chex.Array, 
     if show:
         plt.show()
 
-    return fig
+    return fig, fig2

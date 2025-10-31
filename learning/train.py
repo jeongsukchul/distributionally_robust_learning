@@ -486,7 +486,6 @@ def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
     for param in gmmtd3_params.keys():
         if param in cfg and getattr(cfg, param) is not None:
             gmmtd3_params[param] = getattr(cfg, param)
-    gmmtd3_params['num_evals'] = 1000
     wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.asym={cfg.asymmetric_critic}.dr_train_ratio={cfg.dr_train_ratio}"
     wandb_name += cfg.comment
     if cfg.use_wandb:

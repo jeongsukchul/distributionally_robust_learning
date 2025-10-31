@@ -433,13 +433,8 @@ def train(
   ):
     step_key, key = jax.random.split(key)
     actions, policy_extras = policy(env_state.obs, noise_scales, key)
-    # dynamics_params = jax.random.uniform(key=step_key, shape=(num_envs,len(dr_range_low)), minval=dr_range_low, maxval=dr_range_high)
-    print("num_envs", num_envs)
-    print("dr params", env_state.info['dr_params'])
-    print("done", env_state.done)
-    print("dynamics_params", dynamics_params)
-    params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
-    nstate = env.step(env_state, actions, params)
+    # dynamics_params = env_state.info["dr_params"] * (1 - env_state.done[..., None]) + dynamics_params * env_state.done[..., None]
+    nstate = env.step(env_state, actions, dynamics_params)
     state_extras = {x: nstate.info[x] for x in extra_fields}
     return nstate, TransitionwithParams(  # pytype: disable=wrong-arg-types  # jax-ndarray
         observation=env_state.obs,
@@ -784,17 +779,24 @@ def train(
   print("setup time", ed-st)
 
   
-  # if process_id==0:
-  #   fig1 = render_flow_pdf_1d_subplots(
-  #           flowtd3_network.flow_network,
-  #             _unpmap(training_state.flow_params),
-  #             ndim=dr_range_low.shape[0],
-  #             low=dr_range_low,
-  #             high=dr_range_high,
-  #             training_step=0,
-  #             use_wandb=use_wandb,
-  #       )
-
+  if process_id==0:
+    fig = render_flow_pdf_2d_subplots(
+      flowtd3_network.flow_network,
+          _unpmap(training_state.flow_params),
+        low=dr_range_low,
+        high=dr_range_high,
+        training_step=0,
+        use_wandb=use_wandb,
+    )
+    fig = render_flow_pdf_1d_subplots(
+      flowtd3_network.flow_network,
+          _unpmap(training_state.flow_params),
+        ndim=dr_range_low.shape[0],
+        low=dr_range_low,
+        high=dr_range_high,
+        training_step=0,
+        use_wandb=use_wandb,
+    )
   # # Create and initialize the replay buffer.
   t = time.time()
   prefill_key, local_key = jax.random.split(local_key)

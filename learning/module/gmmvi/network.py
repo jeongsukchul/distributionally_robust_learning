@@ -48,7 +48,7 @@ def create_gmm_network_and_state(
     batch_size : int,
     key : jax.random.PRNGKey,
     prior_mean : float = 0.,
-    prior_scale : float = 1.,
+    prior_scale : float = .3,
     bound_info : dict = None,
 ):  
     

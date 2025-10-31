@@ -153,21 +153,6 @@ def make_losses(
         x=dynamics_params,
     )
     data_log_prob = jnp.clip(data_log_prob, -1e6, 1e6)
-    # normalizer_params, noise_scales, env_state, buffer_state, simul_info, transitions = get_experience(
-    #     normalizer_params,
-    #     policy_params,
-    #     noise_scales,
-    #     env_state,
-    #     dynamics_params,
-    #     buffer_state,
-    #     key2,
-    #     env,
-    #     replay_buffer,
-    #     make_policy,
-    #     std_min,
-    #     std_max,
-    # )
-
     _, current_logp = flow_network.apply(
         flow_params,
         mode='sample',
@@ -183,10 +168,7 @@ def make_losses(
     )
     # Get Q-value for adversarial next state-action pair
     next_q_adv = q_network.apply(normalizer_params, current_q_params, transitions.next_observation, next_action).min(-1)
-    # next_q_adv = (jax.lax.stop_gradient(1/next_q_adv.mean())) * next_q_adv
     current_q = q_network.apply(normalizer_params, current_q_params, transitions.observation, transitions.action).min(-1)
-    # normalized_current_q = (jax.lax.stop_gradient(1/current_q.mean())) * current_q
-    # value_loss = volume*(jnp.exp(data_log_prob)*data_log_prob * normalized_next_v_adv).mean()
     truncation = transitions.extras['state_extras']['truncation']
     advantage = transitions.reward + transitions.discount* next_q_adv - current_q
     if use_normalization:
@@ -197,8 +179,9 @@ def make_losses(
     else: 
         value_loss = (data_log_prob * next_q_adv).mean()
     # return lmbda_params* value_loss + kl_loss, (env_state, buffer_state, normalizer_params, noise_scales, simul_info, value_loss, kl_loss)
-    return lmbda_params*value_loss + 0.01* kl_loss, (value_loss, kl_loss)
+    return -lmbda_params*value_loss +  kl_loss, (value_loss, kl_loss)
   return critic_loss, actor_loss, flow_loss
+
 
 
 

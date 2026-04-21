@@ -17,7 +17,10 @@
 from ml_collections import config_dict
 
 from mujoco_playground._src import dm_control_suite
-from module.termination_fn import get_termination_fn
+try:
+  from learning.module.termination_fn import get_termination_fn
+except ImportError:
+  from module.termination_fn import get_termination_fn
 
 
 def brax_ppo_config(env_name: str) -> config_dict.ConfigDict:
@@ -57,7 +60,7 @@ def brax_ppo_config(env_name: str) -> config_dict.ConfigDict:
   if env_name == "CheetahRun":
     rl_config.network_factory = config_dict.create(
         policy_obs_key="state",
-        value_obs_key="privileged_state",
+        value_obs_key="state",
     )
     rl_config.num_timesteps=200_000_000
   return rl_config
@@ -268,7 +271,7 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
       network_factory=config_dict.create(
           q_network_layer_norm=True,
           policy_obs_key="state",
-        value_obs_key="privileged_state",
+        value_obs_key="state",
       ),
   )
 
@@ -289,7 +292,7 @@ def brax_wdsac_config(env_name: str) -> config_dict.ConfigDict:
     rl_config.network_factory = config_dict.create(
         q_network_layer_norm=True,
         policy_obs_key="state",
-        value_obs_key="privileged_state",
+        value_obs_key="state",
     )
   return rl_config
 

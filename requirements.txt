@@ -1,4 +1,6 @@
-playground
+playground==0.0.5
+mujoco==3.4.0
+mujoco-mjx==3.4.0
 brax
 termcolor
 mediapy

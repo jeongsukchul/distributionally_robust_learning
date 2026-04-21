@@ -123,8 +123,7 @@ def make_losses(
     batch_size = transitions.action.shape[0]
     idx_key, key = jax.random.split(key)
     # with n_nominals next_observationsey
-    lmbda = jnp.maximum(lmbda_params, 0.0)
-    print("next obs", transitions.next_observation)
+    lmbda = jnp.maximum(lmbda_params, 1e-6)
     next_dist_params = policy_network.apply(
         normalizer_params, policy_params, transitions.next_observation)
     next_action = parametric_action_distribution.sample_no_postprocessing(
@@ -133,8 +132,6 @@ def make_losses(
     next_log_prob = parametric_action_distribution.log_prob(
         next_dist_params, next_action
     )
-    print("next action", next_action)
-    print("next log prob", next_log_prob)
     next_q = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
     next_vs = next_q - alpha*next_log_prob          #(batch size, n_nominals)
     next_v = -lmbda * (jax.nn.logsumexp(-next_vs/jnp.expand_dims(lmbda,axis=-1), axis=-1) - jnp.log(n_nominals))  -lmbda * delta
@@ -143,12 +140,7 @@ def make_losses(
     
     # Compute loss reduction info
     loss_info = loss - prev_loss
-    print("next_q", next_q)
-    print("next_vs", next_vs)
-    print("next_v", next_v)
-
-    
-    return loss, (next_vs, min_indices, loss_info)
+    return loss, (next_v, min_indices, loss_info)
   def tv_lmbda_loss(
       lmbda_params: jnp.ndarray,
       policy_params: Params,
@@ -164,7 +156,7 @@ def make_losses(
     idx_key, key = jax.random.split(key)
     batch_size = transitions.action.shape[0]
     # with n_nominals next_observations
-    lmbda = jnp.maximum(lmbda_params, 0.0)
+    lmbda = jnp.maximum(lmbda_params, 1e-6)
     next_dist_params = policy_network.apply(
         normalizer_params, policy_params, transitions.next_observation)
     next_action = parametric_action_distribution.sample_no_postprocessing(
@@ -175,7 +167,7 @@ def make_losses(
     )
     next_q = q_network.apply(normalizer_params, target_q_params, transitions.next_observation, next_action).min(-1)
     next_vs = next_q - alpha*next_log_prob          #(batch size, n_nominals)
-    next_v = -lmbda * jnp.max(jnp.maximum(jnp.expand_dims(lmbda, axis=-1) - next_vs,0.))+(1-delta)*lmbda 
+    next_v = -lmbda * jnp.max(jnp.maximum(jnp.expand_dims(lmbda, axis=-1) - next_vs,0.), axis=-1)+(1-delta)*lmbda 
     # next_v = -lmbda * (jax.nn.logsumexp(-next_vs/jnp.expand_dims(lmbda,axis=-1), axis=-1) - jnp.log(n_nominals))  -lmbda * delta
     loss = -next_v.mean()
     min_indices = jax.random.randint(idx_key, (batch_size,), 0, n_nominals)
@@ -183,13 +175,13 @@ def make_losses(
     # Compute loss reduction info
     loss_info = loss - prev_loss
     
-    return loss, (next_vs, min_indices, loss_info)
+    return loss, (next_v, min_indices, loss_info)
 
   def critic_loss(
       q_params: Params,
       normalizer_params: Any,
       transitions: Transition,
-      next_vs : jnp.ndarray,
+      next_v : jnp.ndarray,
       min_indices : jnp.ndarray,
   ) -> jnp.ndarray:
     
@@ -197,7 +189,9 @@ def make_losses(
     q_old_action = q_network.apply(
         normalizer_params, q_params, transitions.observation, transitions.action
     )
-    discounted_next_v = transitions.discount * next_vs
+    if next_v.ndim == transitions.discount.ndim - 1:
+      next_v = jnp.expand_dims(next_v, axis=-1)
+    discounted_next_v = transitions.discount * next_v
     
     reward = transitions.reward#[jnp.arange(batch_size), min_indices]
     target_q = jax.lax.stop_gradient(
@@ -209,10 +203,8 @@ def make_losses(
     target_q *= 1-truncation
     mask = 1- truncation
     counts = mask.sum(axis=-1, keepdims=True).clip(min=1) 
-    print("counts", counts)
     q_error = q_old_action - target_q.sum(axis=-1, keepdims=True)/counts
     q_error *= mask.sum(axis=-1, keepdims=True).clip(max=1)
-    print("q error",q_error)
     # q_error = jnp.expand_dims(q_old_action - jnp.expand_dims(target_q, -1)
 
     q_loss = 0.5 * jnp.mean(jnp.square(q_error))

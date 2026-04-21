@@ -1,4 +1,12 @@
 import os
+import sys
+from pathlib import Path
+
+_THIS_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _THIS_DIR.parent
+for _path in (_REPO_ROOT, _THIS_DIR):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from omegaconf import OmegaConf
 os.environ['MUJOCO_GL'] = 'egl'
@@ -25,10 +33,22 @@ from brax.io import html, mjcf, model
 from brax.mjx.base import State as MjxState
 from agents.ppo import networks as ppo_networks
 from agents.ppo import train as ppo
-from agents.gmmppo import networks as gmmppo_networks
-from agents.gmmppo import train as gmmppo
-from agents.flowppo import networks as flowppo_networks
-from agents.flowppo import train as flowppo
+try:
+    from agents.gmmppo import networks as gmmppo_networks
+    from agents.gmmppo import train as gmmppo
+    _GMM_PPO_IMPORT_ERROR = None
+except ImportError as exc:
+    gmmppo_networks = None
+    gmmppo = None
+    _GMM_PPO_IMPORT_ERROR = exc
+try:
+    from agents.flowppo import networks as flowppo_networks
+    from agents.flowppo import train as flowppo
+    _FLOW_PPO_IMPORT_ERROR = None
+except ImportError as exc:
+    flowppo_networks = None
+    flowppo = None
+    _FLOW_PPO_IMPORT_ERROR = exc
 from agents.sac import networks as sac_networks
 from agents.sac import train as sac
 from agents.td3 import networks as td3_networks
@@ -43,8 +63,14 @@ from agents.flowsac import train as flowsac
 from agents.flowsac import networks as flowsac_networks
 from agents.flowtd3 import train as flowtd3
 from agents.flowtd3 import networks as flowtd3_networks
-from agents.gmmtd3 import train as gmmtd3
-from agents.gmmtd3 import networks as gmmtd3_networks
+try:
+    from agents.gmmtd3 import train as gmmtd3
+    from agents.gmmtd3 import networks as gmmtd3_networks
+    _GMM_TD3_IMPORT_ERROR = None
+except ImportError as exc:
+    gmmtd3 = None
+    gmmtd3_networks = None
+    _GMM_TD3_IMPORT_ERROR = exc
 from agents.m2td3 import train as m2td3
 from agents.m2td3 import networks as m2td3_networks
 from agents.tdmpc import train as tdmpc
@@ -63,7 +89,7 @@ from mujoco import mjx
 import numpy as np
 from orbax import checkpoint as ocp
 import wandb
-from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_td3_config, brax_tdmpc_config
+from learning.configs.dm_control_training_config import brax_ppo_config, brax_sac_config, brax_td3_config, brax_tdmpc_config, brax_wdsac_config
 from learning.configs.locomotion_training_config import locomotion_ppo_config, locomotion_sac_config, locomotion_td3_config
 from learning.configs.manipulation_training_config import manipulation_ppo_config, manipulation_td3_config
 import hydra
@@ -201,9 +227,13 @@ def train_ppo(cfg:dict, randomization_fn, env, eval_env=None):
         network_factory = ppo_networks.make_ppo_networks
         train_fn = ppo.train
     elif cfg.policy=="gmmppo":
+        if gmmppo is None or gmmppo_networks is None:
+            raise ImportError("gmmppo dependencies are not available in this environment.") from _GMM_PPO_IMPORT_ERROR
         network_factory = gmmppo_networks.make_gmmppo_networks
         train_fn = gmmppo.train
     elif cfg.policy=="flowppo":
+        if flowppo is None or flowppo_networks is None:
+            raise ImportError("flowppo dependencies are not available in this environment.") from _FLOW_PPO_IMPORT_ERROR
         network_factory = flowppo_networks.make_flowppo_networks
         train_fn = flowppo.train
     if "network_factory" in ppo_params:
@@ -288,6 +318,71 @@ def train_sac(cfg:dict, randomization_fn, env, eval_env=None):
 
     make_inference_fn, params, metrics = train_fn(        
         environment=env,
+    )
+    return make_inference_fn, params, metrics
+def train_wdsac(cfg:dict, randomization_fn, env, eval_env=None):
+    if randomization_fn is None:
+        raise ValueError("WDSAC requires cfg.randomization=true so n_nominals can come from domain-randomized dynamics.")
+    if cfg.task in dm_control_suite._envs:
+        wdsac_params = brax_wdsac_config(cfg.task)
+    elif cfg.task in locomotion._envs:
+        wdsac_params = locomotion_sac_config(cfg.task)
+    else:
+        raise ValueError(f"WDSAC config is not defined for task {cfg.task}.")
+
+    wdsac_params.n_nominals = 10
+    wdsac_params.delta = 0.1
+    wdsac_params.lambda_update_steps = 100
+    wdsac_params.single_lambda = False
+    wdsac_params.distance_type = "kl"
+    wdsac_params.lmbda_lr = 3e-4
+    wdsac_params.init_lmbda = 1.0
+
+    for param in wdsac_params.keys():
+        if param in cfg and getattr(cfg, param) is not None:
+            wdsac_params[param] = getattr(cfg, param)
+
+    wandb_name = f"{cfg.task}.{cfg.policy}.seed={cfg.seed}.delta={wdsac_params.delta}\
+        .nominals={wdsac_params.n_nominals}.single_lambda={wdsac_params.single_lambda}.asym={cfg.asymmetric_critic}\
+            .distance_type={wdsac_params.distance_type}.length={wdsac_params.lambda_update_steps}\
+                .lmbda_lr={wdsac_params.lmbda_lr}.init_lmbda={wdsac_params.init_lmbda}"
+    wandb_name += cfg.comment
+    if cfg.use_wandb:
+        wandb.init(
+            project=cfg.wandb_project,
+            entity=cfg.wandb_entity,
+            name=wandb_name,
+            dir=make_dir(cfg.work_dir),
+            config=OmegaConf.to_container(cfg, resolve=True),
+        )
+        wandb.config.update({"env_name": cfg.task})
+
+    network_factory = wdsac_networks.make_wdsac_networks
+    wdsac_training_params = dict(wdsac_params)
+    if "network_factory" in wdsac_params:
+        if not cfg.asymmetric_critic:
+            wdsac_params.network_factory.value_obs_key = "state"
+        del wdsac_training_params["network_factory"]
+        network_factory = functools.partial(
+            wdsac_networks.make_wdsac_networks,
+            **wdsac_params.network_factory,
+        )
+
+    progress = functools.partial(progress_fn, use_wandb=cfg.use_wandb)
+    train_fn = functools.partial(
+        wdsac.train,
+        **dict(wdsac_training_params),
+        network_factory=network_factory,
+        progress_fn=progress,
+        randomization_fn=randomization_fn,
+        dr_train_ratio=cfg.dr_train_ratio,
+        seed=cfg.seed,
+    )
+
+    make_inference_fn, params, metrics = train_fn(
+        environment=env,
+        eval_env=eval_env,
+        wrap_env_fn=wrap_for_brax_training,
     )
     return make_inference_fn, params, metrics
 def train_td3(cfg:dict, randomization_fn, env, eval_env=None):
@@ -504,6 +599,8 @@ def train_flowtd3(cfg:dict, randomization_fn, env, eval_env=None):
     )
     return make_inference_fn, params, metrics
 def train_gmmtd3(cfg:dict, randomization_fn, env, eval_env=None):
+    if gmmtd3 is None or gmmtd3_networks is None:
+        raise ImportError("gmmtd3 dependencies are not available in this environment.") from _GMM_TD3_IMPORT_ERROR
     if cfg.task in dm_control_suite._envs:
         gmmtd3_params = brax_td3_config(cfg.task)
     elif cfg.task in locomotion._envs:
@@ -695,7 +792,9 @@ def train(cfg: dict):
     print("randomization_fn:", randomization_fn)
     if cfg.policy == "sac":
         make_inference_fn, params, metrics = train_sac(cfg, randomization_fn, env)
-    if cfg.policy == "td3":
+    elif cfg.policy == "wdsac":
+        make_inference_fn, params, metrics = train_wdsac(cfg, randomization_fn, env)
+    elif cfg.policy == "td3":
         make_inference_fn, params, metrics = train_td3(cfg, randomization_fn, env)
     elif "ppo" in cfg.policy:
         make_inference_fn, params, metrics = train_ppo(cfg, randomization_fn, env)

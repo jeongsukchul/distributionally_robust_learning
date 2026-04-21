@@ -158,6 +158,7 @@ def train(
     distance_type: str = "wass",
     lmbda_lr: float = 3e-4,
     init_lmbda: float = 0.0,
+    dr_train_ratio: float = 1.0,
     deterministic_eval: bool = False,
     network_factory: types.NetworkFactory[
         wdsac_networks.WDSACNetworks
@@ -200,6 +201,20 @@ def train(
   )
 
   env = environment
+  eval_randomization_fn = None
+  if randomization_fn is not None:
+    if not hasattr(env, 'dr_range'):
+      raise ValueError('WDSAC requires an environment with dr_range for domain randomized nominals.')
+    dr_low, dr_high = env.dr_range
+    dr_mid = (dr_low + dr_high) / 2.0
+    dr_scale = (dr_high - dr_low) / 2.0
+    training_dr_range = (
+        dr_mid - dr_train_ratio * dr_scale,
+        dr_mid + dr_train_ratio * dr_scale,
+    )
+    eval_randomization_fn = functools.partial(randomization_fn, dr_range=env.dr_range)
+    randomization_fn = functools.partial(randomization_fn, dr_range=training_dr_range)
+
   if wrap_env:
     if wrap_env_fn is not None:
       wrap_for_training = wrap_env_fn
@@ -211,15 +226,7 @@ def train(
     rng = jax.random.PRNGKey(seed)
     rng, key = jax.random.split(rng)
 
-    v_randomization_fn = None
-    if randomization_fn is not None:
-      # Per device randomization keys
-      v_randomization_fn = functools.partial(
-          randomization_fn,
-          rng=jax.random.split(
-              key, num_envs // jax.process_count() // local_devices_to_use
-          ),
-      )
+    v_randomization_fn = randomization_fn
 
     # Important: n_envs is PER-DEVICE here
     env = wrap_for_hard_dr_training(
@@ -583,10 +590,8 @@ def train(
     eval_env = environment
   if wrap_env:
     v_randomization_fn_eval = None
-    if randomization_fn is not None:
-      v_randomization_fn_eval = functools.partial(
-          randomization_fn, rng=jax.random.split(eval_key, num_eval_envs)
-      )
+    if eval_randomization_fn is not None:
+      v_randomization_fn_eval = eval_randomization_fn
     #       if wrap_env_fn is not None:
     #   wrap_for_training = wrap_env_fn
     # elif isinstance(env, envs.Env):
